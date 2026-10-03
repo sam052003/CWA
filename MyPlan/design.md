@@ -779,7 +779,24 @@ Website
 - 避免多人瀏覽重複呼叫
 - 即使 CWA API 暫時異常，仍可顯示最近成功取得的預報
 
-第一版可先設定約每 **6 小時**更新一次；實際頻率之後依使用的 CWA dataset 發布時程調整。
+### Production 現況與排程說明
+
+- **Vercel Hobby Cron**：
+  - Schedule: `0 0 * * *`
+  - 代表每日一次（UTC 00:00）。
+  - 在 Vercel Hobby 方案下執行時間可能落在該小時內，因此臺灣時間約為上午 **08:00～08:59**。
+- **資料更新流程**：
+  ```text
+  Vercel Cron
+      ↓
+  protected GET /api/cron/refresh (Bearer CRON_SECRET)
+      ↓
+  CWA Open Data API (F-C0032-005)
+      ↓
+  Supabase PostgreSQL (UPSERT)
+  ```
+- **升級擴充**：
+  - 若未來升級至 Vercel Pro，可調整排程為 `0 */6 * * *` 實現約每 6 小時自動更新。
 
 ---
 
@@ -830,18 +847,26 @@ Website
 - [x] loading/error state
 - [x] responsive layout
 
-### Phase 6 — Deployment (Code Preparation Complete)
+### Phase 6 — Deployment (Completed & Verified)
 
-- [x] GitHub Repository 程式碼與結構就緒
-- [x] Vercel Zero-Config 設定 (`vercel.json` 移除 catch-all rewrites)
-- [x] Protected Cron 端點實作 (`GET /api/cron/refresh` + `CRON_SECRET` 驗證)
-- [x] Chart.js 依賴鎖定（固定版本 4.5.1）
-- [x] 前端快速切換防競態保護 (`AbortController`)
-- [ ] Vercel Project 建立與連結
-- [ ] Vercel Environment Variables 設定 (`APP_NAME`, `ENVIRONMENT`, `CWA_API_KEY`, `DATABASE_URL`, `CRON_SECRET`)
-- [ ] Supabase production 連線驗證
-- [ ] Vercel 部署建置 (Build & Deploy)
-- [ ] Production smoke test
+- [x] GitHub Repository
+- [x] Vercel Project
+- [x] Environment Variables
+- [x] Supabase production connection
+- [x] Build & Deploy
+- [x] Production smoke test
+- [x] Vercel Cron auto refresh
+- [x] CRON_SECRET protection verified
+
+**Production URL**:
+https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/
+
+**Cron Production 驗證狀態**:
+- `GET /api/cron/refresh` 已部署
+- 無 Authorization header → HTTP 401 已驗證
+- 正確 Vercel Cron authentication → HTTP 200 已驗證
+- refresh 成功後 Supabase `fetch_logs` 產生 success 紀錄
+- Production scheduled refresh pipeline 已驗證可正常運作
 
 ### Phase 7 — Advanced
 
@@ -910,10 +935,12 @@ MVP 完成條件：
 - [x] 網站可以切換縣市
 - [x] 可以顯示一週天氣資料表
 - [x] 可以顯示最高／最低溫折線圖
-- [ ] CWA API Key 未出現在 GitHub
-- [ ] Database credentials 未出現在 GitHub
-- [ ] GitHub repository 有完整原始碼
-- [ ] Vercel deployment 可正常瀏覽
+- [x] GitHub repository 有完整原始碼
+- [x] Vercel deployment 可正常瀏覽
+- [x] Production Cron 可自動更新資料
+- [x] Current tracked source files 不含真實 CWA API credentials
+- [x] Current tracked source files 不含真實 database credentials
+- [x] Current tracked source files 不含真實 CRON_SECRET
 
 ---
 
@@ -951,30 +978,36 @@ Vercel
 
 ```text
 CWA Open Data API
-        │
-        │ JSON
-        ▼
-Python / FastAPI
-        │
-        ├── CWA Client
-        ├── JSON Parser
-        ├── Weather Service
-        └── Repository
-                │
-                │ SQL
-                ▼
-        Supabase PostgreSQL
-                │
-                ▼
-          FastAPI API
-                │
-                ▼
-    HTML / CSS / JavaScript
-                │
-                ▼
-             Chart.js
+        ↓
+    CWA Client
+        ↓
+Parser / Normalizer
+        ↓
+  Weather Service
+        ↓
+Supabase PostgreSQL
+        ↓
+    FastAPI API
+        ↓
+ HTML / JavaScript
+        ↓
+Chart.js / Forecast Table
+        ↓
+ Vercel Production
 
-GitHub → Vercel Deployment
+Scheduled Update：
+
+Vercel Cron
+    ↓
+GET /api/cron/refresh
+    ↓
+CRON_SECRET authentication
+    ↓
+Weather Service
+    ↓
+CWA Open Data API
+    ↓
+Supabase PostgreSQL
 ```
 
 這個版本不再依賴 SQLite，本機與正式部署環境都採 PostgreSQL，避免 Vercel 本機檔案持久化問題，也讓整個專案架構更接近一般正式 Web Application。

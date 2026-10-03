@@ -6,6 +6,23 @@
 
 ---
 
+## Live Demo
+
+- **Production URL**: [https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/](https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/)
+
+> **說明**：本網址為目前專案正式上線之 Vercel Production 站台，已完整串接 Supabase PostgreSQL 資料庫與每日定時 Vercel Cron 排程自動更新。
+
+### 專案階段狀態摘要
+
+- Phase 1 ✅ Environment
+- Phase 2 ✅ CWA API & Parser
+- Phase 3 ✅ Supabase PostgreSQL
+- Phase 4 ✅ FastAPI Web API
+- Phase 5 ✅ Frontend Dashboard
+- Phase 6 ✅ Vercel Production Deployment & Scheduled Refresh
+
+---
+
 ## 技術架構
 
 - **後端 Web 框架**：FastAPI
@@ -185,7 +202,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### 3. Vercel Cron 定時資料更新排程
 
-本專案於 `vercel.json` 預設配置每日 UTC 00:00（臺灣時間約上午 08:00）透過 `GET /api/cron/refresh` 自動觸發氣象資料更新：
+本專案於 `vercel.json` 配置每日 UTC 00:00 透過受保護端點 `GET /api/cron/refresh` 自動觸發氣象資料更新：
 
 ```json
 {
@@ -199,9 +216,52 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 }
 ```
 
-> **方案限制說明**：
-> - **Vercel Hobby（免費方案）**：目前限制每個 cron 每日最多執行一次，預設設定為 `0 0 * * *`。
-> - **Vercel Pro**：若升級至 Pro 方案，可將 schedule 修改為 `0 */6 * * *` 實現每 6 小時自動更新。
+> **Production 排程與方案說明**：
+> - **Cron expression 使用 UTC**：`0 0 * * *` 代表每日一次（UTC 00:00）。
+> - **Hobby 方案執行時間**：Vercel Hobby（免費方案）之定時工作會排入該小時的佇列中執行，因此臺灣時間大約於 **08:00～08:59** 觸發更新。
+> - **更新管道**：
+>   ```text
+>   Vercel Cron → protected GET /api/cron/refresh → CWA → Supabase
+>   ```
+> - **升級至 Pro**：若未來升級至 Vercel Pro 方案，可將 schedule 修改為 `0 */6 * * *` 實現約每 6 小時自動更新。
+
+---
+
+## 正式上線系統架構 (Production Architecture)
+
+```text
+CWA Open Data API
+        ↓
+    CWA Client
+        ↓
+Parser / Normalizer
+        ↓
+  Weather Service
+        ↓
+Supabase PostgreSQL
+        ↓
+    FastAPI API
+        ↓
+ HTML / JavaScript
+        ↓
+Chart.js / Forecast Table
+        ↓
+ Vercel Production
+
+Scheduled Update：
+
+Vercel Cron
+    ↓
+GET /api/cron/refresh
+    ↓
+CRON_SECRET authentication
+    ↓
+Weather Service
+    ↓
+CWA Open Data API
+    ↓
+Supabase PostgreSQL
+```
 
 ---
 
@@ -237,12 +297,16 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
   - Chart.js 折線圖（呈現未來一週最高溫與最低溫趨勢，切換地區自動銷毀重建避免重疊）
   - 完整時段預報詳細資料表（保留 CWA 約 12 小時真實區間，支援行動版水平捲動與響應式排版）
   - 載入中（Loading）與錯誤處理（Error Banner）狀態提示，XSS 安全過濾與無障礙設計 (a11y)
-- [ ] **Phase 6: Vercel 雲端正式部署** (程式碼端準備已完成)
+- [x] **Phase 6: Vercel 雲端正式部署與定時更新 (正式完成)**
   - [x] Vercel Zero-Config 設定（`vercel.json` 移除 catch-all rewrites）
-  - [x] 受保護 Cron 定時更新端點 (`GET /api/cron/refresh` + `CRON_SECRET` 驗證)
-  - [x] 前端靜態依賴鎖定（Chart.js 4.5.1 UMD CDN）
-  - [x] 前端快速切換防競態保護 (`AbortController`)
-  - [ ] 使用者手動建立 Vercel Project 並綁定 GitHub
-  - [ ] 使用者於 Vercel 後台設定環境變數 (`CWA_API_KEY`, `DATABASE_URL`, `CRON_SECRET`)
-  - [ ] 雲端正式部署與 Smoke Test 驗證
+  - [x] Vercel Project 建立並連結 GitHub
+  - [x] Production Environment Variables 已設定 (`APP_NAME`, `ENVIRONMENT`, `CWA_API_KEY`, `DATABASE_URL`, `CRON_SECRET`)
+  - [x] Supabase production connection 驗證正常
+  - [x] Vercel Build & Deployment 成功部署
+  - [x] Production smoke test 驗收通過
+  - [x] Protected Cron endpoint 部署完成 (`GET /api/cron/refresh`)
+  - [x] Unauthorized cron request → 401 verified（未帶 Authorization 正確攔截）
+  - [x] Authenticated Vercel Cron invocation → 200 verified（排程觸發刷新成功）
+  - [x] Supabase fetch_logs success verified（成功寫入 success 更新日誌）
+
 
