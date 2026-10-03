@@ -590,13 +590,19 @@ Production 不對一般使用者公開，避免：
 - API quota 浪費
 - 惡意 refresh
 
-後續可改成：
+### GET /api/cron/refresh
 
-- Vercel Cron
-- GitHub Actions
-- secured internal endpoint
+專為 Vercel Cron 設計的受保護定時更新端點（HTTP GET）。
 
-定時更新。
+**安全性機制**：
+- 必須攜帶 Header：`Authorization: Bearer <CRON_SECRET>`
+- 使用 `hmac.compare_digest` 進行常數時間比對防範 Timing Attacks
+- 若伺服器未設定 `CRON_SECRET`，預設採取 **Fail-Closed** 原則拒絕連線 (HTTP 401)
+- 權限無效回傳 HTTP 401，不對外洩露任何機敏字串與錯誤堆疊
+
+**排程規格**：
+- Vercel Hobby（免費方案）：每日一次（`0 0 * * *`，UTC 00:00，約臺灣時間 08:00）
+- Vercel Pro：可設定為每 6 小時一次（`0 */6 * * *`）
 
 ---
 
@@ -824,14 +830,17 @@ Website
 - [x] loading/error state
 - [x] responsive layout
 
-### Phase 6 — Deployment
+### Phase 6 — Deployment (Code Preparation Complete)
 
-- [ ] GitHub
-- [ ] Vercel Project
-- [ ] `CWA_API_KEY` Environment Variable
-- [ ] `DATABASE_URL` Environment Variable
-- [ ] Supabase production connection
-- [ ] Build test
+- [x] GitHub Repository 程式碼與結構就緒
+- [x] Vercel Zero-Config 設定 (`vercel.json` 移除 catch-all rewrites)
+- [x] Protected Cron 端點實作 (`GET /api/cron/refresh` + `CRON_SECRET` 驗證)
+- [x] Chart.js 依賴鎖定（固定版本 4.5.1）
+- [x] 前端快速切換防競態保護 (`AbortController`)
+- [ ] Vercel Project 建立與連結
+- [ ] Vercel Environment Variables 設定 (`APP_NAME`, `ENVIRONMENT`, `CWA_API_KEY`, `DATABASE_URL`, `CRON_SECRET`)
+- [ ] Supabase production 連線驗證
+- [ ] Vercel 部署建置 (Build & Deploy)
 - [ ] Production smoke test
 
 ### Phase 7 — Advanced

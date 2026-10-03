@@ -1,8 +1,9 @@
 {
-  "rewrites": [
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
     {
-      "source": "/(.*)",
-      "destination": "app/main.py"
+      "path": "/api/cron/refresh",
+      "schedule": "0 0 * * *"
     }
   ]
 }

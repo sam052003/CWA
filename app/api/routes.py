@@ -1,6 +1,6 @@
-"""API routes for CWA Taiwan Weather Forecast."""
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import hmac
+from typing import Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
@@ -146,3 +146,67 @@ def refresh_forecast_endpoint(session: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred during refresh",
         )
+
+
+@router.get(
+    "/cron/refresh",
+    response_model=RefreshResponse,
+    summary="Protected cron endpoint for scheduled forecast refresh",
+    responses={
+        401: {"model": ErrorResponse, "description": "Unauthorized"},
+        502: {"model": ErrorResponse, "description": "CWA API request failed"},
+        503: {"model": ErrorResponse, "description": "Database service unavailable"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+def cron_refresh_endpoint(
+    authorization: Optional[str] = Header(None),
+    session: Session = Depends(get_db),
+):
+    """Protected endpoint triggered by Vercel Cron to refresh weather forecasts.
+
+    Requires Bearer token authentication matching the configured CRON_SECRET.
+    """
+    settings = get_settings()
+    configured_secret = settings.CRON_SECRET
+
+    # Fail closed: reject if CRON_SECRET is not configured or blank
+    if not configured_secret or not configured_secret.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+        )
+
+    # Validate Authorization header
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+        )
+
+    provided_token = authorization[7:].strip()
+    if not hmac.compare_digest(provided_token, configured_secret.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+        )
+
+    try:
+        summary = weather_service.refresh_forecasts(session=session)
+        return RefreshResponse(**summary)
+    except WeatherRefreshError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to fetch data from Central Weather Administration API",
+        )
+    except WeatherDatabaseError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable during refresh",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred during refresh",
+        )
+

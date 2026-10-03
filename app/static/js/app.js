@@ -3,8 +3,9 @@
  * Phase 5: Modular, accessible, and secure weather dashboard logic.
  */
 
-// Global Chart.js instance holder
+// Global Chart.js instance holder and request cancellation controller
 let temperatureChartInstance = null;
+let forecastAbortController = null;
 
 // DOM Element References
 const elements = {
@@ -285,11 +286,18 @@ function updateMetadata(data) {
 async function loadForecast(regionName) {
     if (!regionName) return;
 
+    // Abort previous in-flight forecast request to prevent race conditions on rapid switching
+    if (forecastAbortController) {
+        forecastAbortController.abort();
+    }
+    forecastAbortController = new AbortController();
+    const signal = forecastAbortController.signal;
+
     setLoading(true, `正在載入 ${regionName} 天氣預報...`);
 
     try {
         const encodedRegion = encodeURIComponent(regionName);
-        const response = await fetch(`/api/forecast?region=${encodedRegion}`);
+        const response = await fetch(`/api/forecast?region=${encodedRegion}`, { signal });
 
         if (!response.ok) {
             throw new Error(`API responded with status: ${response.status}`);
@@ -306,6 +314,10 @@ async function loadForecast(regionName) {
 
         setLoading(false);
     } catch (err) {
+        if (err.name === "AbortError") {
+            // Request was superseded by a newer selection; cancel silently without error banner
+            return;
+        }
         console.error("Forecast fetch error:", err);
         showError("目前無法取得天氣資料，請稍後再試。");
     }

@@ -52,6 +52,7 @@ CWA/
 │  ├─ test_api.py            # API 端點測試
 │  ├─ test_config.py         # 設定與環境變數測試
 │  ├─ test_cwa_client.py     # CWA 連線 Client 測試 (Phase 2)
+│  ├─ test_deployment.py     # 部署準備與受保護 Cron 測試 (Phase 6)
 │  ├─ test_frontend.py       # 前端模板與靜態資源測試 (Phase 5)
 │  ├─ test_parser.py         # JSON Parser 測試 (Phase 2)
 │  ├─ test_repository.py     # Repository 測試 (Phase 3)
@@ -146,6 +147,64 @@ pytest
 
 ---
 
+## Vercel 雲端正式部署指南 (Phase 6 準備)
+
+本專案支援 **Vercel Zero-Config FastAPI** 原生辨識部署，無需自訂 legacy builds 或 catch-all rewrites。
+
+### 1. 建立 Vercel 專案
+
+1. 登入 [Vercel Dashboard](https://vercel.com/)。
+2. 點擊 **Add New...** → **Project**。
+3. 匯入 GitHub 專案 `sam052003/CWA`。
+4. Framework Preset 選擇 **Other**（Vercel 將自動辨識 `app/main.py` 的 FastAPI 實例）。
+
+### 2. 設定 Vercel 環境變數
+
+在 Vercel 專案設定頁面 (**Settings** → **Environment Variables**) 加入以下變數：
+
+#### 應用程式一般設定 (Config)
+```text
+APP_NAME=CWA Taiwan Weather Forecast
+ENVIRONMENT=production
+```
+
+> **注意**：Vercel Serverless Function 環境無需設定 `PORT`。
+
+#### 機敏金鑰 (Secrets)
+| 變數名稱 | 說明 | 範例 / 格式 |
+|---|---|---|
+| `CWA_API_KEY` | 中央氣象署 Open Data API Key | `CWA-XXXXXXXX-XXXX-...` |
+| `DATABASE_URL` | Supabase Transaction Pooler (port 6543) | `postgresql+psycopg://postgres.<REF>:<PWD>@<POOLER_HOST>:6543/postgres` |
+| `CRON_SECRET` | Vercel Cron 受保護端點驗證金鑰 | 由安全指令產生的 32+ 字元隨機字串 |
+
+#### 安全產生 `CRON_SECRET` 指令
+請在本機終端機執行下列指令產生隨機金鑰，直接貼至 Vercel 後台（**切勿將真實金鑰提交至版本庫**）：
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+### 3. Vercel Cron 定時資料更新排程
+
+本專案於 `vercel.json` 預設配置每日 UTC 00:00（臺灣時間約上午 08:00）透過 `GET /api/cron/refresh` 自動觸發氣象資料更新：
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/refresh",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
+```
+
+> **方案限制說明**：
+> - **Vercel Hobby（免費方案）**：目前限制每個 cron 每日最多執行一次，預設設定為 `0 0 * * *`。
+> - **Vercel Pro**：若升級至 Pro 方案，可將 schedule 修改為 `0 */6 * * *` 實現每 6 小時自動更新。
+
+---
+
 ## 目前開發進度
 
 - [x] **Phase 1: 環境與基礎架構**
@@ -171,11 +230,19 @@ pytest
   - `GET /api/forecast?region={region_name}`：查詢指定縣市最新未過期預報（依 `start_time ASC` 排序，時間為 `Asia/Taipei (+08:00)`）
   - `POST /api/refresh`：觸發從 CWA API 更新並寫入資料庫（開發環境可用，production 環境回傳 403）
   - 完整業務邏輯與驗證封裝於 Weather Service 層，提供統一例外處理與安全機敏字串過濾
-- [x] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)** (當前完成)
+- [x] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)**
   - 首頁 `GET /` 整合 Jinja2 模板動態提供天氣儀表板
   - 22 縣市下拉選單（預設臺中市，非同步動態載入無刷新切換）
   - 近期預報時段摘要資訊卡（天氣現象、預測最低溫與最高溫）
   - Chart.js 折線圖（呈現未來一週最高溫與最低溫趨勢，切換地區自動銷毀重建避免重疊）
   - 完整時段預報詳細資料表（保留 CWA 約 12 小時真實區間，支援行動版水平捲動與響應式排版）
   - 載入中（Loading）與錯誤處理（Error Banner）狀態提示，XSS 安全過濾與無障礙設計 (a11y)
-- [ ] **Phase 6: Vercel 雲端正式部署**
+- [ ] **Phase 6: Vercel 雲端正式部署** (程式碼端準備已完成)
+  - [x] Vercel Zero-Config 設定（`vercel.json` 移除 catch-all rewrites）
+  - [x] 受保護 Cron 定時更新端點 (`GET /api/cron/refresh` + `CRON_SECRET` 驗證)
+  - [x] 前端靜態依賴鎖定（Chart.js 4.5.1 UMD CDN）
+  - [x] 前端快速切換防競態保護 (`AbortController`)
+  - [ ] 使用者手動建立 Vercel Project 並綁定 GitHub
+  - [ ] 使用者於 Vercel 後台設定環境變數 (`CWA_API_KEY`, `DATABASE_URL`, `CRON_SECRET`)
+  - [ ] 雲端正式部署與 Smoke Test 驗證
+

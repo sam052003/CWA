@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     CWA_API_KEY: Optional[str] = None
     DATABASE_URL: Optional[str] = None
+    CRON_SECRET: Optional[str] = None
 
     @property
     def app_name(self) -> str:
@@ -40,6 +41,10 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> Optional[str]:
         return self.DATABASE_URL
+
+    @property
+    def cron_secret(self) -> Optional[str]:
+        return self.CRON_SECRET
 
 
 @lru_cache
