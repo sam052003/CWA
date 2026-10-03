@@ -5,23 +5,120 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Taiwan Weather Forecast — 中央氣象署一週天氣預報</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Chart.js for temperature line chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <header>
-        <h1>Taiwan Weather Forecast</h1>
-        <h2>中央氣象署一週天氣預報</h2>
-        <p class="subtitle">Data Source: Central Weather Administration (CWA)</p>
-    </header>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1 class="main-title">Taiwan Weather Forecast</h1>
+            <h2 class="sub-title">中央氣象署一週天氣預報</h2>
+            <p class="subtitle">Data Source: Central Weather Administration (CWA)</p>
+        </header>
 
-    <main id="app">
-        <!-- UI Components will be implemented in Phase 5 -->
-        <p class="placeholder-notice">系統初始化中（Phase 1）。前端預計於 Phase 5 實作。</p>
-    </main>
+        <!-- Controls: Region Selector & Feedback Alerts -->
+        <section class="controls-section" aria-label="地區選擇與狀態">
+            <div class="selector-wrapper">
+                <label for="region-select" class="selector-label">選擇地區</label>
+                <select id="region-select" class="region-select" aria-label="選擇地區">
+                    <option value="" disabled selected>正在載入縣市...</option>
+                </select>
+            </div>
 
-    <footer>
-        <p>資料來源：中央氣象署 Open Data</p>
-    </footer>
+            <!-- Loading indicator -->
+            <div id="loading-state" class="status-banner loading-banner hidden" role="status" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>
+                <span id="loading-text">正在載入天氣資料...</span>
+            </div>
 
+            <!-- Error banner -->
+            <div id="error-state" class="status-banner error-banner hidden" role="alert" aria-live="assertive">
+                <span id="error-text">目前無法取得天氣資料，請稍後再試。</span>
+            </div>
+        </section>
+
+        <!-- Content Area: Summary, Chart, and Table -->
+        <main id="weather-content" class="weather-content">
+            <!-- Summary Cards Section -->
+            <section class="summary-section" aria-label="近期預報摘要">
+                <div class="section-header">
+                    <h3 class="section-title">最近預報時段摘要</h3>
+                    <span id="summary-period" class="summary-period-badge">--</span>
+                </div>
+                <div class="cards-grid">
+                    <div class="card weather-card">
+                        <div class="card-icon" aria-hidden="true">🌤️</div>
+                        <div class="card-info">
+                            <span class="card-label">天氣現象</span>
+                            <strong id="card-weather" class="card-value">--</strong>
+                        </div>
+                    </div>
+                    <div class="card min-temp-card">
+                        <div class="card-icon" aria-hidden="true">🌡️</div>
+                        <div class="card-info">
+                            <span class="card-label">預測最低溫</span>
+                            <strong id="card-min-temp" class="card-value temp-cold">--</strong>
+                        </div>
+                    </div>
+                    <div class="card max-temp-card">
+                        <div class="card-icon" aria-hidden="true">☀️</div>
+                        <div class="card-info">
+                            <span class="card-label">預測最高溫</span>
+                            <strong id="card-max-temp" class="card-value temp-warm">--</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chart Section -->
+            <section class="chart-section" aria-label="未來一週最高與最低溫趨勢">
+                <div class="section-header">
+                    <h3 class="section-title">未來一週最高／最低溫折線圖</h3>
+                </div>
+                <div class="chart-container">
+                    <canvas id="temperature-chart" aria-label="未來一週最高與最低溫折線圖" role="img"></canvas>
+                </div>
+            </section>
+
+            <!-- Table Section -->
+            <section class="table-section" aria-label="詳細預報列表">
+                <div class="section-header">
+                    <h3 class="section-title">一週預報時段清單</h3>
+                </div>
+                <div class="table-responsive-wrapper">
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">預報時間</th>
+                                <th scope="col">天氣現象</th>
+                                <th scope="col" class="num-col">最低溫</th>
+                                <th scope="col" class="num-col">最高溫</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forecast-table-body">
+                            <tr>
+                                <td colspan="4" class="empty-table-cell">點選地區以檢視預報資料</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Metadata info -->
+            <div class="metadata-bar">
+                <span id="last-updated" class="last-updated">最後資料更新：--</span>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>資料來源：中央氣象署 Open Data（Dataset: F-C0032-005）</p>
+            <p>GitHub Repository: <a href="https://github.com/sam052003/CWA" target="_blank" rel="noopener noreferrer">sam052003/CWA</a></p>
+        </footer>
+    </div>
+
+    <!-- Application Logic -->
     <script src="/static/js/app.js"></script>
 </body>
 </html>

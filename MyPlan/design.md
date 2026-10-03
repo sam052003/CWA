@@ -816,13 +816,13 @@ Website
 
 ### Phase 5 — Frontend
 
-- [ ] Layout
-- [ ] Region dropdown
-- [ ] Summary cards
-- [ ] Chart.js line chart
-- [ ] Forecast table
-- [ ] loading/error state
-- [ ] responsive layout
+- [x] Layout
+- [x] Region dropdown
+- [x] Summary cards
+- [x] Chart.js line chart
+- [x] Forecast table
+- [x] loading/error state
+- [x] responsive layout
 
 ### Phase 6 — Deployment
 
@@ -898,9 +898,9 @@ MVP 完成條件：
 - [x] 可以寫入 Supabase PostgreSQL
 - [x] 相同預報重複 refresh 不會一直新增 duplicate rows
 - [x] 可以用 SQL 查詢指定縣市
-- [ ] 網站可以切換縣市
-- [ ] 可以顯示一週天氣資料表
-- [ ] 可以顯示最高／最低溫折線圖
+- [x] 網站可以切換縣市
+- [x] 可以顯示一週天氣資料表
+- [x] 可以顯示最高／最低溫折線圖
 - [ ] CWA API Key 未出現在 GitHub
 - [ ] Database credentials 未出現在 GitHub
 - [ ] GitHub repository 有完整原始碼

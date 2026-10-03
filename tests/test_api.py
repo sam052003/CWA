@@ -20,12 +20,11 @@ client = TestClient(app)
 # ---------------------------------------------------------------------------
 
 def test_root_endpoint():
-    """Verify root endpoint returns 200 OK and expected message."""
+    """Verify root endpoint returns 200 OK and HTML dashboard content."""
     response = client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert "message" in data
-    assert data["status"] == "online"
+    assert "text/html" in response.headers.get("content-type", "")
+    assert "Taiwan Weather Forecast" in response.text
 
 
 def test_health_check_endpoint():

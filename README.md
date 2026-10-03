@@ -51,8 +51,11 @@ CWA/
 ├─ tests/
 │  ├─ test_api.py            # API 端點測試
 │  ├─ test_config.py         # 設定與環境變數測試
+│  ├─ test_cwa_client.py     # CWA 連線 Client 測試 (Phase 2)
+│  ├─ test_frontend.py       # 前端模板與靜態資源測試 (Phase 5)
 │  ├─ test_parser.py         # JSON Parser 測試 (Phase 2)
-│  └─ test_repository.py     # Repository 測試 (Phase 3)
+│  ├─ test_repository.py     # Repository 測試 (Phase 3)
+│  └─ test_weather_service.py# 業務服務層測試 (Phase 4)
 ├─ .env.example              # 環境變數範本 (集中管理 APP_NAME, ENVIRONMENT, PORT, CWA_API_KEY, DATABASE_URL)
 ├─ .gitignore                # 排除敏感檔案與虛擬環境
 ├─ requirements.txt          # Python 依賴套件清單
@@ -105,7 +108,7 @@ APP_NAME=CWA Taiwan Weather Forecast
 ENVIRONMENT=development
 PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
-DATABASE_URL=postgresql+psycopg://postgres:your_password@db.your_project.supabase.co:5432/postgres
+DATABASE_URL=postgresql+psycopg://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:6543/postgres
 ```
 
 > **重要安全須知**：
@@ -126,7 +129,7 @@ python -m app.main
 ### 5. 檢視與測試端點
 
 啟動後，瀏覽器或 API 測試工具可訪問：
-- **歡迎頁面 (Hello World)**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+- **氣象預報儀表板首頁**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 - **系統健康檢查 (Health Check)**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 - **API 健康檢查**: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
 - **FastAPI 自動化 Swagger API 文件**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
@@ -163,10 +166,16 @@ pytest
   - Repository query（縣市列表去重排序與指定縣市依時間排序預報）
   - Transaction handling（全成功 commit，失敗自動 rollback 並記錄 failure log）
   - `--save-db` 指令列旗標支援真實資料寫入與安全摘要輸出
-- [x] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)** (當前完成)
+- [x] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)**
   - `GET /api/regions`：取得資料庫中現有 22 縣市清單
   - `GET /api/forecast?region={region_name}`：查詢指定縣市最新未過期預報（依 `start_time ASC` 排序，時間為 `Asia/Taipei (+08:00)`）
   - `POST /api/refresh`：觸發從 CWA API 更新並寫入資料庫（開發環境可用，production 環境回傳 403）
   - 完整業務邏輯與驗證封裝於 Weather Service 層，提供統一例外處理與安全機敏字串過濾
-- [ ] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)**
+- [x] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)** (當前完成)
+  - 首頁 `GET /` 整合 Jinja2 模板動態提供天氣儀表板
+  - 22 縣市下拉選單（預設臺中市，非同步動態載入無刷新切換）
+  - 近期預報時段摘要資訊卡（天氣現象、預測最低溫與最高溫）
+  - Chart.js 折線圖（呈現未來一週最高溫與最低溫趨勢，切換地區自動銷毀重建避免重疊）
+  - 完整時段預報詳細資料表（保留 CWA 約 12 小時真實區間，支援行動版水平捲動與響應式排版）
+  - 載入中（Loading）與錯誤處理（Error Banner）狀態提示，XSS 安全過濾與無障礙設計 (a11y)
 - [ ] **Phase 6: Vercel 雲端正式部署**
