@@ -207,7 +207,7 @@ def test_get_forecasts_by_region_ordered():
 
 
 def test_get_active_forecasts_by_region_filters_expired():
-    """Verify that get_active_forecasts_by_region filters with end_time > current_time."""
+    """Verify that get_active_forecasts_by_region applies the latest batch rule and filters expired intervals."""
     mock_session = MagicMock()
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = []
@@ -219,8 +219,32 @@ def test_get_active_forecasts_by_region_filters_expired():
     stmt = mock_session.execute.call_args[0][0]
     compiled = str(stmt.compile())
 
-    assert "WHERE weather_forecasts.region_name = :region_name_1 AND weather_forecasts.end_time > :end_time_1" in compiled
+    assert "weather_forecasts.region_name = :region_name_1" in compiled
+    assert "weather_forecasts.end_time > :end_time_1" in compiled
+    assert "weather_forecasts.dataset_id = :dataset_id_1" in compiled
+    assert "SELECT max(weather_forecasts.fetched_at)" in compiled
     assert "ORDER BY weather_forecasts.start_time ASC" in compiled
+
+
+def test_get_map_forecasts_compilation():
+    """Verify that get_map_forecasts queries all regions with latest batch and active filter."""
+    from app.repositories.weather_repository import get_map_forecasts
+    mock_session = MagicMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    ref_time = datetime(2026, 10, 4, 12, 0, 0, tzinfo=timezone.utc)
+    get_map_forecasts(mock_session, dataset_id="F-C0032-005", current_time=ref_time)
+
+    stmt = mock_session.execute.call_args[0][0]
+    compiled = str(stmt.compile())
+
+    assert "weather_forecasts.dataset_id = :dataset_id_1" in compiled
+    assert "SELECT max(weather_forecasts.fetched_at)" in compiled
+    assert "weather_forecasts.end_time > :end_time_1" in compiled
+    assert "ORDER BY weather_forecasts.start_time ASC, weather_forecasts.region_name ASC" in compiled
+
 
 
 

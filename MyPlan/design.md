@@ -1038,12 +1038,12 @@ https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/
 #### Phase 7 驗收標準 (Acceptance Criteria — 待實作，全數保持未勾選)
 
 ##### Phase 7A — 驗收標準
-- [ ] Taiwan map renders
-- [ ] 22 counties render
-- [ ] temperature choropleth
-- [ ] hover tooltip
-- [ ] click selection
-- [ ] map/dropdown sync
+- [x] Taiwan map renders
+- [x] 22 counties render
+- [x] temperature choropleth
+- [x] hover tooltip
+- [x] click selection
+- [x] map/dropdown sync
 
 ##### Phase 7B — 驗收標準
 - [ ] forecast periods available

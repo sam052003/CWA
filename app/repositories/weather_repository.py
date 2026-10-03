@@ -6,7 +6,7 @@ and execution logging for CWA data fetching pipeline.
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -133,15 +133,78 @@ def get_forecasts_by_region(
     return list(result)
 
 
+def get_latest_batch_forecasts(
+    session: Session,
+    dataset_id: str = "F-C0032-005",
+    region_name: Optional[str] = None,
+    active_only: bool = True,
+    current_time: Optional[datetime] = None,
+) -> List[WeatherForecast]:
+    """Retrieve forecast records belonging to the latest batch for a dataset.
+
+    Applies the Latest Batch Rule:
+    1. Filters by dataset_id.
+    2. Identifies latest batch fetched_at via scalar subquery.
+    3. Selects only rows where fetched_at matches the latest batch.
+    4. If active_only is True, filters end_time > current_time (defaults to now UTC).
+    5. If region_name is provided, filters for that region.
+    6. Deterministic ordering:
+       - If region_name: start_time ASC
+       - Otherwise: start_time ASC, region_name ASC
+    """
+    latest_batch_subquery = (
+        select(func.max(WeatherForecast.fetched_at))
+        .where(WeatherForecast.dataset_id == dataset_id)
+        .scalar_subquery()
+    )
+
+    stmt = select(WeatherForecast).where(
+        WeatherForecast.dataset_id == dataset_id,
+        WeatherForecast.fetched_at == latest_batch_subquery,
+    )
+
+    if region_name:
+        stmt = stmt.where(WeatherForecast.region_name == region_name)
+
+    if active_only:
+        ref_time = current_time or datetime.now(timezone.utc)
+        stmt = stmt.where(WeatherForecast.end_time > ref_time)
+
+    if region_name:
+        stmt = stmt.order_by(WeatherForecast.start_time.asc())
+    else:
+        stmt = stmt.order_by(WeatherForecast.start_time.asc(), WeatherForecast.region_name.asc())
+
+    result = session.execute(stmt).scalars().all()
+    return list(result)
+
+
 def get_active_forecasts_by_region(
     session: Session,
     region_name: str,
     current_time: Optional[datetime] = None,
+    dataset_id: str = "F-C0032-005",
 ) -> List[WeatherForecast]:
-    """Retrieve non-expired forecasts for a region (end_time > current_time), ordered chronologically."""
-    return get_forecasts_by_region(
+    """Retrieve non-expired forecasts for a region from the latest batch only."""
+    return get_latest_batch_forecasts(
         session=session,
+        dataset_id=dataset_id,
         region_name=region_name,
+        active_only=True,
+        current_time=current_time,
+    )
+
+
+def get_map_forecasts(
+    session: Session,
+    dataset_id: str = "F-C0032-005",
+    current_time: Optional[datetime] = None,
+) -> List[WeatherForecast]:
+    """Retrieve active forecast records across all regions from the latest batch only."""
+    return get_latest_batch_forecasts(
+        session=session,
+        dataset_id=dataset_id,
+        region_name=None,
         active_only=True,
         current_time=current_time,
     )
@@ -201,6 +264,8 @@ class WeatherRepository:
     upsert_forecasts = staticmethod(upsert_forecasts)
     get_regions = staticmethod(get_regions)
     get_forecasts_by_region = staticmethod(get_forecasts_by_region)
+    get_latest_batch_forecasts = staticmethod(get_latest_batch_forecasts)
     get_active_forecasts_by_region = staticmethod(get_active_forecasts_by_region)
+    get_map_forecasts = staticmethod(get_map_forecasts)
     create_fetch_log = staticmethod(create_fetch_log)
     get_latest_fetch_log = staticmethod(get_latest_fetch_log)

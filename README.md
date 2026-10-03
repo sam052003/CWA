@@ -153,6 +153,8 @@ python -m app.main
 - **FastAPI 自動化 Swagger API 文件**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **縣市列表 API**: [http://127.0.0.1:8000/api/regions](http://127.0.0.1:8000/api/regions)
 - **指定縣市天氣預報 API**: [http://127.0.0.1:8000/api/forecast?region=臺中市](http://127.0.0.1:8000/api/forecast?region=臺中市)
+- **全臺縣市地圖預報資料 API**: [http://127.0.0.1:8000/api/map-data](http://127.0.0.1:8000/api/map-data)
+- **臺灣縣市邊界 GeoJSON**: [http://127.0.0.1:8000/static/data/taiwan_counties.geojson](http://127.0.0.1:8000/static/data/taiwan_counties.geojson)
 - **手動更新預報 API (POST, 開發環境)**: `http://127.0.0.1:8000/api/refresh`
 - **ReDoc 文件**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
@@ -305,8 +307,32 @@ Supabase PostgreSQL
   - [x] Vercel Build & Deployment 成功部署
   - [x] Production smoke test 驗收通過
   - [x] Protected Cron endpoint 部署完成 (`GET /api/cron/refresh`)
-  - [x] Unauthorized cron request → 401 verified（未帶 Authorization 正確攔截）
-  - [x] Authenticated Vercel Cron invocation → 200 verified（排程觸發刷新成功）
   - [x] Supabase fetch_logs success verified（成功寫入 success 更新日誌）
+- [x] **Phase 7A: 臺灣縣市預報地圖 (Leaflet 互動地圖視覺化)**
+  - [x] 整合 Leaflet 1.9.4 與 OpenStreetMap 底圖（保留官方圖資版權與署名）
+  - [x] 新增 `GET /api/map-data`：套用 Latest Batch Rule，依最新批次與非過期時段回傳 22 縣市預報資料
+  - [x] 資料一致性修正：同步將 Latest Batch Rule 套用至 `GET /api/forecast`，排除歷史重複批次之干擾
+  - [x] 臺灣 22 縣市行政邊界 GeoJSON（`app/static/data/taiwan_counties.geojson`）
+  - [x] 縣市分級面量圖（Choropleth）：依最近預報時段之預測最高溫分級著色，搭配「預測最高溫 °C」圖例
+  - [x] 懸浮互動提示（Tooltip）：即時呈現縣市名稱、天氣現象、預測最低／最高溫
+  - [x] 地圖點擊與縣市選單雙向同步（點擊多邊形立即更新摘要卡、Chart.js 折線圖與詳細預報清單）
+  - [x] 專業氣象 GIS 儀表板排版（桌面版地圖 65–70% + 摘要面板 30–35%）與跨裝置響應式支援
+- [ ] **Phase 7B: 預報時段切換控制 (未實作)**
+- [ ] **Phase 7C: 進階 GIS 圖層與功能增強 (未實作)**
+
+---
+
+## 地圖圖資與 GeoJSON 資料來源說明
+
+| 項目 | 說明 |
+|---|---|
+| **資料集名稱** | 臺灣直轄市、縣市界線（twCounty2010.geo.json） |
+| **來源機構** | 內政部國土測繪中心 (NLSC) / g0v.tw 台灣零時政府開放圖資專案 |
+| **來源網址** | [https://github.com/g0v/twgeojson](https://github.com/g0v/twgeojson) |
+| **座標系統** | WGS84 (EPSG:4326) 經緯度 |
+| **圖資處理** | 進行適度幾何簡化以縮減靜態資源傳輸大小（約 636 KB），並將縣市名稱標準化（例如將「台」統一為「臺」、「桃園縣」更新為「桃園市」），確保 22 縣市名稱與中央氣象署 CWA `region_name` 100% 精準對齊。 |
+| **圖資授權** | Open Data / MIT License / 政府資料開放授權條款 |
+| **底圖來源** | OpenStreetMap Tiles（&copy; OpenStreetMap contributors） |
+
 
 

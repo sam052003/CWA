@@ -1,11 +1,17 @@
 /**
  * CWA Taiwan Weather Forecast — Client Application
- * Phase 5: Modular, accessible, and secure weather dashboard logic.
+ * Phase 7A: Taiwan County Weather Map (Leaflet GIS Dashboard)
  */
 
-// Global Chart.js instance holder and request cancellation controller
+// Global state holders
 let temperatureChartInstance = null;
 let forecastAbortController = null;
+let leafletMap = null;
+let geojsonLayer = null;
+let mapDataCache = null;
+let currentMapPeriod = null;
+let selectedCountyName = null;
+const countyLayersByName = new Map();
 
 // DOM Element References
 const elements = {
@@ -22,6 +28,9 @@ const elements = {
     chartCanvas: document.getElementById("temperature-chart"),
     tableBody: document.getElementById("forecast-table-body"),
     lastUpdated: document.getElementById("last-updated"),
+    taiwanMap: document.getElementById("taiwan-map"),
+    mapError: document.getElementById("map-error"),
+    mapPeriodBadge: document.getElementById("map-period-badge"),
 };
 
 // ---------------------------------------------------------------------------
@@ -90,6 +99,208 @@ function clearError() {
     elements.errorText.textContent = "";
 }
 
+function showMapError(message = "地圖資料暫時無法載入") {
+    if (elements.mapError) {
+        elements.mapError.textContent = message;
+        elements.mapError.classList.remove("hidden");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Map & Choropleth Logic (Leaflet 1.9.4 + Taiwan Counties GeoJSON)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map forecast max_temp to discrete palette colors.
+ * Discrete ranges: <20, 20-23, 24-27, 28-31, 32-35, >=36.
+ * Missing / invalid: neutral slate gray.
+ */
+function getTemperatureColor(temp) {
+    if (temp === null || temp === undefined || isNaN(temp)) {
+        return "#cbd5e1";
+    }
+    if (temp < 20) return "#60a5fa";
+    if (temp <= 23) return "#34d399";
+    if (temp <= 27) return "#facc15";
+    if (temp <= 31) return "#fb923c";
+    if (temp <= 35) return "#f87171";
+    return "#dc2626";
+}
+
+/**
+ * Retrieve forecast item for a given county in the active map period.
+ */
+function getForecastForCounty(countyName) {
+    if (!mapDataCache || !mapDataCache.forecasts || !currentMapPeriod) return null;
+    return mapDataCache.forecasts.find(
+        (f) =>
+            f.region_name === countyName &&
+            f.start_time === currentMapPeriod.start_time &&
+            f.end_time === currentMapPeriod.end_time
+    ) || null;
+}
+
+/**
+ * Determine polygon style based on county forecast and selected state.
+ */
+function getCountyStyle(feature) {
+    const countyName = feature.properties.COUNTYNAME || feature.properties.name;
+    const forecast = getForecastForCounty(countyName);
+    const maxTemp = forecast ? forecast.max_temp : null;
+    const isSelected = selectedCountyName && selectedCountyName === countyName;
+
+    return {
+        fillColor: getTemperatureColor(maxTemp),
+        weight: isSelected ? 3.5 : 1.2,
+        opacity: 1,
+        color: isSelected ? "#1e3a8a" : "#475569",
+        dashArray: "",
+        fillOpacity: isSelected ? 0.92 : 0.78,
+    };
+}
+
+/**
+ * Generate formatted HTML content for hover tooltip.
+ */
+function createTooltipContent(countyName) {
+    const forecast = getForecastForCounty(countyName);
+    if (!forecast) {
+        return `
+            <div class="county-tooltip">
+                <div class="tooltip-county">${countyName}</div>
+                <div class="tooltip-weather">暫無預報資料</div>
+            </div>
+        `;
+    }
+
+    const weather = forecast.weather || "未知";
+    const minStr = forecast.min_temp !== null && forecast.min_temp !== undefined ? `${forecast.min_temp}°C` : "--";
+    const maxStr = forecast.max_temp !== null && forecast.max_temp !== undefined ? `${forecast.max_temp}°C` : "--";
+
+    return `
+        <div class="county-tooltip">
+            <div class="tooltip-county">${countyName}</div>
+            <div class="tooltip-weather">${weather}</div>
+            <div class="tooltip-temps">
+                <span class="temp-label-cold">預測最低 ${minStr}</span>
+                <span class="temp-label-warm">預測最高 ${maxStr}</span>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Select a county polygon, update visual highlights, sync dropdown, and load detailed forecast.
+ */
+function selectCounty(countyName, updateDropdown = true) {
+    if (!countyName) return;
+
+    const prevCounty = selectedCountyName;
+    selectedCountyName = countyName;
+
+    // Reset previous county style
+    if (prevCounty && countyLayersByName.has(prevCounty) && geojsonLayer) {
+        const prevLayer = countyLayersByName.get(prevCounty);
+        geojsonLayer.resetStyle(prevLayer);
+    }
+
+    // Apply selected highlight style
+    if (countyLayersByName.has(countyName)) {
+        const targetLayer = countyLayersByName.get(countyName);
+        targetLayer.setStyle({
+            weight: 3.5,
+            color: "#1e3a8a",
+            fillOpacity: 0.95,
+        });
+        targetLayer.bringToFront();
+    }
+
+    // Sync dropdown value without triggering duplicate change events
+    if (updateDropdown && elements.regionSelect && elements.regionSelect.value !== countyName) {
+        elements.regionSelect.value = countyName;
+    }
+
+    // Load forecast details for the selected region
+    loadForecast(countyName);
+}
+
+/**
+ * Configure hover and click interactions for each county feature.
+ */
+function onEachCountyFeature(feature, layer) {
+    const countyName = feature.properties.COUNTYNAME || feature.properties.name;
+    countyLayersByName.set(countyName, layer);
+
+    // Bind tooltip with dynamic content
+    layer.bindTooltip(() => createTooltipContent(countyName), {
+        sticky: true,
+        direction: "auto",
+        className: "custom-leaflet-tooltip",
+    });
+
+    layer.on({
+        mouseover: (e) => {
+            const currentLayer = e.target;
+            const isSelected = selectedCountyName && selectedCountyName === countyName;
+
+            currentLayer.setStyle({
+                weight: isSelected ? 3.5 : 2.5,
+                color: isSelected ? "#1e3a8a" : "#0f172a",
+                fillOpacity: 0.92,
+            });
+
+            currentLayer.bringToFront();
+
+            // Maintain selected layer prominence
+            if (selectedCountyName && selectedCountyName !== countyName && countyLayersByName.has(selectedCountyName)) {
+                countyLayersByName.get(selectedCountyName).bringToFront();
+            }
+        },
+        mouseout: (e) => {
+            const currentLayer = e.target;
+            const isSelected = selectedCountyName && selectedCountyName === countyName;
+
+            if (geojsonLayer) {
+                geojsonLayer.resetStyle(currentLayer);
+            }
+
+            if (isSelected) {
+                currentLayer.setStyle({
+                    weight: 3.5,
+                    color: "#1e3a8a",
+                    fillOpacity: 0.95,
+                });
+                currentLayer.bringToFront();
+            }
+        },
+        click: () => {
+            selectCounty(countyName, true);
+        },
+    });
+}
+
+/**
+ * Initialize Leaflet Map with neutral OpenStreetMap basemap.
+ */
+function initMap() {
+    if (leafletMap || !elements.taiwanMap || typeof L === "undefined") return;
+
+    leafletMap = L.map("taiwan-map", {
+        center: [23.7, 120.95],
+        zoom: 7.2,
+        minZoom: 6,
+        maxZoom: 12,
+        zoomSnap: 0.25,
+        scrollWheelZoom: false, // Prevent unintentional zooming on page scroll
+    });
+
+    // Basemap: OpenStreetMap tiles with required attribution
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+        maxZoom: 18,
+    }).addTo(leafletMap);
+}
+
 // ---------------------------------------------------------------------------
 // Render Functions (Secure DOM manipulation with textContent & createElement)
 // ---------------------------------------------------------------------------
@@ -119,7 +330,7 @@ function updateSummary(firstForecast) {
 }
 
 function updateChart(forecasts) {
-    if (!elements.chartCanvas) return;
+    if (!elements.chartCanvas || typeof Chart === "undefined") return;
 
     // Destroy existing Chart instance if present to avoid overlay duplication
     if (temperatureChartInstance) {
@@ -177,19 +388,15 @@ function updateChart(forecasts) {
                     position: "top",
                     labels: {
                         boxWidth: 16,
-                        font: {
-                            family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                            size: 13,
-                            weight: "600",
-                        },
-                        color: "#0f172a",
+                        usePointStyle: true,
+                        pointStyle: "circle",
+                        font: { size: 13, weight: "600" },
+                        color: "#334155",
                     },
                 },
                 tooltip: {
                     callbacks: {
-                        label: function (context) {
-                            return `${context.dataset.label}: ${context.parsed.y} °C`;
-                        },
+                        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y + " °C" : "--"}`,
                     },
                 },
             },
@@ -280,7 +487,7 @@ function updateMetadata(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Data Fetching: API Calls (GET /api/regions and GET /api/forecast)
+// Data Fetching: API Calls (GET /api/forecast, /api/map-data, /api/regions)
 // ---------------------------------------------------------------------------
 
 async function loadForecast(regionName) {
@@ -323,6 +530,57 @@ async function loadForecast(regionName) {
     }
 }
 
+async function loadMapDataAndGeoJSON() {
+    try {
+        // Fetch map data and GeoJSON in parallel
+        const [mapDataRes, geojsonRes] = await Promise.all([
+            fetch("/api/map-data"),
+            fetch("/static/data/taiwan_counties.geojson"),
+        ]);
+
+        if (!mapDataRes.ok) {
+            throw new Error(`Map data failed: ${mapDataRes.status}`);
+        }
+        if (!geojsonRes.ok) {
+            throw new Error(`GeoJSON failed: ${geojsonRes.status}`);
+        }
+
+        mapDataCache = await mapDataRes.json();
+        const geojsonData = await geojsonRes.json();
+
+        // Use the earliest / nearest active forecast period for Phase 7A default
+        if (mapDataCache.periods && mapDataCache.periods.length > 0) {
+            currentMapPeriod = mapDataCache.periods[0];
+            if (elements.mapPeriodBadge) {
+                elements.mapPeriodBadge.textContent = formatForecastPeriod(
+                    currentMapPeriod.start_time,
+                    currentMapPeriod.end_time
+                );
+            }
+        }
+
+        // Render GeoJSON choropleth layer on Leaflet map
+        if (leafletMap && geojsonData) {
+            if (geojsonLayer) {
+                leafletMap.removeLayer(geojsonLayer);
+            }
+
+            geojsonLayer = L.geoJSON(geojsonData, {
+                style: getCountyStyle,
+                onEachFeature: onEachCountyFeature,
+            }).addTo(leafletMap);
+
+            // Fit map bounds to Taiwan
+            leafletMap.fitBounds(geojsonLayer.getBounds(), {
+                padding: [15, 15],
+            });
+        }
+    } catch (err) {
+        console.error("Map initialization error:", err);
+        showMapError("地圖資料暫時無法載入，請查看詳細預報。");
+    }
+}
+
 async function loadRegions() {
     setLoading(true, "正在載入臺灣各縣市清單...");
 
@@ -350,12 +608,12 @@ async function loadRegions() {
 
         elements.regionSelect.disabled = false;
 
-        // Default selection: Prefer '臺中市', otherwise first region
+        // Default selection: Prefer '臺中市', otherwise first valid region
         const defaultRegion = regions.includes("臺中市") ? "臺中市" : regions[0];
         elements.regionSelect.value = defaultRegion;
 
-        // Automatically trigger forecast load for default region
-        await loadForecast(defaultRegion);
+        // Select initial county on map and load its forecast
+        selectCounty(defaultRegion, true);
     } catch (err) {
         console.error("Regions load error:", err);
         elements.regionSelect.disabled = true;
@@ -367,15 +625,28 @@ async function loadRegions() {
 // Initialization on DOMContentLoaded
 // ---------------------------------------------------------------------------
 
-document.addEventListener("DOMContentLoaded", () => {
-    // Attach change event listener to region selector
+document.addEventListener("DOMContentLoaded", async () => {
+    // 1. Initialize Leaflet map
+    initMap();
+
+    // 2. Load Map Data and GeoJSON
+    await loadMapDataAndGeoJSON();
+
+    // 3. Load Regions and initial forecast
+    await loadRegions();
+
+    // 4. Attach change event listener to region selector
     if (elements.regionSelect) {
         elements.regionSelect.addEventListener("change", (event) => {
             const selectedRegion = event.target.value;
-            loadForecast(selectedRegion);
+            selectCounty(selectedRegion, false);
         });
     }
 
-    // Initial load
-    loadRegions();
+    // 5. Invalidate map size on window resize
+    window.addEventListener("resize", () => {
+        if (leafletMap) {
+            leafletMap.invalidateSize();
+        }
+    });
 });

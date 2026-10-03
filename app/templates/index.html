@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Taiwan Weather Forecast — 中央氣象署一週天氣預報</title>
+    <!-- Leaflet CSS pinned stable version 1.9.4 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Chart.js pinned stable version for temperature line chart -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <!-- Leaflet JS pinned stable version 1.9.4 -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
     <div class="app-container">
@@ -17,60 +21,89 @@
             <p class="subtitle">Data Source: Central Weather Administration (CWA)</p>
         </header>
 
-        <!-- Controls: Region Selector & Feedback Alerts -->
-        <section class="controls-section" aria-label="地區選擇與狀態">
-            <div class="selector-wrapper">
-                <label for="region-select" class="selector-label">選擇地區</label>
-                <select id="region-select" class="region-select" aria-label="選擇地區">
-                    <option value="" disabled selected>正在載入縣市...</option>
-                </select>
-            </div>
+        <!-- Status Banners: Loading & Error -->
+        <div id="loading-state" class="status-banner loading-banner hidden" role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="loading-text">正在載入天氣資料...</span>
+        </div>
 
-            <!-- Loading indicator -->
-            <div id="loading-state" class="status-banner loading-banner hidden" role="status" aria-live="polite">
-                <span class="spinner" aria-hidden="true"></span>
-                <span id="loading-text">正在載入天氣資料...</span>
-            </div>
+        <div id="error-state" class="status-banner error-banner hidden" role="alert" aria-live="assertive">
+            <span id="error-text">目前無法取得天氣資料，請稍後再試。</span>
+        </div>
 
-            <!-- Error banner -->
-            <div id="error-state" class="status-banner error-banner hidden" role="alert" aria-live="assertive">
-                <span id="error-text">目前無法取得天氣資料，請稍後再試。</span>
-            </div>
-        </section>
-
-        <!-- Content Area: Summary, Chart, and Table -->
+        <!-- Main Dashboard Content -->
         <main id="weather-content" class="weather-content">
-            <!-- Summary Cards Section -->
-            <section class="summary-section" aria-label="近期預報摘要">
-                <div class="section-header">
-                    <h3 class="section-title">最近預報時段摘要</h3>
-                    <span id="summary-period" class="summary-period-badge">--</span>
-                </div>
-                <div class="cards-grid">
-                    <div class="card weather-card">
-                        <div class="card-icon" aria-hidden="true">🌤️</div>
-                        <div class="card-info">
-                            <span class="card-label">天氣現象</span>
-                            <strong id="card-weather" class="card-value">--</strong>
+            <!-- Upper Section: Map (65-70%) + Detail/Summary Panel (30-35%) -->
+            <div class="dashboard-main-grid">
+                <!-- Map Section -->
+                <section class="map-section" aria-label="台灣縣市預報地圖">
+                    <div class="map-header">
+                        <div class="map-title-group">
+                            <h3 class="section-title">臺灣縣市預報地圖</h3>
+                            <span id="map-period-badge" class="map-period-badge">載入中...</span>
                         </div>
                     </div>
-                    <div class="card min-temp-card">
-                        <div class="card-icon" aria-hidden="true">🌡️</div>
-                        <div class="card-info">
-                            <span class="card-label">預測最低溫</span>
-                            <strong id="card-min-temp" class="card-value temp-cold">--</strong>
+                    <div class="map-container" id="map-container">
+                        <div id="taiwan-map" class="taiwan-map" aria-label="台灣各縣市預測最高溫地圖"></div>
+                        <div id="map-error" class="map-error-overlay hidden" role="alert">地圖資料暫時無法載入</div>
+                    </div>
+                    <!-- Temperature Legend -->
+                    <div class="map-legend" id="map-legend" aria-label="預測最高溫圖例">
+                        <span class="legend-title">預測最高溫 °C</span>
+                        <div class="legend-items">
+                            <span class="legend-chip"><i style="background:#60a5fa"></i>&lt; 20</span>
+                            <span class="legend-chip"><i style="background:#34d399"></i>20–23</span>
+                            <span class="legend-chip"><i style="background:#facc15"></i>24–27</span>
+                            <span class="legend-chip"><i style="background:#fb923c"></i>28–31</span>
+                            <span class="legend-chip"><i style="background:#f87171"></i>32–35</span>
+                            <span class="legend-chip"><i style="background:#dc2626"></i>&ge; 36</span>
+                            <span class="legend-chip"><i style="background:#cbd5e1"></i>無資料</span>
                         </div>
                     </div>
-                    <div class="card max-temp-card">
-                        <div class="card-icon" aria-hidden="true">☀️</div>
-                        <div class="card-info">
-                            <span class="card-label">預測最高溫</span>
-                            <strong id="card-max-temp" class="card-value temp-warm">--</strong>
-                        </div>
-                    </div>
-                </div>
-            </section>
+                </section>
 
+                <!-- Detail Panel: Region Selector & Summary Cards -->
+                <aside class="detail-panel" aria-label="縣市預報詳細資訊">
+                    <div class="panel-card selector-panel-card">
+                        <label for="region-select" class="selector-label">選擇地區</label>
+                        <select id="region-select" class="region-select" aria-label="選擇地區">
+                            <option value="" disabled selected>正在載入縣市...</option>
+                        </select>
+                    </div>
+
+                    <div class="panel-card summary-panel-card">
+                        <div class="section-header">
+                            <h3 class="section-title">最近預報時段摘要</h3>
+                            <span id="summary-period" class="summary-period-badge">--</span>
+                        </div>
+                        <div class="cards-grid vertical-cards-grid">
+                            <div class="card weather-card">
+                                <div class="card-icon" aria-hidden="true">🌤️</div>
+                                <div class="card-info">
+                                    <span class="card-label">天氣現象</span>
+                                    <strong id="card-weather" class="card-value">--</strong>
+                                </div>
+                            </div>
+                            <div class="card min-temp-card">
+                                <div class="card-icon" aria-hidden="true">🌡️</div>
+                                <div class="card-info">
+                                    <span class="card-label">預測最低溫</span>
+                                    <strong id="card-min-temp" class="card-value temp-cold">--</strong>
+                                </div>
+                            </div>
+                            <div class="card max-temp-card">
+                                <div class="card-icon" aria-hidden="true">☀️</div>
+                                <div class="card-info">
+                                    <span class="card-label">預測最高溫</span>
+                                    <strong id="card-max-temp" class="card-value temp-warm">--</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+
+            <!-- Lower Section: Chart and Table -->
             <!-- Chart Section -->
             <section class="chart-section" aria-label="未來一週最高與最低溫趨勢">
                 <div class="section-header">
@@ -122,3 +155,4 @@
     <script src="/static/js/app.js"></script>
 </body>
 </html>
+

@@ -14,6 +14,7 @@ from app.repositories.weather_repository import (
     create_fetch_log,
     get_active_forecasts_by_region,
     get_latest_fetch_log,
+    get_map_forecasts,
     get_regions,
     upsert_forecasts,
 )
@@ -171,6 +172,88 @@ def get_forecast(
     }
 
 
+def get_map_data(
+    session: Session,
+    dataset_id: str = CWAClient.DATASET_FORECAST_1WEEK,
+    current_time: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Retrieve active forecast records across all regions for the latest batch.
+
+    Applies the Latest Batch Rule:
+    - Filters forecasts from the latest batch only.
+    - Only includes active/non-expired intervals (end_time > current_time).
+    - Sorts forecasts deterministically by start_time ASC, region_name ASC.
+    - Derives unique sorted periods.
+
+    Args:
+        session: Active SQLAlchemy session.
+        dataset_id: Target dataset ID (defaults to 'F-C0032-005').
+        current_time: Optional reference time for active interval filtering.
+
+    Returns:
+        Dictionary formatted for MapDataResponse with dataset_id, updated_at, periods, and forecasts.
+
+    Raises:
+        WeatherDatabaseError: If database operation fails.
+    """
+    try:
+        forecasts = get_map_forecasts(
+            session=session,
+            dataset_id=dataset_id,
+            current_time=current_time,
+        )
+    except Exception as exc:
+        raise WeatherDatabaseError(f"Database query failed for map data: {sanitize_error(exc)}") from exc
+
+    # Determine last updated timestamp from latest successful fetch log or first forecast
+    try:
+        latest_log = get_latest_fetch_log(
+            session=session,
+            dataset_id=dataset_id,
+            status="success",
+        )
+    except Exception:
+        latest_log = None
+
+    if latest_log and latest_log.fetched_at:
+        updated_at = to_taipei_isoformat(latest_log.fetched_at)
+    elif forecasts and forecasts[0].fetched_at:
+        updated_at = to_taipei_isoformat(forecasts[0].fetched_at)
+    else:
+        updated_at = to_taipei_isoformat(datetime.now(timezone.utc))
+
+    # Derive unique periods sorted chronologically
+    unique_periods_map: Dict[tuple, Dict[str, str]] = {}
+    for f in forecasts:
+        key = (f.start_time, f.end_time)
+        if key not in unique_periods_map:
+            unique_periods_map[key] = {
+                "start_time": to_taipei_isoformat(f.start_time),
+                "end_time": to_taipei_isoformat(f.end_time),
+            }
+
+    periods = sorted(unique_periods_map.values(), key=lambda p: (p["start_time"], p["end_time"]))
+
+    forecast_items = [
+        {
+            "region_name": f.region_name,
+            "start_time": to_taipei_isoformat(f.start_time),
+            "end_time": to_taipei_isoformat(f.end_time),
+            "weather": f.weather,
+            "min_temp": f.min_temp,
+            "max_temp": f.max_temp,
+        }
+        for f in forecasts
+    ]
+
+    return {
+        "dataset_id": dataset_id,
+        "updated_at": updated_at,
+        "periods": periods,
+        "forecasts": forecast_items,
+    }
+
+
 def _record_failure_log(
     session: Session,
     dataset_id: str,
@@ -303,6 +386,7 @@ class WeatherService:
 
     list_regions = staticmethod(list_regions)
     get_forecast = staticmethod(get_forecast)
+    get_map_data = staticmethod(get_map_data)
     refresh_forecasts = staticmethod(refresh_forecasts)
     to_taipei_isoformat = staticmethod(to_taipei_isoformat)
     sanitize_error = staticmethod(sanitize_error)

@@ -15,7 +15,7 @@ def test_root_returns_html():
 
 
 def test_root_html_structure_and_components():
-    """Verify GET / HTML contains all required dashboard sections and IDs."""
+    """Verify GET / HTML contains all required dashboard sections, Leaflet assets, and map elements."""
     response = client.get("/")
     assert response.status_code == 200
     html = response.text
@@ -24,6 +24,18 @@ def test_root_html_structure_and_components():
     assert "Taiwan Weather Forecast" in html
     assert "中央氣象署一週天氣預報" in html
     assert "Data Source: Central Weather Administration (CWA)" in html
+
+    # Leaflet and Chart.js External Libraries
+    assert "leaflet.css" in html
+    assert "leaflet.js" in html
+    assert "chart.umd.min.js" in html
+
+    # Map Container and Legend
+    assert 'id="map-container"' in html
+    assert 'id="taiwan-map"' in html
+    assert 'id="map-legend"' in html
+    assert "預測最高溫 °C" in html
+    assert 'id="map-period-badge"' in html
 
     # Region Selector & Accessibility Label
     assert 'id="region-select"' in html
@@ -61,26 +73,43 @@ def test_root_html_structure_and_components():
 
 
 def test_static_css_asset():
-    """Verify static stylesheet is served with 200 OK and valid CSS content."""
+    """Verify static stylesheet is served with 200 OK and valid GIS dashboard CSS rules."""
     response = client.get("/static/css/style.css")
     assert response.status_code == 200
-    assert "text/css" in response.headers.get("content-type", "") or "stylesheet" in response.text or "--primary" in response.text
-    assert "--primary" in response.text
-    assert ".app-container" in response.text
-    assert ".chart-container" in response.text
+    css = response.text
+    assert ".dashboard-main-grid" in css
+    assert ".map-container" in css
+    assert ".taiwan-map" in css
+    assert ".map-legend" in css
+    assert ".county-tooltip" in css
 
 
 def test_static_js_asset():
-    """Verify static client script is served with 200 OK and valid JS content."""
+    """Verify static client script contains Leaflet map, GeoJSON, and sync logic."""
     response = client.get("/static/js/app.js")
     assert response.status_code == 200
-    assert "loadRegions" in response.text
-    assert "loadForecast" in response.text
-    assert "updateSummary" in response.text
-    assert "updateChart" in response.text
-    assert "updateTable" in response.text
-    assert "encodeURIComponent" in response.text
-    assert "temperatureChartInstance.destroy()" in response.text
+    js = response.text
+    assert "loadRegions" in js
+    assert "loadForecast" in js
+    assert "/api/map-data" in js
+    assert "/static/data/taiwan_counties.geojson" in js
+    assert "initMap" in js
+    assert "getTemperatureColor" in js
+    assert "selectCounty" in js
+    assert "updateSummary" in js
+    assert "updateChart" in js
+    assert "updateTable" in js
+    assert "temperatureChartInstance.destroy()" in js
+    assert "leafletMap.invalidateSize()" in js
+
+
+def test_static_geojson_asset_served():
+    """Verify local taiwan_counties.geojson is served directly via static files."""
+    response = client.get("/static/data/taiwan_counties.geojson")
+    assert response.status_code == 200
+    data = response.json()
+    assert data.get("type") == "FeatureCollection"
+    assert len(data.get("features", [])) == 22
 
 
 def test_frontend_does_not_contain_secrets():

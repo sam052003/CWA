@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.schemas import (
     ErrorResponse,
     ForecastResponse,
+    MapDataResponse,
     RefreshResponse,
     RegionsResponse,
 )
@@ -102,6 +103,31 @@ def get_forecast_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving forecast",
+        )
+
+
+@router.get(
+    "/map-data",
+    response_model=MapDataResponse,
+    summary="Get active weather forecast data for Taiwan county map",
+    responses={
+        503: {"model": ErrorResponse, "description": "Database service unavailable"},
+    },
+)
+def get_map_data_endpoint(session: Session = Depends(get_db)):
+    """Retrieve active weather forecasts across all Taiwan regions from the latest batch."""
+    try:
+        data = weather_service.get_map_data(session=session)
+        return MapDataResponse(**data)
+    except WeatherDatabaseError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable",
         )
 
 
