@@ -171,9 +171,36 @@ def get_forecast(
     }
 
 
+def _record_failure_log(
+    session: Session,
+    dataset_id: str,
+    error_message: str,
+) -> None:
+    """Attempt to record a failure log in the database using a separate rollback/commit cycle.
+
+    Swallows internal logging errors to preserve the original exception category.
+    """
+    try:
+        session.rollback()
+        create_fetch_log(
+            session=session,
+            dataset_id=dataset_id,
+            status="failure",
+            records_count=0,
+            error_message=sanitize_error(error_message)[:1000],
+        )
+        session.commit()
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+
+
 def refresh_forecasts(
     session: Session,
     client: Optional[CWAClient] = None,
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Execute complete data refresh workflow from CWA API to PostgreSQL UPSERT.
 
@@ -182,9 +209,11 @@ def refresh_forecasts(
     Args:
         session: Active database session.
         client: Optional CWAClient instance (created if None).
+        payload: Optional pre-fetched CWA JSON response dictionary. If provided,
+                 network fetch from CWA API is skipped to prevent duplicate requests.
 
     Returns:
-        Summary dictionary with counts and updated_at timestamp.
+        Summary dictionary with counts and updated_at timestamp from the fetch log.
 
     Raises:
         WeatherRefreshError: If CWA request fails, parsing fails, or validation fails.
@@ -193,39 +222,55 @@ def refresh_forecasts(
     if client is None:
         client = CWAClient()
 
-    # Step 1: Fetch raw payload from CWA API
-    try:
-        data = client.fetch_forecast_1week()
-    except CWAClientError as exc:
-        raise WeatherRefreshError(f"CWA API request failed: {sanitize_error(exc)}") from exc
+    dataset_id = getattr(client, "DATASET_FORECAST_1WEEK", "F-C0032-005")
+
+    # Step 1: Obtain raw payload (use pre-provided payload or fetch from CWA API)
+    if payload is not None:
+        data = payload
+    else:
+        try:
+            data = client.fetch_forecast_1week()
+        except CWAClientError as exc:
+            err_msg = f"CWA API request failed: {sanitize_error(exc)}"
+            _record_failure_log(session=session, dataset_id=dataset_id, error_message=err_msg)
+            raise WeatherRefreshError(err_msg) from exc
+        except Exception as exc:
+            err_msg = f"Unexpected error during CWA fetch: {sanitize_error(exc)}"
+            _record_failure_log(session=session, dataset_id=dataset_id, error_message=err_msg)
+            raise WeatherRefreshError(err_msg) from exc
 
     # Step 2: Parse raw JSON into structured forecast records
     try:
         parsed_records = parse_cwa_forecast(data)
     except Exception as exc:
-        raise WeatherRefreshError(f"Failed to parse CWA payload: {sanitize_error(exc)}") from exc
+        err_msg = f"Failed to parse CWA payload: {sanitize_error(exc)}"
+        _record_failure_log(session=session, dataset_id=dataset_id, error_message=err_msg)
+        raise WeatherRefreshError(err_msg) from exc
 
     # Step 3: Validate parsed records
     if not parsed_records:
-        raise WeatherRefreshError("No valid forecast records parsed from CWA response")
+        err_msg = "No valid forecast records parsed from CWA response"
+        _record_failure_log(session=session, dataset_id=dataset_id, error_message=err_msg)
+        raise WeatherRefreshError(err_msg)
 
     distinct_regions = sorted(set(r["region_name"] for r in parsed_records))
     if len(distinct_regions) != 22:
-        raise WeatherRefreshError(
-            f"Validation failed: expected 22 regions from CWA API, got {len(distinct_regions)}"
-        )
+        err_msg = f"Validation failed: expected 22 regions from CWA API, got {len(distinct_regions)}"
+        _record_failure_log(session=session, dataset_id=dataset_id, error_message=err_msg)
+        raise WeatherRefreshError(err_msg)
 
     required_fields = ("dataset_id", "region_name", "start_time", "end_time", "weather", "min_temp", "max_temp")
     for idx, r in enumerate(parsed_records):
         for f in required_fields:
             if r.get(f) is None:
-                raise WeatherRefreshError(f"Validation failed: record {idx} missing required field '{f}'")
+                err_msg = f"Validation failed: record {idx} missing required field '{f}'"
+                _record_failure_log(session=session, dataset_id=dataset_id, error_message=err_msg)
+                raise WeatherRefreshError(err_msg)
 
     # Step 4: Persist via UPSERT in an atomic transaction
-    dataset_id = getattr(client, "DATASET_FORECAST_1WEEK", "F-C0032-005")
     try:
         upserted_count = upsert_forecasts(session, parsed_records)
-        create_fetch_log(
+        success_log = create_fetch_log(
             session=session,
             dataset_id=dataset_id,
             status="success",
@@ -234,31 +279,22 @@ def refresh_forecasts(
         )
         session.commit()
     except Exception as exc:
-        session.rollback()
         sanitized_msg = sanitize_error(exc)
-
-        # Attempt to record failure log using a separate transaction
-        try:
-            create_fetch_log(
-                session=session,
-                dataset_id=dataset_id,
-                status="failure",
-                records_count=0,
-                error_message=sanitized_msg[:1000],
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-
+        _record_failure_log(session=session, dataset_id=dataset_id, error_message=sanitized_msg)
         raise WeatherDatabaseError(f"Database transaction failed during refresh: {sanitized_msg}") from exc
 
-    now_taipei = to_taipei_isoformat(datetime.now(timezone.utc))
+    # Step 5: Format updated_at using actual success fetch_log timestamp
+    fetched_at = getattr(success_log, "fetched_at", None)
+    if isinstance(fetched_at, datetime):
+        updated_at = to_taipei_isoformat(fetched_at)
+    else:
+        updated_at = to_taipei_isoformat(datetime.now(timezone.utc))
     return {
         "status": "success",
         "dataset_id": dataset_id,
         "records_count": upserted_count,
         "regions_count": len(distinct_regions),
-        "updated_at": now_taipei,
+        "updated_at": updated_at,
     }
 
 

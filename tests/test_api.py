@@ -210,7 +210,7 @@ def test_refresh_forecast_development_success():
 
     try:
         with patch("app.api.routes.get_settings") as mock_settings, \
-             patch("app.api.routes.weather_service.refresh_forecasts", return_value=mock_summary):
+             patch("app.api.routes.weather_service.refresh_forecasts", return_value=mock_summary) as mock_refresh:
 
             mock_settings.return_value.ENVIRONMENT = "development"
             response = client.post("/api/refresh")
@@ -221,6 +221,54 @@ def test_refresh_forecast_development_success():
             assert data["records_count"] == 330
             assert data["regions_count"] == 22
             assert "+08:00" in data["updated_at"]
+
+            # Verify refresh_forecasts was called with session and without payload
+            assert mock_refresh.called
+            call_kwargs = mock_refresh.call_args[1]
+            assert call_kwargs.get("payload") is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_refresh_forecast_endpoint_calls_client_fetch_when_no_payload():
+    """Verify that POST /api/refresh without payload invokes client.fetch_forecast_1week."""
+    mock_session = MagicMock()
+    app.dependency_overrides[get_db] = lambda: mock_session
+
+    mock_client = MagicMock()
+    mock_client.DATASET_FORECAST_1WEEK = "F-C0032-005"
+    mock_client.fetch_forecast_1week.return_value = {"cwaopendata": {}}
+
+    mock_records = [
+        {
+            "dataset_id": "F-C0032-005",
+            "region_name": f"Region_{i}",
+            "start_time": "2026-10-04T06:00:00+08:00",
+            "end_time": "2026-10-04T18:00:00+08:00",
+            "weather": "晴",
+            "min_temp": 20.0,
+            "max_temp": 28.0,
+        }
+        for i in range(22)
+    ]
+
+    try:
+        with patch("app.api.routes.get_settings") as mock_settings, \
+             patch("app.services.weather_service.CWAClient", return_value=mock_client), \
+             patch("app.services.weather_service.parse_cwa_forecast", return_value=mock_records), \
+             patch("app.services.weather_service.upsert_forecasts", return_value=22), \
+             patch("app.services.weather_service.create_fetch_log") as mock_create_log:
+
+            from datetime import datetime, timezone
+            mock_success_log = MagicMock()
+            mock_success_log.fetched_at = datetime(2026, 10, 4, 12, 0, 0, tzinfo=timezone.utc)
+            mock_create_log.return_value = mock_success_log
+
+            mock_settings.return_value.ENVIRONMENT = "development"
+            response = client.post("/api/refresh")
+
+            assert response.status_code == 200
+            assert mock_client.fetch_forecast_1week.call_count == 1
     finally:
         app.dependency_overrides.clear()
 

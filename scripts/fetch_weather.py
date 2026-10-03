@@ -98,7 +98,7 @@ def fetch_and_summarize(save_fixture: bool = False, save_db: bool = False) -> No
         print("Writing parsed records to Supabase PostgreSQL via Weather Service...")
         session = SessionLocal()
         try:
-            summary = refresh_forecasts(session=session, client=client)
+            summary = refresh_forecasts(session=session, client=client, payload=data)
             print("Database write success")
             print(f"Upserted forecast records: {summary['records_count']}")
             print(f"Regions: {summary['regions_count']}\n")
