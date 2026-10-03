@@ -89,39 +89,38 @@ https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005
 
 可用於第二階段的地圖、鄉鎮選擇、降雨機率、濕度、風速等功能。
 
-### 3.3 API Key 管理
+### 3.3 環境變數與 API Key 管理
 
-**CWA API Key 不得寫入 GitHub 原始碼。**
+**CWA API Key 與 Database Credentials 不得寫入 GitHub 原始碼。**
 
-本機使用：
+專案所有環境變數由 `app/core/config.py` 的 `Settings` class 集中管理：
 
-```text
-.env
-```
+- 使用 `pydantic-settings` 搭配 `BaseSettings` 與 `SettingsConfigDict`。
+- 本機開發自動讀取根目錄 `.env`（由 `.env.example` 複製建立）。
+- 部署至 Vercel 時由平台 `Project Settings → Environment Variables` 注入。
+- 所有 application modules 不直接呼叫 `os.getenv()` 或 `load_dotenv()`。
+- 透過 `get_settings()` 取得 cached `Settings` singleton instance。
 
-內容：
+`.env` 範例內容：
 
 ```env
+APP_NAME=CWA Taiwan Weather Forecast
+ENVIRONMENT=development
+PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
+DATABASE_URL=postgresql+psycopg://postgres:your_password@db.your_project.supabase.co:5432/postgres
 ```
 
-程式透過環境變數取得：
+程式取得設定方式：
 
 ```python
-import os
+from app.core.config import get_settings
 
-api_key = os.getenv("CWA_API_KEY")
+settings = get_settings()
+api_key = settings.cwa_api_key
 ```
 
-Vercel 部署時在：
-
-`Project Settings → Environment Variables`
-
-加入：
-
-`CWA_API_KEY`
-
-前端 JavaScript **不能直接取得 API Key**；所有 CWA API 請求必須由 server-side Python 執行。
+前端 JavaScript **不能直接取得 API Key 或 Database URL**；所有外部 API 請求與資料庫操作必須由 server-side Python 執行。
 
 ---
 
@@ -130,6 +129,7 @@ Vercel 部署時在：
 | 項目 | 技術 |
 |---|---|
 | Language | Python 3.12 |
+| Settings / Config | pydantic-settings |
 | CWA API Request | requests / httpx |
 | Web Backend | FastAPI |
 | HTML Template | Jinja2 |
@@ -369,20 +369,23 @@ CREATE TABLE IF NOT EXISTS fetch_logs (
 `.env`
 
 ```env
+APP_NAME=CWA Taiwan Weather Forecast
+ENVIRONMENT=development
+PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
 DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/postgres
 ```
 
-Python 端：
+Python 端（透過集中設定存取）：
 
 ```python
-import os
 from sqlalchemy import create_engine
+from app.core.config import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+settings = get_settings()
 
 engine = create_engine(
-    DATABASE_URL,
+    settings.database_url,
     pool_pre_ping=True
 )
 ```
@@ -568,11 +571,15 @@ Production 不對一般使用者公開，避免：
 
 ```text
 CWA/
-├─ myplan/
+├─ MyPlan/
 │  └─ design.md
 │
 ├─ app/
 │  ├─ main.py
+│  │
+│  ├─ core/
+│  │  ├─ __init__.py
+│  │  └─ config.py
 │  │
 │  ├─ api/
 │  │  └─ routes.py
@@ -607,9 +614,10 @@ CWA/
 │  └─ fetch_weather.py
 │
 ├─ tests/
+│  ├─ test_api.py
+│  ├─ test_config.py
 │  ├─ test_parser.py
-│  ├─ test_repository.py
-│  └─ test_api.py
+│  └─ test_repository.py
 │
 ├─ .env.example
 ├─ .gitignore
@@ -652,6 +660,7 @@ requests
 sqlalchemy
 psycopg[binary]
 python-dotenv
+pydantic-settings
 pytest
 httpx
 ```
