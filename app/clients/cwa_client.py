@@ -118,22 +118,30 @@ class CWAClient:
                 f"HTTP request to CWA API dataset '{dataset_id}' failed: {exc.__class__.__name__}"
             ) from exc
 
-        # Handle CWA platform difference: F-C0032-005 is available via File API
+        # Handle CWA platform difference: F-C0032-005 returns 404 on datastore, fallback to File API
         if response.status_code == 404 and dataset_id == self.DATASET_FORECAST_1WEEK:
             file_url = f"{self.FILE_API_BASE_URL}/{dataset_id}"
             file_params = dict(params or {})
             file_params.setdefault("format", "JSON")
             try:
-                fallback_resp = requests.get(
+                response = requests.get(
                     file_url,
                     headers=headers,
                     params=file_params,
                     timeout=self.timeout,
                 )
-                if fallback_resp.status_code == 200:
-                    response = fallback_resp
-            except requests.exceptions.RequestException:
-                pass
+            except requests.exceptions.Timeout as exc:
+                raise CWATimeoutError(
+                    f"Request to CWA File API dataset '{dataset_id}' timed out after {self.timeout}s."
+                ) from exc
+            except requests.exceptions.ConnectionError as exc:
+                raise CWAConnectionError(
+                    f"Failed to connect to CWA File API endpoint for dataset '{dataset_id}'."
+                ) from exc
+            except requests.exceptions.RequestException as exc:
+                raise CWAClientError(
+                    f"HTTP request to CWA File API dataset '{dataset_id}' failed: {exc.__class__.__name__}"
+                ) from exc
 
         if not (200 <= response.status_code < 300):
             raise CWAHTTPError(

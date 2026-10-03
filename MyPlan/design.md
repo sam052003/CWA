@@ -75,11 +75,18 @@ MVP 優先使用：
 - `MinT`：最低溫度
 - `MaxT`：最高溫度
 
-API Base URL：
+API 端點與呼叫說明：
 
-```text
-https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005
-```
+- Datastore API Base URL：
+  ```text
+  https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005
+  ```
+- File API Base URL（實際資料端點）：
+  ```text
+  https://opendata.cwa.gov.tw/fileapi/v1/opendataapi/F-C0032-005?format=JSON
+  ```
+
+> **API 呼叫說明**：在氣象署平台實際取得 `F-C0032-005` 資料時，Datastore endpoint 會回傳 HTTP 404 (`Resource not found`)。目前 CWA Client 會自動 fallback 到 CWA File API (`fileapi/v1/opendataapi/F-C0032-005?format=JSON`) 取得完整預報 JSON。
 
 ### 3.2 進階資料集
 
@@ -247,21 +254,41 @@ response = requests.get(
 )
 ```
 
-### Step 2 — JSON Parser
+### Step 2 — JSON Parser 與實際資料結構
 
-CWA 原始資料通常會以：
+根據實際取得的 sample JSON（`tests/fixtures/cwa_f_c0032_005_sample.json`），`F-C0032-005` 的實際樹狀層級為：
 
-`location → weatherElement → time`
+```text
+cwaopendata
+└─ dataset
+   └─ location[]
+      ├─ locationName
+      └─ weatherElement[]
+         ├─ elementName
+         └─ time[]
+            ├─ startTime
+            ├─ endTime
+            └─ parameter
+```
 
-等層級組織。
+各氣象元素資料細節：
 
-Parser 需要把：
+- **Wx**：
+  - `parameter.parameterName` = 天氣文字（例如 `"晴時多雲"`）
+  - `parameter.parameterValue` = 天氣代碼（例如 `"2"`）
+- **MaxT**：
+  - `parameter.parameterName` = 溫度數值（字串，例如 `"27"`，需轉為數值）
+  - `parameter.parameterUnit` = `C`
+- **MinT**：
+  - `parameter.parameterName` = 溫度數值（字串，例如 `"25"`，需轉為數值）
+  - `parameter.parameterUnit` = `C`
 
-- Wx
-- MinT
-- MaxT
+目前實際 sample 規格：
+- **22 locations**：涵蓋臺灣全部 22 個縣市
+- **weather elements**：固定包含 `Wx`, `MaxT`, `MinT`
+- **12 小時區間**：每個 element 包含 15 個時間區間（每 12 小時一個區間資料）
 
-依據地區與時間對齊。
+Parser 需要依據各縣市與時間區間（以 `startTime` 與 `endTime` 為鍵）將 `Wx`、`MinT`、`MaxT` 整併對齊。
 
 標準化後：
 
