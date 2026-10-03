@@ -35,6 +35,7 @@ def get_engine() -> Engine:
             url,
             poolclass=NullPool,
             pool_pre_ping=True,
+            connect_args={"prepare_threshold": None},
         )
     return _engine
 

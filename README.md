@@ -148,12 +148,18 @@ pytest
   - `requirements.txt`、`.gitignore`、`.env.example`
   - 安全保護機制（預留 `CWA_API_KEY` 與 `DATABASE_URL`，確保 Secrets 不外洩）
   - 本機啟動與測試流程建立
-- [x] **Phase 2: CWA API 資料串接與解析** (當前完成)
+- [x] **Phase 2: CWA API 資料串接與解析**
   - CWA Client 實作（Timeout、例外處理、Datastore 404 至 File API fallback）
   - 取得真實 CWA 一週預報 Sample JSON Fixture（無 Secret）
   - CWA JSON Parser（以 `(startTime, endTime)` 對齊 Wx, MinT, MaxT，具備完整異常處理）
   - 完整 Mock 單元測試與 Fixture 結構測試
-- [ ] **Phase 3: Supabase PostgreSQL 資料庫串接與 Repository**
+- [x] **Phase 3: Supabase PostgreSQL 資料庫串接與 Repository** (當前完成)
+  - Supabase PostgreSQL connection（採用 Transaction Pooler + NullPool 連線策略，停用 prepared statements）
+  - `weather_forecasts` 與 `fetch_logs` 資料表結構
+  - PostgreSQL UPSERT（以 `(dataset_id, region_name, start_time, end_time)` 為鍵避免重複累積）
+  - Repository query（縣市列表去重排序與指定縣市依時間排序預報）
+  - Transaction handling（全成功 commit，失敗自動 rollback 並記錄 failure log）
+  - `--save-db` 指令列旗標支援真實資料寫入與安全摘要輸出
 - [ ] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)**
 - [ ] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)**
 - [ ] **Phase 6: Vercel 雲端正式部署**

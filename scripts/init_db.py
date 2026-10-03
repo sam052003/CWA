@@ -1,7 +1,6 @@
 """Database initialization script.
 
 Creates database tables in Supabase PostgreSQL according to models.py.
-Will be executed in Phase 3.
 """
 
 import sys

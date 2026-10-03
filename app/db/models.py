@@ -3,8 +3,6 @@
 Defined according to Section 7 of design.md:
 - WeatherForecast (weather_forecasts table)
 - FetchLog (fetch_logs table)
-
-Will be finalized and migrated in Phase 3.
 """
 
 from datetime import datetime, timezone

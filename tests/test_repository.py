@@ -310,3 +310,25 @@ def test_database_cached_engine_and_session_factory():
             assert yielded_db is not None
             with pytest.raises(StopIteration):
                 next(gen)
+
+
+def test_database_engine_transaction_pooler_configuration():
+    """Verify that get_engine configures NullPool, pool_pre_ping, and prepare_threshold=None for Transaction Pooler."""
+    from sqlalchemy.pool import NullPool
+    from app.db.database import get_engine
+
+    with patch("app.db.database.get_settings") as mock_settings, \
+         patch("app.db.database.create_engine") as mock_create_engine, \
+         patch("app.db.database._engine", None):
+
+        mock_settings.return_value.database_url = "postgresql+psycopg://user:pass@host:6543/postgres"
+
+        get_engine()
+
+        assert mock_create_engine.called
+        call_args, call_kwargs = mock_create_engine.call_args
+        assert call_args[0] == "postgresql+psycopg://user:pass@host:6543/postgres"
+        assert call_kwargs.get("poolclass") is NullPool
+        assert call_kwargs.get("pool_pre_ping") is True
+        assert call_kwargs.get("connect_args") == {"prepare_threshold": None}
+

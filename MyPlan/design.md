@@ -115,7 +115,7 @@ APP_NAME=CWA Taiwan Weather Forecast
 ENVIRONMENT=development
 PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
-DATABASE_URL=postgresql+psycopg://postgres:your_password@db.your_project.supabase.co:5432/postgres
+DATABASE_URL=postgresql+psycopg://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:6543/postgres
 ```
 
 程式取得設定方式：
@@ -400,22 +400,28 @@ APP_NAME=CWA Taiwan Weather Forecast
 ENVIRONMENT=development
 PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
-DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/postgres
+DATABASE_URL=postgresql+psycopg://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:6543/postgres
 ```
 
 Python 端（透過集中設定存取）：
 
 ```python
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 from app.core.config import get_settings
 
 settings = get_settings()
 
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True
+    poolclass=NullPool,
+    pool_pre_ping=True,
+    connect_args={"prepare_threshold": None},
 )
 ```
+
+> **連線機制說明**：目前專案採用 **Supabase Transaction Pooler (port 6543) + psycopg 3**。因為 Transaction Pooler (PgBouncer) 不支援 prepared statements，故設定 `connect_args={"prepare_threshold": None}` 停用 prepared statements，並搭配 `NullPool` 避免 client 端維持大型閒置連線池。
+
 
 ### 8.2 Vercel
 
