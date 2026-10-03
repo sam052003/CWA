@@ -1,5 +1,6 @@
 """Fetch 1-week weather forecast from CWA Open Data API and output safe summary."""
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -9,8 +10,13 @@ from app.core.config import get_settings
 from app.parsers.cwa_parser import parse_cwa_forecast
 
 
-def fetch_and_summarize() -> None:
-    """Fetch CWA forecast, save fixture, and display a safe summary without exposing secrets."""
+def fetch_and_summarize(save_fixture: bool = False) -> None:
+    """Fetch CWA forecast, parse records, and display a safe summary without exposing secrets.
+
+    Args:
+        save_fixture: If True, writes raw payload to tests/fixtures/cwa_f_c0032_005_sample.json.
+                      If False (default), fixture file is not modified.
+    """
     settings = get_settings()
 
     if not settings.cwa_api_key:
@@ -55,13 +61,15 @@ def fetch_and_summarize() -> None:
         elements = first_loc.get("weatherElement", [])
         weather_element_names = [el.get("elementName") for el in elements if "elementName" in el]
 
-    # Save to tests/fixtures/cwa_f_c0032_005_sample.json
-    output_dir = Path("tests/fixtures")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    sample_file = output_dir / "cwa_f_c0032_005_sample.json"
-
-    with open(sample_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    # Save fixture file only if explicitly requested via --save-fixture
+    fixture_status = "[Skipped] (use --save-fixture to update fixture file)"
+    if save_fixture:
+        output_dir = Path("tests/fixtures")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        sample_file = output_dir / "cwa_f_c0032_005_sample.json"
+        with open(sample_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        fixture_status = f"Saved to {sample_file.as_posix()} ({sample_file.stat().st_size:,} bytes)"
 
     # Parse and validate records with CWAParser
     parsed_records = parse_cwa_forecast(data)
@@ -75,7 +83,7 @@ def fetch_and_summarize() -> None:
     print(f"Raw location count     : {location_count}")
     print(f"First raw location     : {first_location_name}")
     print(f"WeatherElement names   : {weather_element_names}")
-    print(f"Sample JSON saved to   : {sample_file.as_posix()} ({sample_file.stat().st_size:,} bytes)")
+    print(f"Fixture update status  : {fixture_status}")
     print(f"Parsed records count   : {len(parsed_records)}")
     print(f"Parsed regions count   : {len(parsed_regions)}")
     print(f"First parsed record    : {first_parsed_record}")
@@ -83,7 +91,16 @@ def fetch_and_summarize() -> None:
 
 
 def main() -> None:
-    fetch_and_summarize()
+    parser = argparse.ArgumentParser(
+        description="Fetch 1-week weather forecast from CWA Open Data API and display safe summary."
+    )
+    parser.add_argument(
+        "--save-fixture",
+        action="store_true",
+        help="Explicitly save the fetched response to tests/fixtures/cwa_f_c0032_005_sample.json (default: False).",
+    )
+    args = parser.parse_args()
+    fetch_and_summarize(save_fixture=args.save_fixture)
 
 
 if __name__ == "__main__":

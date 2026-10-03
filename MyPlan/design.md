@@ -775,20 +775,20 @@ Website
 
 ### Phase 1 — Environment
 
-- [ ] 建立 Python environment
-- [ ] requirements.txt
-- [ ] `.env`
-- [ ] `.env.example`
-- [ ] `.gitignore`
-- [ ] FastAPI Hello World
+- [x] 建立 Python environment
+- [x] requirements.txt
+- [x] `.env`
+- [x] `.env.example`
+- [x] `.gitignore`
+- [x] FastAPI Hello World
 
 ### Phase 2 — CWA API
 
-- [ ] CWA API request
-- [ ] 驗證 API Key
-- [ ] 取得 sample JSON
-- [ ] 分析 JSON hierarchy
-- [ ] 建立 parser
+- [x] CWA API request
+- [x] 驗證 API Key
+- [x] 取得 sample JSON
+- [x] 分析 JSON hierarchy
+- [x] 建立 parser
 
 ### Phase 3 — Supabase PostgreSQL
 

@@ -142,13 +142,17 @@ pytest
 
 ## 目前開發進度
 
-- [x] **Phase 1: 環境與基礎架構** (當前完成)
+- [x] **Phase 1: 環境與基礎架構**
   - 專案目錄結構建立
   - FastAPI 基礎架構與 Health Check / Hello World 端點
   - `requirements.txt`、`.gitignore`、`.env.example`
   - 安全保護機制（預留 `CWA_API_KEY` 與 `DATABASE_URL`，確保 Secrets 不外洩）
   - 本機啟動與測試流程建立
-- [ ] **Phase 2: CWA API 資料串接與解析**
+- [x] **Phase 2: CWA API 資料串接與解析** (當前完成)
+  - CWA Client 實作（Timeout、例外處理、Datastore 404 至 File API fallback）
+  - 取得真實 CWA 一週預報 Sample JSON Fixture（無 Secret）
+  - CWA JSON Parser（以 `(startTime, endTime)` 對齊 Wx, MinT, MaxT，具備完整異常處理）
+  - 完整 Mock 單元測試與 Fixture 結構測試
 - [ ] **Phase 3: Supabase PostgreSQL 資料庫串接與 Repository**
 - [ ] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)**
 - [ ] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)**
