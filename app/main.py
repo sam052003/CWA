@@ -1,19 +1,16 @@
 """Main application entrypoint for CWA Taiwan Weather Forecast."""
 
-import os
 from pathlib import Path
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
+from app.core.config import get_settings
 
-# Load environment variables from .env file if it exists
-load_dotenv()
+settings = get_settings()
 
 app = FastAPI(
-    title="CWA Taiwan Weather Forecast",
+    title=settings.APP_NAME,
     description="Taiwan Weather Forecast web application powered by Central Weather Administration (CWA) Open Data API.",
     version="0.1.0",
 )
@@ -32,7 +29,8 @@ app.include_router(api_router)
 def read_root():
     """Root endpoint returning welcome message and basic service information."""
     return {
-        "message": "Welcome to CWA Taiwan Weather Forecast API",
+        "message": f"Welcome to {settings.APP_NAME} API",
+        "environment": settings.ENVIRONMENT,
         "status": "online",
         "docs": "/docs",
         "health": "/health",
@@ -44,12 +42,11 @@ def health_check():
     """Root-level health check endpoint."""
     return {
         "status": "healthy",
-        "service": "CWA Taiwan Weather Forecast",
+        "service": settings.APP_NAME,
     }
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)

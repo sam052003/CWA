@@ -24,6 +24,9 @@ CWA/
 │  └─ design.md              # 系統主要設計規格文件
 ├─ app/
 │  ├─ main.py                # FastAPI 應用程式主入口
+│  ├─ core/
+│  │  ├─ __init__.py
+│  │  └─ config.py           # 集中環境變數管理 (pydantic-settings)
 │  ├─ api/
 │  │  └─ routes.py           # API 路由與 Health Check
 │  ├─ services/
@@ -47,9 +50,10 @@ CWA/
 │  └─ fetch_weather.py       # 天氣資料更新腳本
 ├─ tests/
 │  ├─ test_api.py            # API 端點測試
+│  ├─ test_config.py         # 設定與環境變數測試
 │  ├─ test_parser.py         # JSON Parser 測試 (Phase 2)
 │  └─ test_repository.py     # Repository 測試 (Phase 3)
-├─ .env.example              # 環境變數範本 (預留 CWA_API_KEY, DATABASE_URL)
+├─ .env.example              # 環境變數範本 (集中管理 APP_NAME, ENVIRONMENT, PORT, CWA_API_KEY, DATABASE_URL)
 ├─ .gitignore                # 排除敏感檔案與虛擬環境
 ├─ requirements.txt          # Python 依賴套件清單
 ├─ vercel.json               # Vercel 部署設定
@@ -97,9 +101,11 @@ cp .env.example .env
 
 編輯 `.env` 檔案並填入相應的金鑰與資料庫連線資訊：
 ```env
+APP_NAME=CWA Taiwan Weather Forecast
+ENVIRONMENT=development
+PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
 DATABASE_URL=postgresql+psycopg://postgres:your_password@db.your_project.supabase.co:5432/postgres
-PORT=8000
 ```
 
 > **重要安全須知**：

@@ -3,18 +3,18 @@
 Will be fully connected in Phase 3 according to design.md.
 """
 
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+from app.core.config import get_settings
 
 Base = declarative_base()
 
 
 def get_engine():
     """Retrieve SQLAlchemy engine with pool_pre_ping enabled."""
-    url = os.getenv("DATABASE_URL")
+    settings = get_settings()
+    url = settings.database_url
     if not url:
         raise ValueError("DATABASE_URL environment variable is not set.")
     return create_engine(url, pool_pre_ping=True)
