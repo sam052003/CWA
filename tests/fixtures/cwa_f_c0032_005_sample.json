@@ -1,9 +1,9 @@
 {
   "cwaopendata": {
     "@xmlns": "urn:cwa:gov:tw:cwacommon:0.1",
-    "identifier": "be72e549-9b7c-6e90-2852-b0a772f80101",
+    "identifier": "5c6af44a-32bd-a05b-de19-b5d28a660343",
     "sender": "weather@cwa.gov.tw",
-    "sent": "2026-10-03T17:06:11+08:00",
+    "sent": "2026-10-03T22:36:13+08:00",
     "status": "Actual",
     "msgType": "Issue",
     "source": "MFC",
@@ -12,8 +12,8 @@
     "dataset": {
       "datasetInfo": {
         "datasetDescription": "一週縣市天氣預報",
-        "issueTime": "2026-10-03T17:00:00+08:00",
-        "update": "2026-10-03T17:06:11+08:00"
+        "issueTime": "2026-10-03T23:00:00+08:00",
+        "update": "2026-10-03T22:36:13+08:00"
       },
       "location": [
         {
@@ -23,7 +23,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -148,10 +148,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -273,7 +273,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -403,7 +403,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -528,10 +528,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -653,7 +653,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -783,7 +783,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -908,10 +908,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -1033,7 +1033,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -1163,7 +1163,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -1288,10 +1288,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "29",
+                    "parameterName": "27",
                     "parameterUnit": "C"
                   }
                 },
@@ -1413,7 +1413,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "26",
@@ -1543,7 +1543,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -1668,10 +1668,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "30",
+                    "parameterName": "28",
                     "parameterUnit": "C"
                   }
                 },
@@ -1793,7 +1793,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "27",
@@ -1923,7 +1923,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -2048,10 +2048,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "30",
+                    "parameterName": "28",
                     "parameterUnit": "C"
                   }
                 },
@@ -2173,7 +2173,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "27",
@@ -2303,19 +2303,19 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "多雲",
-                    "parameterValue": "4"
+                    "parameterName": "多雲時晴",
+                    "parameterValue": "3"
                   }
                 },
                 {
                   "startTime": "2026-10-04T06:00:00+08:00",
                   "endTime": "2026-10-04T18:00:00+08:00",
                   "parameter": {
-                    "parameterName": "多雲時晴",
-                    "parameterValue": "3"
+                    "parameterName": "多雲短暫陣雨",
+                    "parameterValue": "8"
                   }
                 },
                 {
@@ -2428,10 +2428,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -2553,7 +2553,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -2683,7 +2683,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -2808,10 +2808,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "25",
                     "parameterUnit": "C"
                   }
                 },
@@ -2933,7 +2933,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "24",
@@ -3063,7 +3063,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -3188,10 +3188,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -3313,7 +3313,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "24",
@@ -3443,7 +3443,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -3568,10 +3568,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "24",
                     "parameterUnit": "C"
                   }
                 },
@@ -3693,7 +3693,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "23",
@@ -3823,7 +3823,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -3948,10 +3948,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "29",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -4073,7 +4073,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -4203,7 +4203,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -4328,10 +4328,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "29",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -4453,7 +4453,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "24",
@@ -4583,7 +4583,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -4708,10 +4708,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "29",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -4833,7 +4833,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -4963,7 +4963,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -5088,10 +5088,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "29",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -5213,7 +5213,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -5343,7 +5343,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -5468,10 +5468,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "29",
+                    "parameterName": "25",
                     "parameterUnit": "C"
                   }
                 },
@@ -5593,7 +5593,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "24",
@@ -5723,7 +5723,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -5848,10 +5848,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "30",
+                    "parameterName": "27",
                     "parameterUnit": "C"
                   }
                 },
@@ -5973,7 +5973,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -6103,11 +6103,11 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "陰時多雲短暫陣雨",
-                    "parameterValue": "10"
+                    "parameterName": "多雲短暫陣雨",
+                    "parameterValue": "8"
                   }
                 },
                 {
@@ -6228,10 +6228,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "25",
                     "parameterUnit": "C"
                   }
                 },
@@ -6353,7 +6353,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -6483,7 +6483,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "多雲短暫陣雨",
@@ -6494,8 +6494,8 @@
                   "startTime": "2026-10-04T06:00:00+08:00",
                   "endTime": "2026-10-04T18:00:00+08:00",
                   "parameter": {
-                    "parameterName": "晴時多雲",
-                    "parameterValue": "2"
+                    "parameterName": "多雲短暫陣雨",
+                    "parameterValue": "8"
                   }
                 },
                 {
@@ -6608,10 +6608,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "28",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -6733,7 +6733,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "24",
@@ -6863,7 +6863,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -6988,10 +6988,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "28",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -7113,7 +7113,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "25",
@@ -7243,7 +7243,7 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "晴時多雲",
@@ -7368,7 +7368,7 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "27",
@@ -7493,7 +7493,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "26",
@@ -7623,11 +7623,11 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "多雲短暫陣雨",
-                    "parameterValue": "8"
+                    "parameterName": "晴時多雲",
+                    "parameterValue": "2"
                   }
                 },
                 {
@@ -7748,10 +7748,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -7873,7 +7873,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "26",
@@ -8003,19 +8003,19 @@
               "elementName": "Wx",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "晴時多雲",
-                    "parameterValue": "2"
+                    "parameterName": "多雲短暫陣雨",
+                    "parameterValue": "8"
                   }
                 },
                 {
                   "startTime": "2026-10-04T06:00:00+08:00",
                   "endTime": "2026-10-04T18:00:00+08:00",
                   "parameter": {
-                    "parameterName": "晴時多雲",
-                    "parameterValue": "2"
+                    "parameterName": "多雲短暫陣雨",
+                    "parameterValue": "8"
                   }
                 },
                 {
@@ -8128,10 +8128,10 @@
               "elementName": "MaxT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
-                    "parameterName": "27",
+                    "parameterName": "26",
                     "parameterUnit": "C"
                   }
                 },
@@ -8253,7 +8253,7 @@
               "elementName": "MinT",
               "time": [
                 {
-                  "startTime": "2026-10-03T18:00:00+08:00",
+                  "startTime": "2026-10-04T00:00:00+08:00",
                   "endTime": "2026-10-04T06:00:00+08:00",
                   "parameter": {
                     "parameterName": "26",

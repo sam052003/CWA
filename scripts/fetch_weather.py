@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.clients.cwa_client import CWAClient, CWAClientError
 from app.core.config import get_settings
+from app.parsers.cwa_parser import parse_cwa_forecast
 
 
 def fetch_and_summarize() -> None:
@@ -62,14 +63,22 @@ def fetch_and_summarize() -> None:
     with open(sample_file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+    # Parse and validate records with CWAParser
+    parsed_records = parse_cwa_forecast(data)
+    parsed_regions = sorted(set(r["region_name"] for r in parsed_records))
+    first_parsed_record = parsed_records[0] if parsed_records else None
+
     print("\n--- CWA Fetch Summary ---")
     print(f"Request success        : {request_success}")
     print(f"Dataset ID             : {CWAClient.DATASET_FORECAST_1WEEK}")
     print(f"Dataset description    : {dataset_description}")
-    print(f"Location count         : {location_count}")
-    print(f"First location name    : {first_location_name}")
+    print(f"Raw location count     : {location_count}")
+    print(f"First raw location     : {first_location_name}")
     print(f"WeatherElement names   : {weather_element_names}")
     print(f"Sample JSON saved to   : {sample_file.as_posix()} ({sample_file.stat().st_size:,} bytes)")
+    print(f"Parsed records count   : {len(parsed_records)}")
+    print(f"Parsed regions count   : {len(parsed_regions)}")
+    print(f"First parsed record    : {first_parsed_record}")
     print("-------------------------\n")
 
 
