@@ -2,20 +2,94 @@
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 from app.clients.cwa_client import CWAClient, CWAClientError
 from app.core.config import get_settings
+from app.db.database import SessionLocal
 from app.parsers.cwa_parser import parse_cwa_forecast
+from app.repositories.weather_repository import (
+    create_fetch_log,
+    get_regions,
+    upsert_forecasts,
+)
 
 
-def fetch_and_summarize(save_fixture: bool = False) -> None:
+def sanitize_error(exc: Exception) -> str:
+    """Ensure error message does not contain secrets, URLs, or credentials."""
+    msg = str(exc)
+    settings = get_settings()
+    if settings.cwa_api_key and settings.cwa_api_key in msg:
+        msg = msg.replace(settings.cwa_api_key, "[REDACTED_API_KEY]")
+    if settings.database_url and settings.database_url in msg:
+        msg = msg.replace(settings.database_url, "[REDACTED_DATABASE_URL]")
+    # Redact connection string or password patterns if present
+    msg = re.sub(r"postgresql(?:\+\w+)?://[^\s@]+@[^\s/]+/[^\s?]+", "[REDACTED_DATABASE_URL]", msg)
+    msg = re.sub(r"://[^:]+:[^@]+@", "://[REDACTED_CREDENTIALS]@", msg)
+    return msg
+
+
+def save_to_database(parsed_records: List[Dict[str, Any]], dataset_id: str) -> Tuple[int, int]:
+    """Execute atomic transaction to upsert forecasts and record fetch log.
+
+    Args:
+        parsed_records: List of normalized forecast dictionaries.
+        dataset_id: Identifier of the dataset.
+
+    Returns:
+        Tuple of (upserted_records_count, regions_count).
+
+    Raises:
+        RuntimeError: If database persistence fails after rollback.
+    """
+    session = SessionLocal()
+    try:
+        upserted_count = upsert_forecasts(session, parsed_records)
+        distinct_regions = get_regions(session)
+        regions_count = len(distinct_regions)
+
+        create_fetch_log(
+            session=session,
+            dataset_id=dataset_id,
+            status="success",
+            records_count=upserted_count,
+            error_message=None,
+        )
+        session.commit()
+        return upserted_count, regions_count
+    except Exception as exc:
+        session.rollback()
+        sanitized_msg = sanitize_error(exc)
+
+        # Attempt to record failure log using a separate transaction
+        try:
+            create_fetch_log(
+                session=session,
+                dataset_id=dataset_id,
+                status="failure",
+                records_count=0,
+                error_message=sanitized_msg[:1000],
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+
+        raise RuntimeError(f"Database transaction failed: {sanitized_msg}") from None
+    finally:
+        session.close()
+
+
+def fetch_and_summarize(save_fixture: bool = False, save_db: bool = False) -> None:
     """Fetch CWA forecast, parse records, and display a safe summary without exposing secrets.
 
     Args:
         save_fixture: If True, writes raw payload to tests/fixtures/cwa_f_c0032_005_sample.json.
                       If False (default), fixture file is not modified.
+        save_db: If True, persists parsed records to Supabase PostgreSQL using UPSERT.
+                 If False (default), database is not accessed or modified.
     """
     settings = get_settings()
 
@@ -89,6 +163,21 @@ def fetch_and_summarize(save_fixture: bool = False) -> None:
     print(f"First parsed record    : {first_parsed_record}")
     print("-------------------------\n")
 
+    # Save to database if --save-db flag is provided
+    if save_db:
+        print("Writing parsed records to Supabase PostgreSQL...")
+        try:
+            upserted_count, regions_count = save_to_database(
+                parsed_records=parsed_records,
+                dataset_id=CWAClient.DATASET_FORECAST_1WEEK,
+            )
+            print("Database write success")
+            print(f"Upserted forecast records: {upserted_count}")
+            print(f"Regions: {regions_count}\n")
+        except RuntimeError as err:
+            print(f"ERROR: {err}", file=sys.stderr)
+            sys.exit(1)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -99,8 +188,13 @@ def main() -> None:
         action="store_true",
         help="Explicitly save the fetched response to tests/fixtures/cwa_f_c0032_005_sample.json (default: False).",
     )
+    parser.add_argument(
+        "--save-db",
+        action="store_true",
+        help="Explicitly persist parsed forecast records into Supabase PostgreSQL (default: False).",
+    )
     args = parser.parse_args()
-    fetch_and_summarize(save_fixture=args.save_fixture)
+    fetch_and_summarize(save_fixture=args.save_fixture, save_db=args.save_db)
 
 
 if __name__ == "__main__":

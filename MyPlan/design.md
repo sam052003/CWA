@@ -792,14 +792,14 @@ Website
 
 ### Phase 3 — Supabase PostgreSQL
 
-- [ ] 建立 Supabase Project
-- [ ] 取得 PostgreSQL connection information
-- [ ] 建立 `weather_forecasts`
-- [ ] 建立 `fetch_logs`
-- [ ] Python 成功連線
-- [ ] insert / upsert
-- [ ] SELECT region
-- [ ] SELECT forecast
+- [x] 建立 Supabase Project
+- [x] 取得 PostgreSQL connection information
+- [x] 建立 `weather_forecasts`
+- [x] 建立 `fetch_logs`
+- [x] Python 成功連線
+- [x] insert / upsert
+- [x] SELECT region
+- [x] SELECT forecast
 
 ### Phase 4 — Web API
 
@@ -887,11 +887,11 @@ Website
 
 MVP 完成條件：
 
-- [ ] 可以從 CWA 成功取得真實資料
-- [ ] 可以解析 22 縣市資料
-- [ ] 可以寫入 Supabase PostgreSQL
-- [ ] 相同預報重複 refresh 不會一直新增 duplicate rows
-- [ ] 可以用 SQL 查詢指定縣市
+- [x] 可以從 CWA 成功取得真實資料
+- [x] 可以解析 22 縣市資料
+- [x] 可以寫入 Supabase PostgreSQL
+- [x] 相同預報重複 refresh 不會一直新增 duplicate rows
+- [x] 可以用 SQL 查詢指定縣市
 - [ ] 網站可以切換縣市
 - [ ] 可以顯示一週天氣資料表
 - [ ] 可以顯示最高／最低溫折線圖
