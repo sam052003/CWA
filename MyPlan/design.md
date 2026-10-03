@@ -604,6 +604,56 @@ Production 不對一般使用者公開，避免：
 - Vercel Hobby（免費方案）：每日一次（`0 0 * * *`，UTC 00:00，約臺灣時間 08:00）
 - Vercel Pro：可設定為每 6 小時一次（`0 */6 * * *`）
 
+### GET /api/map-data (Phase 7 預先設計)
+
+為全台 22 縣市地圖視覺化與多時段切換所規劃的高效匯總端點（Phase 7 規劃，本階段僅定義架構，不進行程式碼實作）。
+
+**設計概念**：
+- 前端地圖需要同時呈現全台 22 縣市的預報數值以繪製面量圖（Choropleth）。
+- 若前端針對 22 縣市發送 22 次 HTTP 請求，會造成不必要的網路開銷、瀏覽器連線排隊與資料庫負擔。
+- 因此由後端單一查詢打包「最新單一批次」之 22 縣市全部有效時段預報，一次性傳送給前端，由前端在本地記憶體中即時切換時段。
+
+**Response Schema Concept**：
+```json
+{
+  "dataset_id": "F-C0032-005",
+  "updated_at": "2026-10-04T00:30:00+08:00",
+  "periods": [
+    {
+      "start_time": "2026-10-04T06:00:00+08:00",
+      "end_time": "2026-10-04T18:00:00+08:00"
+    },
+    {
+      "start_time": "2026-10-04T18:00:00+08:00",
+      "end_time": "2026-10-05T06:00:00+08:00"
+    }
+  ],
+  "forecasts": [
+    {
+      "region_name": "臺中市",
+      "start_time": "2026-10-04T06:00:00+08:00",
+      "end_time": "2026-10-04T18:00:00+08:00",
+      "weather": "多雲",
+      "min_temp": 24.0,
+      "max_temp": 31.0
+    }
+  ]
+}
+```
+
+**架構與效能要求**：
+- **最新批次規則 (Latest Batch Rule)**：
+  - 由於 `weather_forecasts` 表保留歷史資料，舊批次與新批次可能存在重疊未過期的時段。
+  - 後端查詢必須先定位該資料集最新的 `fetched_at` batch（例如透過子查詢 `SELECT MAX(fetched_at) FROM weather_forecasts WHERE dataset_id = :dataset_id`），僅選取該 batch 之紀錄，杜絕新舊資料混雜。
+  - 再以 `end_time > CURRENT_TIMESTAMP` 過濾掉過期時段。
+  - 不得刪除歷史資料，確保資料庫維持稽核與追溯歷史之能力。
+- **穩定排序 (Deterministic Ordering)**：
+  - 結果統一以 `start_time ASC, region_name ASC` 排序，方便前端建構時段陣列與索引映射。
+- **資料量輕量**：
+  - 22 縣市 × 約 15 個預報區間 ≈ 330 筆紀錄，未壓縮 JSON 大小約 25～35 KB（啟用 Gzip/Brotli 僅約 4～6 KB），可由前端一次取得並暫存。
+- **嚴格分層設計**：
+  - Repository (`WeatherRepository.get_latest_map_forecasts`) → Service (`WeatherService.get_map_data`) → Route (`GET /api/map-data`)。
+
 ---
 
 ## 11. 預計目錄結構
@@ -616,37 +666,40 @@ CWA/
 ├─ app/
 │  ├─ main.py
 │  │
-│  ├─ core/
-│  │  ├─ __init__.py
-│  │  └─ config.py
-│  │
-│  ├─ api/
-│  │  └─ routes.py
-│  │
-│  ├─ services/
-│  │  └─ weather_service.py
-│  │
-│  ├─ repositories/
-│  │  └─ weather_repository.py
-│  │
-│  ├─ clients/
-│  │  └─ cwa_client.py
-│  │
-│  ├─ parsers/
-│  │  └─ cwa_parser.py
-│  │
-│  ├─ db/
-│  │  ├─ database.py
-│  │  └─ models.py
-│  │
-│  ├─ templates/
-│  │  └─ index.html
-│  │
-│  └─ static/
-│     ├─ css/
-│     │  └─ style.css
-│     └─ js/
-│        └─ app.js
+├─ core/
+│  ├─ __init__.py
+│  └─ config.py
+│
+├─ api/
+│  ├─ routes.py
+│  └─ schemas.py
+│
+├─ services/
+│  └─ weather_service.py
+│
+├─ repositories/
+│  └─ weather_repository.py
+│
+├─ clients/
+│  └─ cwa_client.py
+│
+├─ parsers/
+│  └─ cwa_parser.py
+│
+├─ db/
+│  ├─ database.py
+│  └─ models.py
+│
+├─ templates/
+│  └─ index.html
+│
+└─ static/
+   ├─ css/
+   │  └─ style.css
+   ├─ js/
+   │  └─ app.js
+   └─ data/
+      └─ taiwan_counties.geojson  # Phase 7: 22 縣市界線 GeoJSON
 │
 ├─ scripts/
 │  ├─ init_db.py
@@ -655,8 +708,12 @@ CWA/
 ├─ tests/
 │  ├─ test_api.py
 │  ├─ test_config.py
+│  ├─ test_cwa_client.py
+│  ├─ test_deployment.py
+│  ├─ test_frontend.py
 │  ├─ test_parser.py
-│  └─ test_repository.py
+│  ├─ test_repository.py
+│  └─ test_weather_service.py
 │
 ├─ .env.example
 ├─ .gitignore
@@ -868,16 +925,140 @@ https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/
 - refresh 成功後 Supabase `fetch_logs` 產生 success 紀錄
 - Production scheduled refresh pipeline 已驗證可正常運作
 
-### Phase 7 — Advanced
+### Phase 7 — Interactive Taiwan Weather Dashboard (規劃中)
 
-- [ ] Taiwan map
-- [ ] Township forecast
-- [ ] PoP
-- [ ] humidity
-- [ ] wind
-- [ ] UV
-- [ ] weather alert
-- [ ] AI summary
+對應原課程流程：
+- **Phase 7A**：對應原課程第 17 項（台灣地圖視覺化）
+- **Phase 7B**：對應原課程第 18 項（選擇日期／預報時段顯示地圖）
+- **Phase 7C**：對應原課程第 19 項（完整 Taiwan Weather Dashboard）
+
+---
+
+#### 7A. 台灣縣市天氣地圖 (Taiwan County Weather Map — 對應第 17 項)
+
+將純文字與下拉選單擴充為直覺的互動式地理空間 GIS 視覺化：
+
+- **Leaflet 互動式地圖**：輕量、高效能開源地圖核心，支援向量圖層與平滑縮放拖曳。
+- **台灣 22 縣市 GeoJSON 幾何界線**：
+  - 本地靜態檔案：`app/static/data/taiwan_counties.geojson`
+  - 規格：GeoJSON `FeatureCollection`、WGS84 座標系統（EPSG:4326）。
+  - 屬性包含縣市名稱，精準對齊 CWA `region_name`（如「臺中市」、「臺北市」、「新北市」等）。
+  - 資料來源優先採用內政部或政府開放資料之官方邊界圖資，實作時於 README 記載來源與授權。
+  - 打包為靜態資源（static asset），前端載入首頁時本地讀取，不依賴不可靠的第三方外鏈 geometry API。
+- **面量圖多邊形渲染 (Polygon Choropleth)**：
+  - 依各縣市預報最高溫或天氣數值映射至漸層色彩階梯（Color Scale）。
+- **懸停提示 (Hover Tooltip)**：
+  - 滑鼠游標移動至各縣市時，即時彈出顯示縣市名稱、天氣現象與預測最高/最低溫。
+- **點擊選取 (Click Selection)**：
+  - 點擊特定縣市時高亮（Highlight）該多邊形邊框，並將選取地區傳遞至系統狀態。
+- **地圖與下拉選單雙向同步 (Bidirectional Synchronization)**：
+  - 既有地區下拉選單保留作為備用/輔助控制項。
+  - 點選地圖縣市 → 同步更新下拉選單的值。
+  - 切換下拉選單 → 地圖自動高亮對應多邊形並聚焦。
+- **核心數值定義規則**：
+  - 地圖呈現的是 **預報（Forecast）**，而非即時觀測（Current Observation）。
+  - UI 必須明確標註「最近預報時段」、「預測最高溫」、「預測最低溫」，嚴禁標示為「即時溫度」或「現在溫度」。
+
+---
+
+#### 7B. 預報時段地圖切換 (Forecast Period Map — 對應第 18 項)
+
+中央氣象署 F-C0032-005 為時段型預報（約 12 小時一筆，跨越未來一週約 15 個時段），非單純 date-only 結構：
+
+- **時段選擇器 (Forecast Period Selector)**：
+  - 於地圖上方或控制列提供時段選擇控制項（按鈕群組或滑桿/下拉），顯示格式如：`MM/DD HH:mm ～ MM/DD HH:mm`。
+- **全島多邊形即時連動**：
+  - 切換不同預報時段時，全台 22 縣市地圖的：
+    - 天氣現象 (weather)
+    - 預測最低溫 (min_temp)
+    - 預測最高溫 (max_temp)
+    - 多邊形塗色 (polygon colors)
+    一併即時同步重新渲染。
+- **高效零額外請求架構**：
+  - 前端於載入時透過 `GET /api/map-data` 一次取得全台 22 縣市於所有有效時段的資料。
+  - 切換時段由瀏覽器本機記憶體直接過濾渲染，無需重整網頁，亦絕不重複向後端發送 22 次 HTTP 請求。
+
+---
+
+#### 7C. 完整天氣儀表板整合 (Complete Taiwan Weather Dashboard — 對應第 19 項)
+
+整合地圖、卡片、折線圖與表格，建立具備 GIS 特色的專業氣象儀表板：
+
+- **最終桌面版面配置 (Desktop Layout)**：
+  ```text
+  Header (Taiwan Weather Forecast / 中央氣象署一週天氣預報)
+
+  Map Dashboard Section (地圖儀表板核心區)
+  ├─ Taiwan interactive weather map (約佔寬度 65–70%)
+  └─ Selected region detail panel (約佔寬度 30–35%)
+
+  Detailed Section (時段深度分析區)
+  ├─ Existing Chart.js temperature chart (未來一週最高/最低溫折線圖)
+  └─ Existing forecast table (一週時段預報清單，支援水平滑動)
+
+  Footer (資料來源與 GitHub 連結)
+  ```
+- **以地圖為核心的視覺層級 (Map-First Information Hierarchy)**：
+  - 地圖為使用者造訪首頁的第一主要視覺焦點。
+  - 右側選取縣市資訊面板（Detail Panel）顯示：
+    - 選取縣市名稱 (selected region)
+    - 天氣現象與圖示 (weather)
+    - 預報時段區間 (forecast period)
+    - 預測最低溫 (min_temp)
+    - 預測最高溫 (max_temp)
+    - 最後資料更新時間 (updated_at)
+- **聯動更新管線**：
+  - 點擊地圖縣市：
+    1. 地圖多邊形高亮選取。
+    2. 下拉選單同步切換至該縣市。
+    3. 更新右側 Detail Panel 內容。
+    4. 既有 Chart.js 銷毀重建更新該縣市未來一週溫標走勢。
+    5. 既有 Forecast Table 更新該縣市完整 15 個預報時段。
+  - 切換下拉選單：
+    1. 地圖選取多邊形同步高亮切換。
+    2. 更新 Detail Panel、Chart.js 與 Forecast Table。
+- **視覺風格規範 (Visual Style Guidelines)**：
+  - **定位**：專業氣象地理資訊儀表板（Professional Weather GIS Dashboard）。
+  - **參考概念**：參考氣象署 GIS 空間佈局與現代環境監測站（如 AirBox）之空間視覺化直覺感。
+  - **智慧財產與合規保護**：嚴禁複製任何第三方網站之商標、Logo、特定品牌元素、精確排版或具版權之視覺資產。
+  - **色彩與質感**：
+    - 淺中性底圖（Light neutral map）：簡潔乾淨之底圖或向量圖層，避免花俏雜亂。
+    - 氣象系統主色（Navy / Sky Blue accents）：使用深藍、天藍與冷暖色溫作重點點綴。
+    - 白色資訊面板（White info panels）：乾淨白底帶細緻 1px 邊框與柔和陰影。
+    - 清晰溫度圖例（Clear temperature legend）：標示最高溫階層色盤與數值範圍。
+    - 收斂裝飾元素：減少過度圓角與雜亂卡片，強調清晰閱讀性與地圖主體性。
+- **響應式排版 (Responsive Breakpoints)**：
+  - **Desktop (大螢幕)**：左側地圖 (約 65~70%) + 右側縣市細節面板 (約 30~35%) 雙欄並排。
+  - **Tablet (平板)**：地圖置頂保持主視覺，右側面板適度縮窄或流暢折至地圖下方。
+  - **Mobile (手機)**：垂直單欄依序堆疊：
+    `Map (保持 320～380px 高度以維持流暢觸控) → Region Details → Temperature Chart → Forecast Table`。
+
+---
+
+#### Phase 7 驗收標準 (Acceptance Criteria — 待實作，全數保持未勾選)
+
+##### Phase 7A — 驗收標準
+- [ ] Taiwan map renders
+- [ ] 22 counties render
+- [ ] temperature choropleth
+- [ ] hover tooltip
+- [ ] click selection
+- [ ] map/dropdown sync
+
+##### Phase 7B — 驗收標準
+- [ ] forecast periods available
+- [ ] period selector
+- [ ] switching period updates all counties
+- [ ] no page reload
+- [ ] no 22 API requests
+
+##### Phase 7C — 驗收標準
+- [ ] map-first dashboard layout
+- [ ] selected county detail panel
+- [ ] existing Chart.js integrated
+- [ ] existing forecast table integrated
+- [ ] responsive desktop/mobile
+- [ ] Production deployment
 
 ---
 
