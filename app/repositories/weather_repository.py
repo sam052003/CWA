@@ -106,15 +106,45 @@ def get_regions(session: Session) -> List[str]:
     return list(result)
 
 
-def get_forecasts_by_region(session: Session, region_name: str) -> List[WeatherForecast]:
-    """Retrieve all forecasts for a specific region, ordered chronologically by start_time."""
-    stmt = (
-        select(WeatherForecast)
-        .where(WeatherForecast.region_name == region_name)
-        .order_by(WeatherForecast.start_time.asc())
-    )
+def get_forecasts_by_region(
+    session: Session,
+    region_name: str,
+    active_only: bool = False,
+    current_time: Optional[datetime] = None,
+) -> List[WeatherForecast]:
+    """Retrieve forecasts for a specific region, ordered chronologically by start_time.
+
+    Args:
+        session: Active SQLAlchemy session.
+        region_name: Target region name (e.g. '臺中市').
+        active_only: If True, filters out expired intervals (end_time > current_time).
+                     If False (default for backwards compatibility), returns all intervals.
+        current_time: Reference timestamp for expiration check (defaults to current UTC time).
+
+    Returns:
+        List of WeatherForecast records ordered by start_time ascending.
+    """
+    stmt = select(WeatherForecast).where(WeatherForecast.region_name == region_name)
+    if active_only:
+        ref_time = current_time or datetime.now(timezone.utc)
+        stmt = stmt.where(WeatherForecast.end_time > ref_time)
+    stmt = stmt.order_by(WeatherForecast.start_time.asc())
     result = session.execute(stmt).scalars().all()
     return list(result)
+
+
+def get_active_forecasts_by_region(
+    session: Session,
+    region_name: str,
+    current_time: Optional[datetime] = None,
+) -> List[WeatherForecast]:
+    """Retrieve non-expired forecasts for a region (end_time > current_time), ordered chronologically."""
+    return get_forecasts_by_region(
+        session=session,
+        region_name=region_name,
+        active_only=True,
+        current_time=current_time,
+    )
 
 
 def create_fetch_log(
@@ -151,11 +181,14 @@ def create_fetch_log(
 def get_latest_fetch_log(
     session: Session,
     dataset_id: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> Optional[FetchLog]:
-    """Retrieve the most recent fetch log entry, optionally filtered by dataset_id."""
+    """Retrieve the most recent fetch log entry, optionally filtered by dataset_id and status."""
     stmt = select(FetchLog)
     if dataset_id:
         stmt = stmt.where(FetchLog.dataset_id == dataset_id)
+    if status:
+        stmt = stmt.where(FetchLog.status == status)
     stmt = stmt.order_by(FetchLog.fetched_at.desc(), FetchLog.id.desc()).limit(1)
     return session.execute(stmt).scalars().first()
 
@@ -168,5 +201,6 @@ class WeatherRepository:
     upsert_forecasts = staticmethod(upsert_forecasts)
     get_regions = staticmethod(get_regions)
     get_forecasts_by_region = staticmethod(get_forecasts_by_region)
+    get_active_forecasts_by_region = staticmethod(get_active_forecasts_by_region)
     create_fetch_log = staticmethod(create_fetch_log)
     get_latest_fetch_log = staticmethod(get_latest_fetch_log)

@@ -130,6 +130,9 @@ python -m app.main
 - **系統健康檢查 (Health Check)**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 - **API 健康檢查**: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
 - **FastAPI 自動化 Swagger API 文件**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **縣市列表 API**: [http://127.0.0.1:8000/api/regions](http://127.0.0.1:8000/api/regions)
+- **指定縣市天氣預報 API**: [http://127.0.0.1:8000/api/forecast?region=臺中市](http://127.0.0.1:8000/api/forecast?region=臺中市)
+- **手動更新預報 API (POST, 開發環境)**: `http://127.0.0.1:8000/api/refresh`
 - **ReDoc 文件**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
 ### 6. 執行自動化測試
@@ -153,13 +156,17 @@ pytest
   - 取得真實 CWA 一週預報 Sample JSON Fixture（無 Secret）
   - CWA JSON Parser（以 `(startTime, endTime)` 對齊 Wx, MinT, MaxT，具備完整異常處理）
   - 完整 Mock 單元測試與 Fixture 結構測試
-- [x] **Phase 3: Supabase PostgreSQL 資料庫串接與 Repository** (當前完成)
+- [x] **Phase 3: Supabase PostgreSQL 資料庫串接與 Repository**
   - Supabase PostgreSQL connection（採用 Transaction Pooler + NullPool 連線策略，停用 prepared statements）
   - `weather_forecasts` 與 `fetch_logs` 資料表結構
   - PostgreSQL UPSERT（以 `(dataset_id, region_name, start_time, end_time)` 為鍵避免重複累積）
   - Repository query（縣市列表去重排序與指定縣市依時間排序預報）
   - Transaction handling（全成功 commit，失敗自動 rollback 並記錄 failure log）
   - `--save-db` 指令列旗標支援真實資料寫入與安全摘要輸出
-- [ ] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)**
+- [x] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)** (當前完成)
+  - `GET /api/regions`：取得資料庫中現有 22 縣市清單
+  - `GET /api/forecast?region={region_name}`：查詢指定縣市最新未過期預報（依 `start_time ASC` 排序，時間為 `Asia/Taipei (+08:00)`）
+  - `POST /api/refresh`：觸發從 CWA API 更新並寫入資料庫（開發環境可用，production 環境回傳 403）
+  - 完整業務邏輯與驗證封裝於 Weather Service 層，提供統一例外處理與安全機敏字串過濾
 - [ ] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)**
 - [ ] **Phase 6: Vercel 雲端正式部署**

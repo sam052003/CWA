@@ -2,84 +2,14 @@
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
 
 from app.clients.cwa_client import CWAClient, CWAClientError
 from app.core.config import get_settings
 from app.db.database import SessionLocal
 from app.parsers.cwa_parser import parse_cwa_forecast
-from app.repositories.weather_repository import (
-    create_fetch_log,
-    get_regions,
-    upsert_forecasts,
-)
-
-
-def sanitize_error(exc: Exception) -> str:
-    """Ensure error message does not contain secrets, URLs, or credentials."""
-    msg = str(exc)
-    settings = get_settings()
-    if settings.cwa_api_key and settings.cwa_api_key in msg:
-        msg = msg.replace(settings.cwa_api_key, "[REDACTED_API_KEY]")
-    if settings.database_url and settings.database_url in msg:
-        msg = msg.replace(settings.database_url, "[REDACTED_DATABASE_URL]")
-    # Redact connection string or password patterns if present
-    msg = re.sub(r"postgresql(?:\+\w+)?://[^\s@]+@[^\s/]+/[^\s?]+", "[REDACTED_DATABASE_URL]", msg)
-    msg = re.sub(r"://[^:]+:[^@]+@", "://[REDACTED_CREDENTIALS]@", msg)
-    return msg
-
-
-def save_to_database(parsed_records: List[Dict[str, Any]], dataset_id: str) -> Tuple[int, int]:
-    """Execute atomic transaction to upsert forecasts and record fetch log.
-
-    Args:
-        parsed_records: List of normalized forecast dictionaries.
-        dataset_id: Identifier of the dataset.
-
-    Returns:
-        Tuple of (upserted_records_count, regions_count).
-
-    Raises:
-        RuntimeError: If database persistence fails after rollback.
-    """
-    session = SessionLocal()
-    try:
-        upserted_count = upsert_forecasts(session, parsed_records)
-        distinct_regions = get_regions(session)
-        regions_count = len(distinct_regions)
-
-        create_fetch_log(
-            session=session,
-            dataset_id=dataset_id,
-            status="success",
-            records_count=upserted_count,
-            error_message=None,
-        )
-        session.commit()
-        return upserted_count, regions_count
-    except Exception as exc:
-        session.rollback()
-        sanitized_msg = sanitize_error(exc)
-
-        # Attempt to record failure log using a separate transaction
-        try:
-            create_fetch_log(
-                session=session,
-                dataset_id=dataset_id,
-                status="failure",
-                records_count=0,
-                error_message=sanitized_msg[:1000],
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-
-        raise RuntimeError(f"Database transaction failed: {sanitized_msg}") from None
-    finally:
-        session.close()
+from app.services.weather_service import refresh_forecasts, sanitize_error
 
 
 def fetch_and_summarize(save_fixture: bool = False, save_db: bool = False) -> None:
@@ -88,7 +18,7 @@ def fetch_and_summarize(save_fixture: bool = False, save_db: bool = False) -> No
     Args:
         save_fixture: If True, writes raw payload to tests/fixtures/cwa_f_c0032_005_sample.json.
                       If False (default), fixture file is not modified.
-        save_db: If True, persists parsed records to Supabase PostgreSQL using UPSERT.
+        save_db: If True, triggers Weather Service refresh to persist records into Supabase PostgreSQL.
                  If False (default), database is not accessed or modified.
     """
     settings = get_settings()
@@ -103,7 +33,7 @@ def fetch_and_summarize(save_fixture: bool = False, save_db: bool = False) -> No
     try:
         data = client.fetch_forecast_1week()
     except CWAClientError as exc:
-        print(f"ERROR: CWA API request failed: {exc}", file=sys.stderr)
+        print(f"ERROR: CWA API request failed: {sanitize_error(exc)}", file=sys.stderr)
         sys.exit(1)
 
     # Security verification: Ensure raw API key is never in the payload
@@ -163,20 +93,20 @@ def fetch_and_summarize(save_fixture: bool = False, save_db: bool = False) -> No
     print(f"First parsed record    : {first_parsed_record}")
     print("-------------------------\n")
 
-    # Save to database if --save-db flag is provided
+    # Delegate database write to Weather Service if --save-db flag is provided
     if save_db:
-        print("Writing parsed records to Supabase PostgreSQL...")
+        print("Writing parsed records to Supabase PostgreSQL via Weather Service...")
+        session = SessionLocal()
         try:
-            upserted_count, regions_count = save_to_database(
-                parsed_records=parsed_records,
-                dataset_id=CWAClient.DATASET_FORECAST_1WEEK,
-            )
+            summary = refresh_forecasts(session=session, client=client)
             print("Database write success")
-            print(f"Upserted forecast records: {upserted_count}")
-            print(f"Regions: {regions_count}\n")
-        except RuntimeError as err:
-            print(f"ERROR: {err}", file=sys.stderr)
+            print(f"Upserted forecast records: {summary['records_count']}")
+            print(f"Regions: {summary['regions_count']}\n")
+        except Exception as err:
+            print(f"ERROR: {sanitize_error(err)}", file=sys.stderr)
             sys.exit(1)
+        finally:
+            session.close()
 
 
 def main() -> None:

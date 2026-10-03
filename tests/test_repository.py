@@ -12,6 +12,7 @@ from app.db.models import FetchLog, WeatherForecast
 from app.repositories.weather_repository import (
     WeatherRepository,
     create_fetch_log,
+    get_active_forecasts_by_region,
     get_forecasts_by_region,
     get_latest_fetch_log,
     get_regions,
@@ -19,7 +20,11 @@ from app.repositories.weather_repository import (
     to_timezone_aware_datetime,
     upsert_forecasts,
 )
-from scripts.fetch_weather import sanitize_error, save_to_database
+from app.services.weather_service import (
+    WeatherDatabaseError,
+    refresh_forecasts,
+    sanitize_error,
+)
 
 
 def test_timezone_aware_datetime_conversion():
@@ -201,6 +206,24 @@ def test_get_forecasts_by_region_ordered():
     assert "ORDER BY weather_forecasts.start_time ASC" in compiled
 
 
+def test_get_active_forecasts_by_region_filters_expired():
+    """Verify that get_active_forecasts_by_region filters with end_time > current_time."""
+    mock_session = MagicMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    ref_time = datetime(2026, 10, 4, 12, 0, 0, tzinfo=timezone.utc)
+    get_active_forecasts_by_region(mock_session, "臺中市", current_time=ref_time)
+
+    stmt = mock_session.execute.call_args[0][0]
+    compiled = str(stmt.compile())
+
+    assert "WHERE weather_forecasts.region_name = :region_name_1 AND weather_forecasts.end_time > :end_time_1" in compiled
+    assert "ORDER BY weather_forecasts.start_time ASC" in compiled
+
+
+
 def test_fetch_log_success():
     """Verify create_fetch_log and get_latest_fetch_log."""
     mock_session = MagicMock()
@@ -240,30 +263,32 @@ def test_fetch_log_success():
 
 def test_transaction_rollback_and_error_behavior():
     """Verify atomic transaction rollback and failure log on persistence error."""
-    records = [
+    mock_session = MagicMock()
+    mock_session.commit.side_effect = [Exception("Database connection terminated"), None]
+    mock_client = MagicMock()
+    mock_client.DATASET_FORECAST_1WEEK = "F-C0032-005"
+    mock_client.fetch_forecast_1week.return_value = {"cwaopendata": {}}
+
+    mock_records = [
         {
             "dataset_id": "F-C0032-005",
-            "region_name": "臺北市",
+            "region_name": f"Region_{i}",
             "start_time": "2026-10-04T06:00:00+08:00",
             "end_time": "2026-10-04T18:00:00+08:00",
             "weather": "晴",
             "min_temp": 24,
             "max_temp": 28,
         }
+        for i in range(22)
     ]
 
-    mock_session = MagicMock()
-    # Simulate database commit error
-    mock_session.commit.side_effect = [Exception("Database connection terminated"), None]
-
-    with patch("scripts.fetch_weather.SessionLocal", return_value=mock_session):
-        with pytest.raises(RuntimeError, match="Database transaction failed"):
-            save_to_database(records, dataset_id="F-C0032-005")
+    with patch("app.services.weather_service.parse_cwa_forecast", return_value=mock_records), \
+         patch("app.services.weather_service.upsert_forecasts", return_value=22):
+        with pytest.raises(WeatherDatabaseError, match="Database transaction failed"):
+            refresh_forecasts(mock_session, client=mock_client)
 
     # Verify rollback was called for failed transaction
     assert mock_session.rollback.called
-    # Verify session was closed in finally
-    assert mock_session.close.called
 
 
 def test_security_sanitization_of_error_message():
@@ -271,7 +296,7 @@ def test_security_sanitization_of_error_message():
     fake_key = "MY_SUPER_SECRET_KEY_123"
     fake_db_url = "postgresql+psycopg://postgres:secret_pass_456@db.supabase.co:5432/postgres"
 
-    with patch("scripts.fetch_weather.get_settings") as mock_settings:
+    with patch("app.services.weather_service.get_settings") as mock_settings:
         mock_settings.return_value.cwa_api_key = fake_key
         mock_settings.return_value.database_url = fake_db_url
 

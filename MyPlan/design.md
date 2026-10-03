@@ -809,10 +809,10 @@ Website
 
 ### Phase 4 — Web API
 
-- [ ] GET `/api/regions`
-- [ ] GET `/api/forecast`
-- [ ] refresh service
-- [ ] error handling
+- [x] GET `/api/regions`
+- [x] GET `/api/forecast`
+- [x] refresh service
+- [x] error handling
 
 ### Phase 5 — Frontend
 
