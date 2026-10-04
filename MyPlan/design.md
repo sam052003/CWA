@@ -1124,7 +1124,7 @@ MVP 完成條件：
 - [x] Current tracked source files 不含真實 CRON_SECRET
 - [x] Phase 7A: 臺灣 22 縣市分級面量圖視覺化與點擊互動
 - [x] Phase 7B: 預報時段切換控制（生產環境已驗收完成）
-- [ ] Phase 7C: 完整成果展示 Taiwan Weather Dashboard（已實作，待生產環境最終驗收）
+- [x] Phase 7C: Complete Taiwan Weather Dashboard（已完成並通過生產環境驗收）
 
 ---
 
@@ -1214,14 +1214,14 @@ Supabase PostgreSQL
 - [x] no page reload（零頁面重整）
 - [x] no 22 API requests（零額外網路請求，不發送 22 次 API）
 
-### 21.3 Phase 7C: 完整成果展示 Taiwan Weather Dashboard (已實作，待生產環境最終驗收)
+### 21.3 Phase 7C: 完整成果展示 Taiwan Weather Dashboard (已完成並通過生產環境驗收)
 - 對應課程第 19 項「完整成果展示 Taiwan Weather Dashboard」。
-- 地圖優先氣象儀表板整體整合（Map-first Dashboard Integration）。
-- 選定縣市即時摘要面板（Selected County Detail Panel，含資料更新時間）。
-- 既有 Chart.js 折線圖深度整合（溫度趨勢視覺化）。
-- 既有預報資料表深度整合（詳細時段清單）。
-- 桌面／平板／手機跨裝置響應式排版（Responsive Desktop & Mobile Layout）。
-- 正式環境完整成果驗收與整體功能驗證。
+- [x] map-first dashboard layout（地圖優先氣象儀表板整體整合）
+- [x] selected county detail panel（選定縣市即時摘要面板，含資料更新時間）
+- [x] existing Chart.js integrated（既有 Chart.js 一週溫度趨勢折線圖整合）
+- [x] existing forecast table integrated（既有預報詳細時段資料表整合）
+- [x] responsive desktop/mobile（桌面／平板／手機跨裝置響應式排版）
+- [x] Production deployment（正式環境部署與完整成果驗收）
 
 ---
 

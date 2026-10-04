@@ -20,6 +20,9 @@
 - Phase 4 ✅ FastAPI Web API
 - Phase 5 ✅ Frontend Dashboard
 - Phase 6 ✅ Vercel Production Deployment & Scheduled Refresh
+- Phase 7A ✅ Taiwan County Forecast Map
+- Phase 7B ✅ Forecast Period Map
+- Phase 7C ✅ Complete Taiwan Weather Dashboard
 
 ---
 
@@ -323,13 +326,13 @@ Supabase PostgreSQL
   - [x] switching period updates all counties（切換時段即時更新全縣市多邊形與摘要）
   - [x] no page reload（零頁面重整）
   - [x] no 22 API requests（零額外網路請求，不發送 22 次 API）
-- [ ] **Phase 7C: 完整成果展示 Taiwan Weather Dashboard (對應課程第 19 項 — 已實作，待生產環境最終驗收)**
-  - [ ] 地圖優先氣象儀表板整體整合（Map-first Dashboard Integration）
-  - [ ] 選定縣市即時摘要面板（Selected County Detail Panel，含資料更新時間）
-  - [ ] 既有 Chart.js 折線圖深度整合（一週溫度趨勢視覺化）
-  - [ ] 既有預報資料表深度整合（詳細時段清單）
-  - [ ] 桌面／平板／手機跨裝置響應式排版（Responsive Desktop & Mobile Layout）
-  - [ ] 正式環境完整成果驗收與整體功能驗證
+- [x] **Phase 7C: 完整成果展示 Taiwan Weather Dashboard (對應課程第 19 項 — 已完成並通過生產環境驗收)**
+  - [x] map-first dashboard layout（地圖優先氣象儀表板整體整合）
+  - [x] selected county detail panel（選定縣市即時摘要面板，含資料更新時間）
+  - [x] existing Chart.js integrated（既有 Chart.js 一週溫度趨勢折線圖整合）
+  - [x] existing forecast table integrated（既有預報詳細時段資料表整合）
+  - [x] responsive desktop/mobile（桌面／平板／手機跨裝置響應式排版）
+  - [x] Production deployment（正式環境部署與完整成果驗收）
 
 > **未來擴充規劃（Future Extensions）**：雷達回波圖層疊加、降雨機率、自動輪播時段播放條、鄉鎮市區預報（F-D0047-093）等非屬課程核心規格之項目，保留於後續延伸階段規劃。
 
