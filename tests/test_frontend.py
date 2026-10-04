@@ -216,3 +216,89 @@ def test_dom_pointerdown_bridge_county_selection():
     assert "closeActiveTooltip()" in js
 
 
+def test_forecast_period_map_phase_7b():
+    """Verify Phase 7B Forecast Period Map selector, shared update function, and semantics."""
+    html_resp = client.get("/")
+    assert html_resp.status_code == 200
+    html = html_resp.text
+
+    # A. HTML:
+    # - map-period-select exists
+    # - associated accessible label exists
+    assert 'id="map-period-select"' in html
+    assert 'for="map-period-select"' in html
+    assert "預報時段" in html
+
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    # B. JavaScript:
+    # - periods are populated from mapDataCache.periods
+    assert "populatePeriodSelector" in js
+    assert "elements.mapPeriodSelect" in js
+
+    # - currentMapPeriod changes through shared function setMapPeriod
+    assert "function setMapPeriod(" in js
+    assert "currentMapPeriod = period" in js
+
+    # - selector displays formatted forecast periods
+    assert "formatForecastPeriod(period.start_time, period.end_time)" in js
+
+    # - period switch redraws GeoJSON styles
+    assert "geojsonLayer.setStyle(getCountyStyle)" in js
+
+    # - selected county summary updates from getForecastForCounty()
+    assert "updateSummary(getForecastForCounty(selectedCountyName))" in js
+
+    # - selected polygon styling is preserved
+    assert "selectedLayer.setStyle({" in js
+    assert "selectedLayer.bringToFront()" in js
+
+    # - no loadForecast() or fetch() inside period-switch function
+    set_period_idx = js.find("function setMapPeriod(")
+    assert set_period_idx != -1
+    set_period_end = js.find("function selectCounty(", set_period_idx)
+    set_period_body = (
+        js[set_period_idx:set_period_end]
+        if set_period_end != -1
+        else js[set_period_idx:set_period_idx + 1500]
+    )
+    assert "fetch(" not in set_period_body
+    assert "loadForecast(" not in set_period_body
+
+    # C. getForecastForCounty:
+    # - exact current period match is used
+    # - current period missing county data returns null
+    # - must NOT fall back to wrong period
+    forecast_fn_idx = js.find("function getForecastForCounty(")
+    assert forecast_fn_idx != -1
+    forecast_fn_end = js.find("function getCountyStyle(", forecast_fn_idx)
+    forecast_fn_body = js[forecast_fn_idx:forecast_fn_end]
+    assert "f.start_time === currentMapPeriod.start_time" in forecast_fn_body
+    assert "f.end_time === currentMapPeriod.end_time" in forecast_fn_body
+    assert "|| null" in forecast_fn_body
+
+    # loadForecast must not overwrite summary with forecasts[0]
+    load_forecast_idx = js.find("async function loadForecast(")
+    assert load_forecast_idx != -1
+    load_forecast_end = js.find("async function loadMapDataAndGeoJSON(", load_forecast_idx)
+    load_forecast_body = js[load_forecast_idx:load_forecast_end]
+    assert "updateSummary(forecasts[0])" not in load_forecast_body
+    assert "updateSummary(forecasts.length > 0 ? forecasts[0] : null)" not in load_forecast_body
+
+    # D. Regression:
+    # - handleCountyPointerDown still exists
+    assert "function handleCountyPointerDown(event)" in js
+    # - county pointer selection still routes to selectCounty()
+    assert "selectCounty(matchedCountyName, {" in js
+    # - dropdown selection still works
+    assert "selectCounty(selectedRegion" in js
+    # - mouseover/mouseout tooltip remains
+    assert "mouseover: (e) =>" in js
+    assert "mouseout: (e) =>" in js
+    # - Chart/Table functions remain
+    assert "updateChart" in js
+    assert "updateTable" in js
+
+

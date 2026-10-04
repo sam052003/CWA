@@ -34,6 +34,7 @@ const elements = {
     taiwanMap: document.getElementById("taiwan-map"),
     mapError: document.getElementById("map-error"),
     mapPeriodBadge: document.getElementById("map-period-badge"),
+    mapPeriodSelect: document.getElementById("map-period-select"),
 };
 
 // ---------------------------------------------------------------------------
@@ -132,17 +133,19 @@ function getTemperatureColor(temp) {
 
 /**
  * Retrieve forecast item for a given county in the active map period.
+ * If currentMapPeriod exists, only returns an exact start/end time match (no fallback to wrong period).
  */
 function getForecastForCounty(countyName) {
     if (!mapDataCache || !mapDataCache.forecasts) return null;
     if (currentMapPeriod) {
-        const matched = mapDataCache.forecasts.find(
-            (f) =>
-                f.region_name === countyName &&
-                f.start_time === currentMapPeriod.start_time &&
-                f.end_time === currentMapPeriod.end_time
+        return (
+            mapDataCache.forecasts.find(
+                (f) =>
+                    f.region_name === countyName &&
+                    f.start_time === currentMapPeriod.start_time &&
+                    f.end_time === currentMapPeriod.end_time
+            ) || null
         );
-        if (matched) return matched;
     }
     return mapDataCache.forecasts.find((f) => f.region_name === countyName) || null;
 }
@@ -259,6 +262,90 @@ function resetCountyStyle(layer) {
             fillOpacity: 0.95,
         });
         layer.bringToFront();
+    }
+}
+
+/**
+ * Populate forecast period selector options from mapDataCache.periods.
+ */
+function populatePeriodSelector(periods) {
+    if (!elements.mapPeriodSelect) return;
+    elements.mapPeriodSelect.replaceChildren();
+
+    if (!periods || periods.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "暫無預報時段";
+        elements.mapPeriodSelect.appendChild(opt);
+        return;
+    }
+
+    periods.forEach((period) => {
+        const opt = document.createElement("option");
+        opt.value = `${period.start_time}_${period.end_time}`;
+        opt.textContent = formatForecastPeriod(period.start_time, period.end_time);
+        elements.mapPeriodSelect.appendChild(opt);
+    });
+}
+
+/**
+ * Canonical forecast period update pipeline for Phase 7B.
+ * 1. Updates currentMapPeriod.
+ * 2. Closes any active tooltip.
+ * 3. Updates map period UI (select element and badge).
+ * 4. Redraws all 22 county polygon styles (choropleth).
+ * 5. Preserves selected county highlight outline.
+ * 6. Updates selected county summary panel for the new period.
+ * Does NOT reload Chart.js or Table, and does NOT fetch data.
+ *
+ * @param {Object|string} periodOrKey Period object with start_time & end_time, or period key string
+ */
+function setMapPeriod(periodOrKey) {
+    if (!periodOrKey) return;
+    let period = periodOrKey;
+    if (typeof periodOrKey === "string" && mapDataCache && mapDataCache.periods) {
+        period = mapDataCache.periods.find(
+            (p) => `${p.start_time}_${p.end_time}` === periodOrKey
+        ) || null;
+    }
+    if (!period) return;
+
+    currentMapPeriod = period;
+
+    // 1. Close any active tooltip
+    closeActiveTooltip();
+
+    // 2. Synchronize period selector and badge
+    const periodKey = `${period.start_time}_${period.end_time}`;
+    if (elements.mapPeriodSelect && elements.mapPeriodSelect.value !== periodKey) {
+        elements.mapPeriodSelect.value = periodKey;
+    }
+    if (elements.mapPeriodBadge) {
+        elements.mapPeriodBadge.textContent = formatForecastPeriod(
+            period.start_time,
+            period.end_time
+        );
+    }
+
+    // 3. Redraw all county polygon styles using getCountyStyle
+    if (geojsonLayer) {
+        geojsonLayer.setStyle(getCountyStyle);
+    }
+
+    // 4. Preserve selected county polygon highlight
+    if (selectedCountyName && countyLayersByName.has(selectedCountyName)) {
+        const selectedLayer = countyLayersByName.get(selectedCountyName);
+        selectedLayer.setStyle({
+            weight: 3.5,
+            color: "#1e3a8a",
+            fillOpacity: 0.95,
+        });
+        selectedLayer.bringToFront();
+    }
+
+    // 5. Immediately update selected county summary panel for the new period
+    if (selectedCountyName) {
+        updateSummary(getForecastForCounty(selectedCountyName));
     }
 }
 
@@ -713,9 +800,8 @@ async function loadForecast(regionName) {
 
         const data = await response.json();
 
-        // Update dashboard sections
+        // Update dashboard sections (Chart, Table, Metadata)
         const forecasts = data.forecasts || [];
-        updateSummary(forecasts.length > 0 ? forecasts[0] : null);
         updateChart(forecasts);
         updateTable(forecasts);
         updateMetadata(data);
@@ -753,9 +839,14 @@ async function loadMapDataAndGeoJSON() {
         mapDataCache = await mapDataRes.json();
         const geojsonData = await geojsonRes.json();
 
-        // Use the earliest / nearest active forecast period for Phase 7A default
+        // Populate period selector and initialize default active forecast period
         if (mapDataCache.periods && mapDataCache.periods.length > 0) {
+            populatePeriodSelector(mapDataCache.periods);
             currentMapPeriod = mapDataCache.periods[0];
+            const initialKey = `${currentMapPeriod.start_time}_${currentMapPeriod.end_time}`;
+            if (elements.mapPeriodSelect) {
+                elements.mapPeriodSelect.value = initialKey;
+            }
             if (elements.mapPeriodBadge) {
                 elements.mapPeriodBadge.textContent = formatForecastPeriod(
                     currentMapPeriod.start_time,
@@ -862,7 +953,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // 5. Invalidate map size on window resize
+    // 5. Attach change event listener to forecast period selector
+    if (elements.mapPeriodSelect) {
+        elements.mapPeriodSelect.addEventListener("change", (event) => {
+            const selectedKey = event.target.value;
+            const period = mapDataCache?.periods?.find(
+                (p) => `${p.start_time}_${p.end_time}` === selectedKey
+            );
+            if (period) {
+                setMapPeriod(period);
+            }
+        });
+    }
+
+    // 6. Invalidate map size on window resize
     window.addEventListener("resize", () => {
         if (leafletMap) {
             leafletMap.invalidateSize();

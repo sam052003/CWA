@@ -1122,6 +1122,9 @@ MVP 完成條件：
 - [x] Current tracked source files 不含真實 CWA API credentials
 - [x] Current tracked source files 不含真實 database credentials
 - [x] Current tracked source files 不含真實 CRON_SECRET
+- [x] Phase 7A: 臺灣 22 縣市分級面量圖視覺化與點擊互動
+- [x] Phase 7B: 預報時段切換控制與全縣市即時重新著色（無額外 API 請求、無頁面重整）
+- [ ] Phase 7C: 進階 GIS 圖層（未實作）
 
 ---
 
@@ -1192,3 +1195,24 @@ Supabase PostgreSQL
 ```
 
 這個版本不再依賴 SQLite，本機與正式部署環境都採 PostgreSQL，避免 Vercel 本機檔案持久化問題，也讓整個專案架構更接近一般正式 Web Application。
+
+---
+
+## 21. Phase 7: GIS 地圖視覺化與預報時段切換
+
+### 21.1 Phase 7A: 臺灣縣市預報地圖 (已完成)
+- Leaflet 1.9.4 底圖與 22 縣市 GeoJSON 多邊形圖層。
+- 依最近時段最高溫分級面量圖（Choropleth）。
+- 懸浮 Tooltip 即時顯示天氣與溫度。
+- 地圖縣市點擊與縣市選單雙向同步。
+
+### 21.2 Phase 7B: 預報時段切換控制 (已完成)
+- 實作課程項目第 18 項：選擇日期／預報時段顯示地圖。
+- 前端 `#map-period-select` 下拉選單動態載入所有可用預報區間（約 12 小時時段）。
+- 純前端零延遲切換：切換時段不發送額外網路請求，無頁面重新整理。
+- 即時重新著色 22 縣市分級面量圖多邊形，Tooltip 與縣市摘要卡同步呈現所選時段數值。
+- 保留所選縣市高亮輪廓，且 Chart.js 與預報資料表持續保持完整一週預報。
+
+### 21.3 Phase 7C: 進階 GIS 圖層與功能增強 (未實作)
+- 降雨機率雷達回波疊加、自動輪播時段播放條等進階圖層待未來階段實作。
+
