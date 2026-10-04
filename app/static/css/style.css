@@ -338,7 +338,50 @@ body {
     padding: 0.9rem 1.15rem;
 }
 
+.selected-region-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.selected-region-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.selected-region-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1e3a8a;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.selected-region-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 /* Leaflet Custom Tooltip */
+.leaflet-tooltip.custom-leaflet-tooltip {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+}
+
+.leaflet-tooltip.custom-leaflet-tooltip::before {
+    display: none !important;
+}
+
 .county-tooltip {
     background: rgba(15, 23, 42, 0.92) !important;
     color: #f8fafc !important;

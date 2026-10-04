@@ -327,11 +327,10 @@ Supabase PostgreSQL
 | 項目 | 說明 |
 |---|---|
 | **資料集名稱** | 臺灣直轄市、縣市界線（twCounty2010.geo.json） |
-| **來源機構** | 內政部國土測繪中心 (NLSC) / g0v.tw 台灣零時政府開放圖資專案 |
-| **來源網址** | [https://github.com/g0v/twgeojson](https://github.com/g0v/twgeojson) |
+| **直接來源** | g0v/twgeojson（[https://github.com/g0v/twgeojson](https://github.com/g0v/twgeojson)） |
+| **圖資授權** | CC0 1.0 Universal |
 | **座標系統** | WGS84 (EPSG:4326) 經緯度 |
 | **圖資處理** | 進行適度幾何簡化以縮減靜態資源傳輸大小（約 636 KB），並將縣市名稱標準化（例如將「台」統一為「臺」、「桃園縣」更新為「桃園市」），確保 22 縣市名稱與中央氣象署 CWA `region_name` 100% 精準對齊。 |
-| **圖資授權** | Open Data / MIT License / 政府資料開放授權條款 |
 | **底圖來源** | OpenStreetMap Tiles（&copy; OpenStreetMap contributors） |
 
 

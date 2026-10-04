@@ -11,11 +11,14 @@ let geojsonLayer = null;
 let mapDataCache = null;
 let currentMapPeriod = null;
 let selectedCountyName = null;
+let activeTooltipLayer = null;
+let hoveredCountyLayer = null;
 const countyLayersByName = new Map();
 
 // DOM Element References
 const elements = {
     regionSelect: document.getElementById("region-select"),
+    selectedRegionName: document.getElementById("selected-region-name"),
     loadingState: document.getElementById("loading-state"),
     loadingText: document.getElementById("loading-text"),
     errorState: document.getElementById("error-state"),
@@ -131,13 +134,17 @@ function getTemperatureColor(temp) {
  * Retrieve forecast item for a given county in the active map period.
  */
 function getForecastForCounty(countyName) {
-    if (!mapDataCache || !mapDataCache.forecasts || !currentMapPeriod) return null;
-    return mapDataCache.forecasts.find(
-        (f) =>
-            f.region_name === countyName &&
-            f.start_time === currentMapPeriod.start_time &&
-            f.end_time === currentMapPeriod.end_time
-    ) || null;
+    if (!mapDataCache || !mapDataCache.forecasts) return null;
+    if (currentMapPeriod) {
+        const matched = mapDataCache.forecasts.find(
+            (f) =>
+                f.region_name === countyName &&
+                f.start_time === currentMapPeriod.start_time &&
+                f.end_time === currentMapPeriod.end_time
+        );
+        if (matched) return matched;
+    }
+    return mapDataCache.forecasts.find((f) => f.region_name === countyName) || null;
 }
 
 /**
@@ -160,51 +167,129 @@ function getCountyStyle(feature) {
 }
 
 /**
- * Generate formatted HTML content for hover tooltip.
+ * Generate secure DOM element for hover tooltip using document.createElement & textContent.
+ * Prevents HTML injection of weather strings while cleanly styling weather info.
  */
-function createTooltipContent(countyName) {
+function createTooltipElement(countyName) {
+    const container = document.createElement("div");
+    container.className = "county-tooltip";
+
+    const countyDiv = document.createElement("div");
+    countyDiv.className = "tooltip-county";
+    countyDiv.textContent = countyName;
+    container.appendChild(countyDiv);
+
     const forecast = getForecastForCounty(countyName);
     if (!forecast) {
-        return `
-            <div class="county-tooltip">
-                <div class="tooltip-county">${countyName}</div>
-                <div class="tooltip-weather">暫無預報資料</div>
-            </div>
-        `;
+        const noDataDiv = document.createElement("div");
+        noDataDiv.className = "tooltip-weather";
+        noDataDiv.textContent = "暫無預報資料";
+        container.appendChild(noDataDiv);
+        return container;
     }
 
-    const weather = forecast.weather || "未知";
-    const minStr = forecast.min_temp !== null && forecast.min_temp !== undefined ? `${forecast.min_temp}°C` : "--";
-    const maxStr = forecast.max_temp !== null && forecast.max_temp !== undefined ? `${forecast.max_temp}°C` : "--";
+    const weatherDiv = document.createElement("div");
+    weatherDiv.className = "tooltip-weather";
+    weatherDiv.textContent = forecast.weather || "未知";
+    container.appendChild(weatherDiv);
 
-    return `
-        <div class="county-tooltip">
-            <div class="tooltip-county">${countyName}</div>
-            <div class="tooltip-weather">${weather}</div>
-            <div class="tooltip-temps">
-                <span class="temp-label-cold">預測最低 ${minStr}</span>
-                <span class="temp-label-warm">預測最高 ${maxStr}</span>
-            </div>
-        </div>
-    `;
+    const tempsDiv = document.createElement("div");
+    tempsDiv.className = "tooltip-temps";
+
+    const minSpan = document.createElement("span");
+    minSpan.className = "temp-label-cold";
+    const minStr = forecast.min_temp !== null && forecast.min_temp !== undefined ? `${forecast.min_temp}°C` : "--";
+    minSpan.textContent = `預測最低 ${minStr}`;
+    tempsDiv.appendChild(minSpan);
+
+    const maxSpan = document.createElement("span");
+    maxSpan.className = "temp-label-warm";
+    const maxStr = forecast.max_temp !== null && forecast.max_temp !== undefined ? `${forecast.max_temp}°C` : "--";
+    maxSpan.textContent = `預測最高 ${maxStr}`;
+    tempsDiv.appendChild(maxSpan);
+
+    container.appendChild(tempsDiv);
+    return container;
 }
 
 /**
- * Select a county polygon, update visual highlights, sync dropdown, and load detailed forecast.
+ * Explicitly close any active county tooltip across all layers.
+ * Enforces requirement that at most ONE county tooltip is visible at a time.
  */
-function selectCounty(countyName, updateDropdown = true) {
+function closeActiveTooltip() {
+    if (activeTooltipLayer) {
+        try {
+            activeTooltipLayer.closeTooltip();
+        } catch (e) {
+            // ignore
+        }
+        activeTooltipLayer = null;
+    }
+    countyLayersByName.forEach((layer) => {
+        if (layer && typeof layer.closeTooltip === "function") {
+            try {
+                if (layer.isTooltipOpen && layer.isTooltipOpen()) {
+                    layer.closeTooltip();
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+    });
+}
+
+/**
+ * Restore polygon style for a county layer.
+ * If the layer is currently selected, preserves its selected highlight.
+ */
+function resetCountyStyle(layer) {
+    if (!layer || !geojsonLayer) return;
+    const countyName = layer.feature && layer.feature.properties
+        ? (layer.feature.properties.COUNTYNAME || layer.feature.properties.name)
+        : null;
+    const isSelected = selectedCountyName && selectedCountyName === countyName;
+
+    geojsonLayer.resetStyle(layer);
+
+    if (isSelected) {
+        layer.setStyle({
+            weight: 3.5,
+            color: "#1e3a8a",
+            fillOpacity: 0.95,
+        });
+        layer.bringToFront();
+    }
+}
+
+/**
+ * Shared county-selection function for both map clicks and dropdown changes.
+ * 1. Closes any active tooltip.
+ * 2. Updates selected county state and manages visual polygon highlights.
+ * 3. Synchronizes dropdown selection.
+ * 4. Immediately updates selected-region-name heading.
+ * 5. Immediately updates nearest-period summary from mapDataCache.
+ * 6. Loads detailed 7-day forecast via API for Chart and Table.
+ *
+ * @param {string} countyName Name of the county to select (e.g. "臺中市")
+ * @param {Object} options Configuration options
+ * @param {boolean} options.panMap Whether to gently pan the map to the selected county (default: false)
+ */
+function selectCounty(countyName, options = {}) {
     if (!countyName) return;
+
+    // 1. Close any active tooltip
+    closeActiveTooltip();
 
     const prevCounty = selectedCountyName;
     selectedCountyName = countyName;
 
-    // Reset previous county style
-    if (prevCounty && countyLayersByName.has(prevCounty) && geojsonLayer) {
+    // 2. Remove previous selected polygon highlight
+    if (prevCounty && prevCounty !== countyName && countyLayersByName.has(prevCounty) && geojsonLayer) {
         const prevLayer = countyLayersByName.get(prevCounty);
         geojsonLayer.resetStyle(prevLayer);
     }
 
-    // Apply selected highlight style
+    // 3. Highlight selected county polygon
     if (countyLayersByName.has(countyName)) {
         const targetLayer = countyLayersByName.get(countyName);
         targetLayer.setStyle({
@@ -213,14 +298,31 @@ function selectCounty(countyName, updateDropdown = true) {
             fillOpacity: 0.95,
         });
         targetLayer.bringToFront();
+
+        // Optional gentle pan for dropdown selection without excessive zooming
+        if (options.panMap && leafletMap && targetLayer.getBounds) {
+            const bounds = targetLayer.getBounds();
+            leafletMap.panTo(bounds.getCenter(), { animate: true });
+        }
     }
 
-    // Sync dropdown value without triggering duplicate change events
-    if (updateDropdown && elements.regionSelect && elements.regionSelect.value !== countyName) {
+    // 4. Synchronize dropdown
+    if (elements.regionSelect && elements.regionSelect.value !== countyName) {
         elements.regionSelect.value = countyName;
     }
 
-    // Load forecast details for the selected region
+    // 5. Immediately update selected-region-name heading
+    if (elements.selectedRegionName) {
+        elements.selectedRegionName.textContent = countyName;
+    }
+
+    // 6. Immediately update nearest-period summary using mapDataCache for currently displayed period
+    const cachedForecast = getForecastForCounty(countyName);
+    if (cachedForecast) {
+        updateSummary(cachedForecast);
+    }
+
+    // 7. Load detailed 7-day forecast for Chart and Table
     loadForecast(countyName);
 }
 
@@ -232,7 +334,7 @@ function onEachCountyFeature(feature, layer) {
     countyLayersByName.set(countyName, layer);
 
     // Bind tooltip with dynamic content
-    layer.bindTooltip(() => createTooltipContent(countyName), {
+    layer.bindTooltip(() => createTooltipElement(countyName), {
         sticky: true,
         direction: "auto",
         className: "custom-leaflet-tooltip",
@@ -241,14 +343,28 @@ function onEachCountyFeature(feature, layer) {
     layer.on({
         mouseover: (e) => {
             const currentLayer = e.target;
-            const isSelected = selectedCountyName && selectedCountyName === countyName;
 
+            // 1. Close any previously opened tooltip
+            closeActiveTooltip();
+
+            // 2. Open current county tooltip
+            currentLayer.setTooltipContent(createTooltipElement(countyName));
+            currentLayer.openTooltip(e.latlng);
+            activeTooltipLayer = currentLayer;
+
+            // Clean up previous hover layer style if mouseout was missed during rapid movement
+            if (hoveredCountyLayer && hoveredCountyLayer !== currentLayer) {
+                resetCountyStyle(hoveredCountyLayer);
+            }
+            hoveredCountyLayer = currentLayer;
+
+            // 3. Apply hover polygon style
+            const isSelected = selectedCountyName && selectedCountyName === countyName;
             currentLayer.setStyle({
                 weight: isSelected ? 3.5 : 2.5,
                 color: isSelected ? "#1e3a8a" : "#0f172a",
                 fillOpacity: 0.92,
             });
-
             currentLayer.bringToFront();
 
             // Maintain selected layer prominence
@@ -258,23 +374,26 @@ function onEachCountyFeature(feature, layer) {
         },
         mouseout: (e) => {
             const currentLayer = e.target;
-            const isSelected = selectedCountyName && selectedCountyName === countyName;
 
-            if (geojsonLayer) {
-                geojsonLayer.resetStyle(currentLayer);
+            // Explicitly close that county tooltip
+            currentLayer.closeTooltip();
+            if (activeTooltipLayer === currentLayer) {
+                activeTooltipLayer = null;
             }
 
-            if (isSelected) {
-                currentLayer.setStyle({
-                    weight: 3.5,
-                    color: "#1e3a8a",
-                    fillOpacity: 0.95,
-                });
-                currentLayer.bringToFront();
+            // Restore polygon style, preserving selected-county highlight
+            resetCountyStyle(currentLayer);
+            if (hoveredCountyLayer === currentLayer) {
+                hoveredCountyLayer = null;
             }
         },
-        click: () => {
-            selectCounty(countyName, true);
+        click: (e) => {
+            // Close the tooltip first
+            closeActiveTooltip();
+            currentLayer.closeTooltip();
+
+            // Select county via shared function without changing zoom
+            selectCounty(countyName, { panMap: false });
         },
     });
 }
@@ -299,6 +418,29 @@ function initMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
         maxZoom: 18,
     }).addTo(leafletMap);
+
+    // Map-level click and mouseout cleanup
+    leafletMap.on("click", () => {
+        closeActiveTooltip();
+    });
+    leafletMap.on("mouseout", () => {
+        closeActiveTooltip();
+        if (hoveredCountyLayer) {
+            resetCountyStyle(hoveredCountyLayer);
+            hoveredCountyLayer = null;
+        }
+    });
+
+    // DOM container mouseleave cleanup
+    if (elements.taiwanMap) {
+        elements.taiwanMap.addEventListener("mouseleave", () => {
+            closeActiveTooltip();
+            if (hoveredCountyLayer) {
+                resetCountyStyle(hoveredCountyLayer);
+                hoveredCountyLayer = null;
+            }
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -526,7 +668,11 @@ async function loadForecast(regionName) {
             return;
         }
         console.error("Forecast fetch error:", err);
-        showError("目前無法取得天氣資料，請稍後再試。");
+        setLoading(false);
+        showError("目前無法取得詳細天氣資料，請稍後再試。");
+        // Maintain county selection state, highlight, and dropdown sync, but clear chart/table
+        updateChart([]);
+        updateTable([]);
     }
 }
 
@@ -574,6 +720,17 @@ async function loadMapDataAndGeoJSON() {
             leafletMap.fitBounds(geojsonLayer.getBounds(), {
                 padding: [15, 15],
             });
+
+            // Ensure selected county is highlighted if already chosen
+            if (selectedCountyName && countyLayersByName.has(selectedCountyName)) {
+                const targetLayer = countyLayersByName.get(selectedCountyName);
+                targetLayer.setStyle({
+                    weight: 3.5,
+                    color: "#1e3a8a",
+                    fillOpacity: 0.95,
+                });
+                targetLayer.bringToFront();
+            }
         }
     } catch (err) {
         console.error("Map initialization error:", err);
@@ -608,12 +765,14 @@ async function loadRegions() {
 
         elements.regionSelect.disabled = false;
 
-        // Default selection: Prefer '臺中市', otherwise first valid region
-        const defaultRegion = regions.includes("臺中市") ? "臺中市" : regions[0];
-        elements.regionSelect.value = defaultRegion;
+        // Default selection: If user has already made a selection, keep it; otherwise default to '臺中市'
+        const initialRegion = selectedCountyName || (regions.includes("臺中市") ? "臺中市" : regions[0]);
+        elements.regionSelect.value = initialRegion;
 
-        // Select initial county on map and load its forecast
-        selectCounty(defaultRegion, true);
+        // Trigger initial selection if not already selected
+        if (!selectedCountyName) {
+            selectCounty(initialRegion, { panMap: false });
+        }
     } catch (err) {
         console.error("Regions load error:", err);
         elements.regionSelect.disabled = true;
@@ -639,7 +798,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (elements.regionSelect) {
         elements.regionSelect.addEventListener("change", (event) => {
             const selectedRegion = event.target.value;
-            selectCounty(selectedRegion, false);
+            selectCounty(selectedRegion, { panMap: true });
         });
     }
 

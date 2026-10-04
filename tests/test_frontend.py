@@ -37,10 +37,11 @@ def test_root_html_structure_and_components():
     assert "預測最高溫 °C" in html
     assert 'id="map-period-badge"' in html
 
-    # Region Selector & Accessibility Label
+    # Region Selector & Selected Region Heading
     assert 'id="region-select"' in html
     assert 'for="region-select"' in html
     assert "選擇地區" in html
+    assert 'id="selected-region-name"' in html
 
     # Loading & Error Banners
     assert 'id="loading-state"' in html
@@ -129,3 +130,40 @@ def test_frontend_does_not_contain_secrets():
     for pattern in forbidden_patterns:
         assert pattern not in html_resp.text
         assert pattern not in js_resp.text
+
+
+def test_county_selection_and_tooltip_lifecycle_js():
+    """Verify JS client contains explicit tooltip lifecycle, single tooltip manager, and unified county selection."""
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. Explicit tooltip close behavior and single active tooltip management
+    assert "closeActiveTooltip" in js
+    assert "activeTooltipLayer" in js
+    assert "currentLayer.closeTooltip()" in js
+    assert "createTooltipElement" in js
+
+    # 2. Secure DOM manipulation for tooltips (document.createElement & textContent)
+    assert "document.createElement" in js
+    assert "textContent" in js
+
+    # 3. Selected region heading element and update
+    assert "selectedRegionName" in js
+    assert "elements.selectedRegionName.textContent = countyName" in js
+
+    # 4. Map click routes through shared county-selection function
+    assert "selectCounty(countyName" in js
+
+    # 5. Dropdown routes through the same county-selection flow
+    assert "selectCounty(selectedRegion" in js
+
+    # 6. mapDataCache is used for immediate selected-region summary
+    assert "getForecastForCounty(countyName)" in js
+    assert "updateSummary(cachedForecast)" in js
+
+    # 7. Existing loadForecast is still used for detailed Chart/Table
+    assert "loadForecast(countyName)" in js
+    assert "updateChart" in js
+    assert "updateTable" in js
+
