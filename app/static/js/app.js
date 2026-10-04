@@ -260,11 +260,6 @@ function resetCountyStyle(layer) {
         });
         layer.bringToFront();
     }
-
-    const pathElement = typeof layer.getElement === "function" ? layer.getElement() : null;
-    if (pathElement && countyName) {
-        pathElement.dataset.countyName = countyName;
-    }
 }
 
 /**
@@ -304,11 +299,6 @@ function selectCounty(countyName, options = {}) {
             fillOpacity: 0.95,
         });
         targetLayer.bringToFront();
-
-        const targetPath = typeof targetLayer.getElement === "function" ? targetLayer.getElement() : null;
-        if (targetPath) {
-            targetPath.dataset.countyName = countyName;
-        }
 
         // Optional gentle pan for dropdown selection without excessive zooming
         if (options.panMap && leafletMap && targetLayer.getBounds) {
@@ -398,34 +388,24 @@ function onEachCountyFeature(feature, layer) {
                 hoveredCountyLayer = null;
             }
         },
-    });
-}
+        mousedown: (e) => {
+            const originalEvent = e.originalEvent;
 
-/**
- * Delegated pointerdown handler on stable map container #taiwan-map.
- * Intercepts user pointer interaction directly on rendered SVG county polygon paths.
- */
-function handleMapCountyPointerDown(event) {
-    if (!event || !event.target) return;
+            // Only primary mouse button. Touch/pen pointer events remain supported if present.
+            if (
+                originalEvent &&
+                typeof originalEvent.button === "number" &&
+                originalEvent.button !== 0
+            ) {
+                return;
+            }
 
-    // Only primary mouse button. Touch/pen pointer events remain supported.
-    if (event.pointerType === "mouse" && event.button !== 0) {
-        return;
-    }
+            closeActiveTooltip();
 
-    const pathElement = typeof event.target.closest === "function"
-        ? event.target.closest("path.leaflet-interactive[data-county-name]")
-        : null;
-
-    if (!pathElement) return;
-
-    const countyName = pathElement.dataset?.countyName;
-    if (!countyName) return;
-
-    closeActiveTooltip();
-
-    selectCounty(countyName, {
-        panMap: false,
+            selectCounty(countyName, {
+                panMap: false,
+            });
+        },
     });
 }
 
@@ -462,7 +442,7 @@ function initMap() {
         }
     });
 
-    // DOM container mouseleave and delegated pointerdown listener
+    // DOM container mouseleave listener
     if (elements.taiwanMap) {
         elements.taiwanMap.addEventListener("mouseleave", () => {
             closeActiveTooltip();
@@ -471,9 +451,6 @@ function initMap() {
                 hoveredCountyLayer = null;
             }
         });
-
-        // ONE delegated pointerdown listener on stable #taiwan-map container
-        elements.taiwanMap.addEventListener("pointerdown", handleMapCountyPointerDown, true);
     }
 }
 
@@ -750,26 +727,6 @@ async function loadMapDataAndGeoJSON() {
                 style: getCountyStyle,
                 onEachFeature: onEachCountyFeature,
             }).addTo(leafletMap);
-
-            // Assign data-county-name attribute to all rendered county SVG paths
-            geojsonLayer.eachLayer((layer) => {
-                const countyName =
-                    layer.feature?.properties?.COUNTYNAME ||
-                    layer.feature?.properties?.name;
-
-                const assignElementData = (target) => {
-                    const pathElement = typeof target.getElement === "function" ? target.getElement() : null;
-                    if (pathElement && countyName) {
-                        pathElement.dataset.countyName = countyName;
-                    }
-                };
-
-                if (typeof layer.eachLayer === "function") {
-                    layer.eachLayer(assignElementData);
-                } else {
-                    assignElementData(layer);
-                }
-            });
 
             // Fit map bounds to Taiwan
             leafletMap.fitBounds(geojsonLayer.getBounds(), {

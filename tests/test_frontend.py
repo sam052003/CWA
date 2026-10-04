@@ -168,40 +168,33 @@ def test_county_selection_and_tooltip_lifecycle_js():
     assert "updateTable" in js
 
 
-def test_delegated_county_polygon_pointerdown_selection():
-    """Verify delegated pointerdown listener on #taiwan-map container handles county polygon selection."""
+def test_leaflet_layer_mousedown_county_selection():
+    """Verify Leaflet layer mousedown handles county polygon selection directly without DOM delegation."""
     response = client.get("/static/js/app.js")
     assert response.status_code == 200
     js = response.text
 
-    # 1. data-county-name assignment on rendered GeoJSON paths
-    assert "dataset.countyName = countyName" in js
-    assert "dataset.countyName" in js
+    # 1. onEachCountyFeature contains mousedown handler
+    assert "mousedown: (e) =>" in js
 
-    # 2. Delegated pointerdown handler exists and is bound to taiwan-map container
-    assert "handleMapCountyPointerDown" in js
-    assert 'elements.taiwanMap.addEventListener("pointerdown", handleMapCountyPointerDown, true)' in js
-
-    # 3. Event target / closest polygon detection matching path.leaflet-interactive[data-county-name]
-    assert "path.leaflet-interactive[data-county-name]" in js
-    assert "event.target.closest" in js
-    assert "pathElement.dataset" in js
-    assert "countyName" in js
-
-    # 4. Calls selectCounty(countyName, { panMap: false })
+    # 2. mousedown routes directly to selectCounty(countyName, { panMap: false })
     assert "selectCounty(countyName, {" in js
     assert "panMap: false" in js
 
-    # 5. Dropdown still calls selectCounty(..., { panMap: true })
-    assert "selectCounty(selectedRegion" in js
-    assert "panMap: true" in js
-
-    # 6. Existing hover mouseover/mouseout behavior remains in layer.on
+    # 3. mouseover and mouseout hover handlers remain
     assert "mouseover: (e) =>" in js
     assert "mouseout: (e) =>" in js
     assert "closeActiveTooltip()" in js
 
-    # 7. Old county delegated click handler is removed
+    # 4. Dropdown still uses selectCounty(selectedRegion, { panMap: true })
+    assert "selectCounty(selectedRegion" in js
+    assert "panMap: true" in js
+
+    # 5. Obsolete DOM delegation and data-county-name mechanisms are completely removed
+    assert "handleMapCountyPointerDown" not in js
+    assert "data-county-name" not in js
+    assert "dataset.countyName" not in js
+    assert 'addEventListener("pointerdown"' not in js
     assert "handleMapCountyClick" not in js
     assert 'addEventListener("click", handleMapCountyClick' not in js
     assert "attachPathClickHandler" not in js
