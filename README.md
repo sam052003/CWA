@@ -317,15 +317,15 @@ Supabase PostgreSQL
   - [x] 懸浮互動提示（Tooltip）：即時呈現縣市名稱、天氣現象、預測最低／最高溫
   - [x] 地圖點擊與縣市選單雙向同步（點擊多邊形立即更新摘要卡、Chart.js 折線圖與詳細預報清單）
   - [x] 專業氣象 GIS 儀表板排版（桌面版地圖 65–70% + 摘要面板 30–35%）與跨裝置響應式支援
-- [ ] **Phase 7B: 預報時段切換控制 (選擇日期／預報時段顯示地圖 — 已實作，待正式環境手動驗收)**
-  - [ ] 地圖預報時段下拉選單（`#map-period-select`，具備無障礙 `<label>` 與鍵盤操作支援）
-  - [ ] 純前端零延遲切換：複用記憶體中 `mapDataCache.periods`，不發送額外網路請求，無頁面重整
-  - [ ] 22 縣市分級面量圖多邊形色彩即時重新著色（依所選時段之最高溫重繪）
-  - [ ] 懸浮 Tooltip 與右側縣市摘要卡即時同步呈現所選時段之天氣現象與最低／最高溫
-  - [ ] 保持當前選中縣市之顯著海軍藍外框高亮，且不截斷 Chart.js 與預報資料表之完整一週詳細預報
-- [ ] **Phase 7C: 完整成果展示 Taiwan Weather Dashboard (對應課程第 19 項，未實作)**
+- [x] **Phase 7B: 預報時段切換控制 (選擇日期／預報時段顯示地圖 — 生產環境已驗收完成)**
+  - [x] forecast periods available（有效預報時段可用）
+  - [x] period selector（時段下拉選單）
+  - [x] switching period updates all counties（切換時段即時更新全縣市多邊形與摘要）
+  - [x] no page reload（零頁面重整）
+  - [x] no 22 API requests（零額外網路請求，不發送 22 次 API）
+- [ ] **Phase 7C: 完整成果展示 Taiwan Weather Dashboard (對應課程第 19 項 — 已實作，待生產環境最終驗收)**
   - [ ] 地圖優先氣象儀表板整體整合（Map-first Dashboard Integration）
-  - [ ] 選定縣市即時摘要面板（Selected County Detail Panel）
+  - [ ] 選定縣市即時摘要面板（Selected County Detail Panel，含資料更新時間）
   - [ ] 既有 Chart.js 折線圖深度整合（一週溫度趨勢視覺化）
   - [ ] 既有預報資料表深度整合（詳細時段清單）
   - [ ] 桌面／平板／手機跨裝置響應式排版（Responsive Desktop & Mobile Layout）

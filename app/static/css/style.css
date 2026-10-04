@@ -376,6 +376,26 @@ body {
     padding: 0.9rem 1.15rem;
 }
 
+.detail-updated-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.detail-updated-label {
+    font-weight: 600;
+}
+
+.detail-updated-time {
+    font-weight: 500;
+    color: var(--text-main);
+}
+
 .selected-region-header {
     display: flex;
     align-items: center;
@@ -654,6 +674,22 @@ body {
 
     .sub-title {
         font-size: 1.05rem;
+    }
+
+    .map-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.65rem;
+    }
+
+    .map-period-control {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .map-period-select {
+        flex: 1;
+        max-width: calc(100% - 4.5rem);
     }
 
     .map-container {

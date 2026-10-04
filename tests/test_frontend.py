@@ -318,3 +318,75 @@ def test_forecast_period_map_phase_7b():
     assert "updateTable" in js
 
 
+def test_taiwan_weather_dashboard_phase_7c():
+    """Verify Phase 7C Taiwan Weather Dashboard final integration and presentation hierarchy."""
+    html_resp = client.get("/")
+    assert html_resp.status_code == 200
+    html = html_resp.text
+
+    css_resp = client.get("/static/css/style.css")
+    assert css_resp.status_code == 200
+    css = css_resp.text
+
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    # 1. Map remains first major dashboard section in DOM hierarchy
+    map_idx = html.find('id="taiwan-map"')
+    chart_idx = html.find('id="temperature-chart"')
+    table_idx = html.find('id="forecast-table-body"')
+    assert map_idx != -1 and chart_idx != -1 and table_idx != -1
+    assert map_idx < chart_idx < table_idx
+
+    # 2. Selected county detail panel elements exist
+    assert 'id="selected-region-name"' in html
+    assert 'id="summary-period"' in html
+    assert 'id="card-weather"' in html
+    assert 'id="card-min-temp"' in html
+    assert 'id="card-max-temp"' in html
+
+    # 3. Last updated value exists in detail panel and uses existing mapDataCache.updated_at
+    assert 'id="detail-last-updated"' in html
+    assert "elements.detailLastUpdated" in js
+    assert "mapDataCache.updated_at" in js
+    assert "formatUpdatedTimestamp(mapDataCache.updated_at)" in js
+
+    # 4. Region selector and forecast period selector remain accessible
+    assert 'id="region-select"' in html
+    assert 'for="region-select"' in html
+    assert 'id="map-period-select"' in html
+    assert 'for="map-period-select"' in html
+
+    # 5. Chart.js canvas and forecast table remain
+    assert '<canvas id="temperature-chart"' in html
+    assert '<table class="forecast-table"' in html
+    assert "updateChart" in js
+    assert "updateTable" in js
+
+    # 6. Regressions: handleCountyPointerDown and setMapPeriod remain
+    assert "function handleCountyPointerDown(event)" in js
+    assert "function setMapPeriod(" in js
+    assert "currentMapPeriod = period" in js
+    assert "selectCounty(matchedCountyName, {" in js
+
+    # 7. loadForecast does not overwrite current-period summary
+    load_forecast_idx = js.find("async function loadForecast(")
+    assert load_forecast_idx != -1
+    load_forecast_end = js.find("async function loadMapDataAndGeoJSON(", load_forecast_idx)
+    load_forecast_body = js[load_forecast_idx:load_forecast_end]
+    assert "updateSummary(forecasts[0])" not in load_forecast_body
+
+    # 8. Period switching contains no fetch()
+    set_period_idx = js.find("function setMapPeriod(")
+    assert set_period_idx != -1
+    set_period_end = js.find("function selectCounty(", set_period_idx)
+    set_period_body = js[set_period_idx:set_period_end]
+    assert "fetch(" not in set_period_body
+
+    # 9. Responsive CSS contains mobile and tablet rules with map height 320-380px
+    assert "@media (max-width: 960px)" in css
+    assert "@media (max-width: 600px)" in css
+    assert "360px" in css
+
+

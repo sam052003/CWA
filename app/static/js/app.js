@@ -35,6 +35,7 @@ const elements = {
     mapError: document.getElementById("map-error"),
     mapPeriodBadge: document.getElementById("map-period-badge"),
     mapPeriodSelect: document.getElementById("map-period-select"),
+    detailLastUpdated: document.getElementById("detail-last-updated"),
 };
 
 // ---------------------------------------------------------------------------
@@ -766,9 +767,13 @@ function updateTable(forecasts) {
 }
 
 function updateMetadata(data) {
+    if (!data) return;
+    const timeStr = formatUpdatedTimestamp(data.updated_at);
     if (elements.lastUpdated) {
-        const timeStr = formatUpdatedTimestamp(data.updated_at);
         elements.lastUpdated.textContent = `最後資料更新：${timeStr}`;
+    }
+    if (elements.detailLastUpdated && (!mapDataCache || !mapDataCache.updated_at)) {
+        elements.detailLastUpdated.textContent = timeStr;
     }
 }
 
@@ -836,6 +841,17 @@ async function loadMapDataAndGeoJSON() {
 
         mapDataCache = await mapDataRes.json();
         const geojsonData = await geojsonRes.json();
+
+        // Update detail panel and metadata bar with mapDataCache.updated_at
+        if (mapDataCache.updated_at) {
+            const timeStr = formatUpdatedTimestamp(mapDataCache.updated_at);
+            if (elements.detailLastUpdated) {
+                elements.detailLastUpdated.textContent = timeStr;
+            }
+            if (elements.lastUpdated) {
+                elements.lastUpdated.textContent = `最後資料更新：${timeStr}`;
+            }
+        }
 
         // Populate period selector unconditionally from loaded periods
         populatePeriodSelector(mapDataCache.periods || []);
