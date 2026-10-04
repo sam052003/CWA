@@ -388,24 +388,65 @@ function onEachCountyFeature(feature, layer) {
                 hoveredCountyLayer = null;
             }
         },
-        mousedown: (e) => {
-            const originalEvent = e.originalEvent;
+    });
+}
 
-            // Only primary mouse button. Touch/pen pointer events remain supported if present.
-            if (
-                originalEvent &&
-                typeof originalEvent.button === "number" &&
-                originalEvent.button !== 0
-            ) {
-                return;
-            }
+/**
+ * Capture-phase pointerdown handler on #taiwan-map container.
+ * Bridges DOM pointer events on SVG polygon paths directly to county selection via countyLayersByName.
+ */
+function handleCountyPointerDown(event) {
+    if (!event || !event.target) return;
 
-            closeActiveTooltip();
+    if (
+        event.pointerType === "mouse" &&
+        event.button !== 0
+    ) {
+        return;
+    }
 
-            selectCounty(countyName, {
-                panMap: false,
+    const pathElement =
+        typeof event.target.closest === "function"
+            ? event.target.closest("path.leaflet-interactive")
+            : null;
+
+    if (!pathElement) return;
+
+    let matchedCountyName = null;
+
+    for (const [countyName, countyLayer] of countyLayersByName) {
+        if (
+            countyLayer &&
+            typeof countyLayer.getElement === "function" &&
+            countyLayer.getElement() === pathElement
+        ) {
+            matchedCountyName = countyName;
+            break;
+        }
+        if (countyLayer && typeof countyLayer.eachLayer === "function") {
+            let found = false;
+            countyLayer.eachLayer((subLayer) => {
+                if (
+                    subLayer &&
+                    typeof subLayer.getElement === "function" &&
+                    subLayer.getElement() === pathElement
+                ) {
+                    found = true;
+                }
             });
-        },
+            if (found) {
+                matchedCountyName = countyName;
+                break;
+            }
+        }
+    }
+
+    if (!matchedCountyName) return;
+
+    closeActiveTooltip();
+
+    selectCounty(matchedCountyName, {
+        panMap: false,
     });
 }
 
@@ -442,7 +483,7 @@ function initMap() {
         }
     });
 
-    // DOM container mouseleave listener
+    // DOM container mouseleave and pointerdown listeners
     if (elements.taiwanMap) {
         elements.taiwanMap.addEventListener("mouseleave", () => {
             closeActiveTooltip();
@@ -451,6 +492,13 @@ function initMap() {
                 hoveredCountyLayer = null;
             }
         });
+
+        // ONE DOM pointerdown bridge on #taiwan-map container
+        elements.taiwanMap.addEventListener(
+            "pointerdown",
+            handleCountyPointerDown,
+            true
+        );
     }
 }
 

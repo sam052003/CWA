@@ -168,39 +168,51 @@ def test_county_selection_and_tooltip_lifecycle_js():
     assert "updateTable" in js
 
 
-def test_leaflet_layer_mousedown_county_selection():
-    """Verify Leaflet layer mousedown handles county polygon selection directly without DOM delegation."""
+def test_dom_pointerdown_bridge_county_selection():
+    """Verify DOM pointerdown bridge on #taiwan-map container handles county polygon selection via countyLayersByName."""
     response = client.get("/static/js/app.js")
     assert response.status_code == 200
     js = response.text
 
-    # 1. onEachCountyFeature contains mousedown handler
-    assert "mousedown: (e) =>" in js
+    # 1. handleCountyPointerDown exists
+    assert "function handleCountyPointerDown(event)" in js
 
-    # 2. mousedown routes directly to selectCounty(countyName, { panMap: false })
-    assert "selectCounty(countyName, {" in js
+    # 2. taiwanMap has ONE pointerdown capture listener attached
+    assert "handleCountyPointerDown" in js
+    assert 'elements.taiwanMap.addEventListener(' in js
+    assert '"pointerdown"' in js or "'pointerdown'" in js
+    assert "handleCountyPointerDown, true" in js or "handleCountyPointerDown,\n            true" in js
+
+    # 3. Handler matches "path.leaflet-interactive"
+    assert 'path.leaflet-interactive' in js
+    assert 'event.target.closest("path.leaflet-interactive")' in js
+
+    # 4. Handler iterates countyLayersByName
+    assert "countyLayersByName" in js
+    assert "for (const [countyName, countyLayer] of countyLayersByName)" in js
+
+    # 5. Handler compares countyLayer.getElement() === pathElement
+    assert "countyLayer.getElement() === pathElement" in js
+
+    # 6. Handler calls selectCounty(matchedCountyName, { panMap: false })
+    assert "selectCounty(matchedCountyName, {" in js
     assert "panMap: false" in js
 
-    # 3. mouseover and mouseout hover handlers remain
-    assert "mouseover: (e) =>" in js
-    assert "mouseout: (e) =>" in js
-    assert "closeActiveTooltip()" in js
-
-    # 4. Dropdown still uses selectCounty(selectedRegion, { panMap: true })
+    # 7. Dropdown still uses selectCounty(selectedRegion, { panMap: true })
     assert "selectCounty(selectedRegion" in js
     assert "panMap: true" in js
 
-    # 5. Obsolete DOM delegation and data-county-name mechanisms are completely removed
-    assert "handleMapCountyPointerDown" not in js
+    # 8. Leaflet mousedown county-selection handler is removed
+    assert "mousedown: (e) =>" not in js
+    assert "mousedown:(e)=>" not in js
+
+    # 9. No data-county-name or dataset.countyName
     assert "data-county-name" not in js
     assert "dataset.countyName" not in js
-    assert 'addEventListener("pointerdown"' not in js
-    assert "handleMapCountyClick" not in js
-    assert 'addEventListener("click", handleMapCountyClick' not in js
-    assert "attachPathClickHandler" not in js
-    assert 'layer.on("add"' not in js
-    assert 'L.DomEvent.on(pathElement, "click"' not in js
-    assert "click: (e) =>" not in js
-    assert "click:(e)=>" not in js
+
+    # 10. Hover mouseover and mouseout remain
+    assert "mouseover: (e) =>" in js
+    assert "mouseout: (e) =>" in js
+    assert "closeActiveTooltip()" in js
 
 
