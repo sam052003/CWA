@@ -209,6 +209,10 @@ body {
     z-index: 1;
 }
 
+.taiwan-map path.leaflet-interactive {
+    cursor: pointer;
+}
+
 .map-error-overlay {
     position: absolute;
     top: 0;

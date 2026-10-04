@@ -157,6 +157,7 @@ function getCountyStyle(feature) {
     const isSelected = selectedCountyName && selectedCountyName === countyName;
 
     return {
+        interactive: true,
         fillColor: getTemperatureColor(maxTemp),
         weight: isSelected ? 3.5 : 1.2,
         opacity: 1,
@@ -387,17 +388,44 @@ function onEachCountyFeature(feature, layer) {
                 hoveredCountyLayer = null;
             }
         },
-        click: (e) => {
-            const currentLayer = e.target;
-
-            // Close the tooltip first
-            closeActiveTooltip();
-            currentLayer.closeTooltip();
-
-            // Select county via shared function without changing zoom
-            selectCounty(countyName, { panMap: false });
-        },
     });
+
+    // Canonical polygon-click selection using rendered SVG path element
+    const attachPathClickHandler = () => {
+        const bindElement = (target) => {
+            if (!target) return;
+            const pathElement = target.getElement ? target.getElement() : null;
+            if (!pathElement) return;
+
+            // Clean up existing listener to prevent duplicate bindings
+            L.DomEvent.off(pathElement, "click");
+            L.DomEvent.on(pathElement, "click", (event) => {
+                L.DomEvent.preventDefault(event);
+                L.DomEvent.stopPropagation(event);
+                if (event.preventDefault) event.preventDefault();
+                if (event.stopPropagation) event.stopPropagation();
+
+                closeActiveTooltip();
+                if (target.closeTooltip) {
+                    target.closeTooltip();
+                }
+
+                selectCounty(countyName, { panMap: false });
+            });
+        };
+
+        if (typeof layer.eachLayer === "function") {
+            layer.eachLayer(bindElement);
+        } else {
+            bindElement(layer);
+        }
+    };
+
+    // Bind when layer is added to map and rendered into DOM
+    layer.on("add", attachPathClickHandler);
+    if (layer.getElement && layer.getElement()) {
+        attachPathClickHandler();
+    }
 }
 
 /**
@@ -714,6 +742,7 @@ async function loadMapDataAndGeoJSON() {
             }
 
             geojsonLayer = L.geoJSON(geojsonData, {
+                interactive: true,
                 style: getCountyStyle,
                 onEachFeature: onEachCountyFeature,
             }).addTo(leafletMap);
