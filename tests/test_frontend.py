@@ -167,3 +167,26 @@ def test_county_selection_and_tooltip_lifecycle_js():
     assert "updateChart" in js
     assert "updateTable" in js
 
+
+def test_county_click_handler_scope_regression():
+    """Regression test: verify click callback defines currentLayer from e.target and avoids ReferenceError."""
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # Find the click block in the onEachCountyFeature function
+    click_index = js.find("click: (e) =>")
+    assert click_index != -1, "click: (e) => handler not found in app.js"
+
+    # Slice the click handler body up to its closing brace
+    click_body = js[click_index: click_index + 400]
+    assert "currentLayer" in click_body
+    assert (
+        "const currentLayer = e.target" in click_body
+        or "let currentLayer = e.target" in click_body
+        or "var currentLayer = e.target" in click_body
+    ), "click handler must declare currentLayer from e.target to avoid ReferenceError"
+    assert "currentLayer.closeTooltip()" in click_body
+    assert "selectCounty(countyName" in click_body
+
+

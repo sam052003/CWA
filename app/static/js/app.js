@@ -388,6 +388,8 @@ function onEachCountyFeature(feature, layer) {
             }
         },
         click: (e) => {
+            const currentLayer = e.target;
+
             // Close the tooltip first
             closeActiveTooltip();
             currentLayer.closeTooltip();
