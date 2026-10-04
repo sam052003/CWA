@@ -402,24 +402,25 @@ function onEachCountyFeature(feature, layer) {
 }
 
 /**
- * Delegated click handler on stable map container #taiwan-map.
- * Intercepts clicks on rendered SVG county polygon paths carrying data-county-name.
+ * Delegated pointerdown handler on stable map container #taiwan-map.
+ * Intercepts user pointer interaction directly on rendered SVG county polygon paths.
  */
-function handleMapCountyClick(event) {
+function handleMapCountyPointerDown(event) {
     if (!event || !event.target) return;
 
-    // Robust SVG-safe check for county polygon path
+    // Only primary mouse button. Touch/pen pointer events remain supported.
+    if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+    }
+
     const pathElement = typeof event.target.closest === "function"
         ? event.target.closest("path.leaflet-interactive[data-county-name]")
         : null;
 
     if (!pathElement) return;
 
-    const countyName = pathElement.dataset ? pathElement.dataset.countyName : null;
+    const countyName = pathElement.dataset?.countyName;
     if (!countyName) return;
-
-    event.preventDefault();
-    event.stopPropagation();
 
     closeActiveTooltip();
 
@@ -461,7 +462,7 @@ function initMap() {
         }
     });
 
-    // DOM container mouseleave and delegated click listener
+    // DOM container mouseleave and delegated pointerdown listener
     if (elements.taiwanMap) {
         elements.taiwanMap.addEventListener("mouseleave", () => {
             closeActiveTooltip();
@@ -471,8 +472,8 @@ function initMap() {
             }
         });
 
-        // ONE delegated click listener on stable #taiwan-map container
-        elements.taiwanMap.addEventListener("click", handleMapCountyClick, true);
+        // ONE delegated pointerdown listener on stable #taiwan-map container
+        elements.taiwanMap.addEventListener("pointerdown", handleMapCountyPointerDown, true);
     }
 }
 

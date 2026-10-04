@@ -168,8 +168,8 @@ def test_county_selection_and_tooltip_lifecycle_js():
     assert "updateTable" in js
 
 
-def test_delegated_county_polygon_click_selection():
-    """Verify delegated event listener on #taiwan-map container handles county polygon selection."""
+def test_delegated_county_polygon_pointerdown_selection():
+    """Verify delegated pointerdown listener on #taiwan-map container handles county polygon selection."""
     response = client.get("/static/js/app.js")
     assert response.status_code == 200
     js = response.text
@@ -178,28 +178,32 @@ def test_delegated_county_polygon_click_selection():
     assert "dataset.countyName = countyName" in js
     assert "dataset.countyName" in js
 
-    # 2. One delegated click handler on taiwan-map container
-    assert "handleMapCountyClick" in js
-    assert 'elements.taiwanMap.addEventListener("click", handleMapCountyClick, true)' in js
+    # 2. Delegated pointerdown handler exists and is bound to taiwan-map container
+    assert "handleMapCountyPointerDown" in js
+    assert 'elements.taiwanMap.addEventListener("pointerdown", handleMapCountyPointerDown, true)' in js
 
-    # 3. Event target / closest polygon detection
+    # 3. Event target / closest polygon detection matching path.leaflet-interactive[data-county-name]
     assert "path.leaflet-interactive[data-county-name]" in js
     assert "event.target.closest" in js
     assert "pathElement.dataset" in js
+    assert "countyName" in js
 
-    # 4. Click routes to selectCounty(countyName, { panMap: false })
+    # 4. Calls selectCounty(countyName, { panMap: false })
     assert "selectCounty(countyName, {" in js
     assert "panMap: false" in js
 
-    # 5. Existing hover mouseover/mouseout behavior remains in layer.on
+    # 5. Dropdown still calls selectCounty(..., { panMap: true })
+    assert "selectCounty(selectedRegion" in js
+    assert "panMap: true" in js
+
+    # 6. Existing hover mouseover/mouseout behavior remains in layer.on
     assert "mouseover: (e) =>" in js
     assert "mouseout: (e) =>" in js
     assert "closeActiveTooltip()" in js
 
-    # 6. Dropdown still calls shared selectCounty()
-    assert "selectCounty(selectedRegion" in js
-
-    # 7. Verify old unreliable per-path code is removed
+    # 7. Old county delegated click handler is removed
+    assert "handleMapCountyClick" not in js
+    assert 'addEventListener("click", handleMapCountyClick' not in js
     assert "attachPathClickHandler" not in js
     assert 'layer.on("add"' not in js
     assert 'L.DomEvent.on(pathElement, "click"' not in js
