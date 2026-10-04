@@ -406,9 +406,7 @@ function selectCounty(countyName, options = {}) {
 
     // 6. Immediately update nearest-period summary using mapDataCache for currently displayed period
     const cachedForecast = getForecastForCounty(countyName);
-    if (cachedForecast) {
-        updateSummary(cachedForecast);
-    }
+    updateSummary(cachedForecast);
 
     // 7. Load detailed 7-day forecast for Chart and Table
     loadForecast(countyName);
@@ -839,9 +837,11 @@ async function loadMapDataAndGeoJSON() {
         mapDataCache = await mapDataRes.json();
         const geojsonData = await geojsonRes.json();
 
-        // Populate period selector and initialize default active forecast period
+        // Populate period selector unconditionally from loaded periods
+        populatePeriodSelector(mapDataCache.periods || []);
+
+        // Initialize default active forecast period if available
         if (mapDataCache.periods && mapDataCache.periods.length > 0) {
-            populatePeriodSelector(mapDataCache.periods);
             currentMapPeriod = mapDataCache.periods[0];
             const initialKey = `${currentMapPeriod.start_time}_${currentMapPeriod.end_time}`;
             if (elements.mapPeriodSelect) {
@@ -853,6 +853,8 @@ async function loadMapDataAndGeoJSON() {
                     currentMapPeriod.end_time
                 );
             }
+        } else if (elements.mapPeriodBadge) {
+            elements.mapPeriodBadge.textContent = "暫無預報時段";
         }
 
         // Render GeoJSON choropleth layer on Leaflet map

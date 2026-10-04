@@ -279,6 +279,22 @@ def test_forecast_period_map_phase_7b():
     assert "f.end_time === currentMapPeriod.end_time" in forecast_fn_body
     assert "|| null" in forecast_fn_body
 
+    # - selectCounty always calls updateSummary(cachedForecast), including null
+    select_county_idx = js.find("function selectCounty(")
+    assert select_county_idx != -1
+    select_county_end = js.find("function onEachCountyFeature(", select_county_idx)
+    select_county_body = js[select_county_idx:select_county_end]
+    assert "const cachedForecast = getForecastForCounty(countyName);" in select_county_body
+    assert "updateSummary(cachedForecast);" in select_county_body
+    assert "if (cachedForecast)" not in select_county_body
+
+    # - empty periods invoke populatePeriodSelector unconditionally
+    load_map_idx = js.find("async function loadMapDataAndGeoJSON(")
+    assert load_map_idx != -1
+    load_map_end = js.find("async function loadRegions(", load_map_idx)
+    load_map_body = js[load_map_idx:load_map_end]
+    assert "populatePeriodSelector(mapDataCache.periods || []);" in load_map_body
+
     # loadForecast must not overwrite summary with forecasts[0]
     load_forecast_idx = js.find("async function loadForecast(")
     assert load_forecast_idx != -1
