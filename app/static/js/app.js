@@ -44,6 +44,15 @@ const elements = {
     detailPanelToggle: document.getElementById("detail-panel-toggle"),
     detailPanelSummaryLabel: document.getElementById("detail-panel-summary-label"),
     mapSection: document.querySelector(".map-section"),
+    shortTermSection: document.getElementById("short-term-section"),
+    shortTermRegionBadge: document.getElementById("short-term-region-badge"),
+    shortTermLoading: document.getElementById("short-term-loading"),
+    shortTermLoadingText: document.getElementById("short-term-loading-text"),
+    shortTermError: document.getElementById("short-term-error"),
+    shortTermErrorText: document.getElementById("short-term-error-text"),
+    shortTermRetryBtn: document.getElementById("short-term-retry-btn"),
+    shortTermEmpty: document.getElementById("short-term-empty"),
+    shortTermCardsGrid: document.getElementById("short-term-cards-grid"),
 };
 
 // ---------------------------------------------------------------------------
@@ -541,6 +550,9 @@ function selectCounty(countyName, options = {}) {
 
     // 7. Load detailed 7-day forecast for Chart and Table
     loadForecast(countyName);
+
+    // 8. Load short-term 36-hour living forecast (F-C0032-001)
+    loadShortTermForecast(countyName);
 }
 
 /**
@@ -1029,6 +1041,193 @@ function updateMetadata(data) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 8B: Short-term 36h Living Forecast Functions (F-C0032-001)
+// ---------------------------------------------------------------------------
+
+let shortTermAbortController = null;
+
+/**
+ * Set loading UI for the 36-hour living forecast section independently.
+ */
+function setShortTermLoading(isLoading, message = "正在載入 36 小時預報...") {
+    if (elements.shortTermLoading) {
+        elements.shortTermLoading.style.display = isLoading ? "flex" : "none";
+        if (elements.shortTermLoadingText) {
+            elements.shortTermLoadingText.textContent = message;
+        }
+    }
+    if (elements.shortTermCardsGrid && isLoading) {
+        elements.shortTermCardsGrid.style.opacity = "0.5";
+    } else if (elements.shortTermCardsGrid) {
+        elements.shortTermCardsGrid.style.opacity = "1";
+    }
+}
+
+/**
+ * Set error UI for the 36-hour living forecast section independently.
+ */
+function setShortTermError(hasError, message = "暫時無法取得 36 小時生活預報") {
+    if (elements.shortTermError) {
+        elements.shortTermError.style.display = hasError ? "flex" : "none";
+        if (elements.shortTermErrorText) {
+            elements.shortTermErrorText.textContent = message;
+        }
+    }
+}
+
+/**
+ * Map weather code or text to an emoji icon.
+ */
+function getWeatherIcon(weatherCode, weatherText) {
+    const text = weatherText || "";
+    if (text.includes("雷")) return "⛈️";
+    if (text.includes("雨") || text.includes("陣雨")) return "🌧️";
+    if (text.includes("陰")) return "☁️";
+    if (text.includes("多雲")) return "⛅";
+    if (text.includes("晴")) return "☀️";
+    if (text.includes("雪")) return "❄️";
+    if (text.includes("霧")) return "🌫️";
+    return "🌤️";
+}
+
+/**
+ * Determine a natural friendly title for the short-term forecast interval.
+ */
+function getShortTermPeriodTitle(startStr, endStr, index) {
+    if (!startStr || !endStr) return `預報時段 ${index + 1}`;
+    const startMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if (!startMatch) return formatForecastPeriod(startStr, endStr);
+
+    const sHour = parseInt(startMatch[4], 10);
+    if (index === 0) {
+        if (sHour >= 5 && sHour < 12) return "今天白天";
+        if (sHour >= 12 && sHour < 18) return "今天下午至晚上";
+        return "今天晚上 ～ 明天清晨";
+    } else if (index === 1) {
+        if (sHour >= 5 && sHour < 12) return "明天白天";
+        if (sHour >= 12 && sHour < 18) return "明天下午至晚上";
+        return "明天晚上 ～ 後天清晨";
+    } else if (index === 2) {
+        if (sHour >= 5 && sHour < 12) return "後天白天";
+        if (sHour >= 12 && sHour < 18) return "後天下午至晚上";
+        return "明天晚上 ～ 後天清晨";
+    }
+    return `生活預報時段 ${index + 1}`;
+}
+
+/**
+ * Render 36-hour living forecast cards.
+ */
+function renderShortTermForecast(forecasts) {
+    if (!elements.shortTermCardsGrid) return;
+    elements.shortTermCardsGrid.innerHTML = "";
+
+    if (!forecasts || forecasts.length === 0) {
+        if (elements.shortTermEmpty) {
+            elements.shortTermEmpty.style.display = "block";
+        }
+        return;
+    }
+
+    if (elements.shortTermEmpty) {
+        elements.shortTermEmpty.style.display = "none";
+    }
+
+    forecasts.forEach((f, idx) => {
+        const card = document.createElement("article");
+        card.className = "short-term-card";
+
+        const friendlyTitle = getShortTermPeriodTitle(f.start_time, f.end_time, idx);
+        const periodTime = formatForecastPeriod(f.start_time, f.end_time);
+        const icon = getWeatherIcon(f.weather_code, f.weather);
+        const weatherDesc = f.weather || "--";
+
+        let tempStr = "--";
+        if (f.min_temp !== null && f.max_temp !== null) {
+            tempStr = `${f.min_temp} ～ ${f.max_temp} °C`;
+        } else if (f.min_temp !== null) {
+            tempStr = `最低 ${f.min_temp} °C`;
+        } else if (f.max_temp !== null) {
+            tempStr = `最高 ${f.max_temp} °C`;
+        }
+
+        const popVal = f.pop !== null && f.pop !== undefined ? `${f.pop}%` : "--";
+        const popPercent = f.pop !== null && f.pop !== undefined ? Math.min(100, Math.max(0, f.pop)) : 0;
+        const ciVal = f.comfort_index || "--";
+
+        card.innerHTML = `
+            <div class="st-card-header">
+                <span class="st-period-name">${friendlyTitle}</span>
+                <span class="st-period-time">${periodTime}</span>
+            </div>
+            <div class="st-weather-row">
+                <span class="st-weather-icon" aria-hidden="true">${icon}</span>
+                <div class="st-weather-info">
+                    <span class="st-weather-desc">${weatherDesc}</span>
+                    <span class="st-temp-range">🌡️ ${tempStr}</span>
+                </div>
+            </div>
+            <div class="st-metrics-group">
+                <div class="st-metric-row">
+                    <span class="st-metric-label">🌧️ 降雨機率</span>
+                    <strong class="st-pop-value">${popVal}</strong>
+                </div>
+                <div class="st-pop-bar-bg" aria-hidden="true">
+                    <div class="st-pop-bar-fill" style="width: ${popPercent}%;"></div>
+                </div>
+                <div class="st-metric-row st-ci-row">
+                    <span class="st-metric-label">👕 舒適度</span>
+                    <span class="st-ci-value">${ciVal}</span>
+                </div>
+            </div>
+        `;
+
+        elements.shortTermCardsGrid.appendChild(card);
+    });
+}
+
+/**
+ * Fetch and display 36-hour living forecast for the selected county (F-C0032-001).
+ */
+async function loadShortTermForecast(regionName) {
+    if (!regionName) return;
+
+    // Abort previous in-flight short-term request to prevent race conditions
+    if (shortTermAbortController) {
+        shortTermAbortController.abort();
+    }
+    shortTermAbortController = new AbortController();
+
+    if (elements.shortTermRegionBadge) {
+        elements.shortTermRegionBadge.textContent = regionName;
+    }
+
+    setShortTermLoading(true, `正在載入 ${regionName} 36 小時預報...`);
+    setShortTermError(false);
+
+    try {
+        const url = `/api/forecast/short-term?region=${encodeURIComponent(regionName)}`;
+        const response = await fetch(url, { signal: shortTermAbortController.signal });
+
+        if (!response.ok) {
+            throw new Error(`Short-term API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        renderShortTermForecast(data.forecasts || []);
+        setShortTermLoading(false);
+    } catch (err) {
+        if (err.name === "AbortError") {
+            // Superseded by newer selection; exit silently
+            return;
+        }
+        console.error("Short-term forecast fetch error:", err);
+        setShortTermLoading(false);
+        setShortTermError(true, "暫時無法取得 36 小時生活預報");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Data Fetching Functions
 // ---------------------------------------------------------------------------
 
@@ -1227,6 +1426,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         elements.regionSelect.addEventListener("change", (event) => {
             const selectedRegion = event.target.value;
             selectCounty(selectedRegion, { panMap: true });
+        });
+    }
+
+    // 5b. Attach click listener to short-term forecast retry button
+    if (elements.shortTermRetryBtn) {
+        elements.shortTermRetryBtn.addEventListener("click", () => {
+            if (selectedCountyName) {
+                loadShortTermForecast(selectedCountyName);
+            }
         });
     }
 

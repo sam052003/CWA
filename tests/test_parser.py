@@ -297,3 +297,258 @@ def test_malformed_root_structure():
     assert parse_cwa_forecast({"cwaopendata": {}}) == []
     assert parse_cwa_forecast({"cwaopendata": {"dataset": None}}) == []
     assert parse_cwa_forecast({"cwaopendata": {"dataset": {"location": None}}}) == []
+
+
+# ==============================================================================
+# Phase 8B: F-C0032-001 Short-Term 36h Parser Tests
+# ==============================================================================
+
+from app.parsers.cwa_parser import parse_short_term_forecast
+
+
+@pytest.fixture
+def sample_36h_payload():
+    """Sanitized realistic fixture matching CWA F-C0032-001 datastore JSON structure."""
+    return {
+        "success": "true",
+        "result": {
+            "resource_id": "F-C0032-001",
+            "fields": [{"id": "datasetDescription", "type": "String"}],
+        },
+        "records": {
+            "datasetDescription": "三十六小時天氣預報",
+            "location": [
+                {
+                    "locationName": "臺中市",
+                    "weatherElement": [
+                        {
+                            "elementName": "Wx",
+                            "time": [
+                                {
+                                    "startTime": "2026-10-05 18:00:00",
+                                    "endTime": "2026-10-06 06:00:00",
+                                    "parameter": {"parameterName": "多雲短暫陣雨", "parameterValue": "08"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 06:00:00",
+                                    "endTime": "2026-10-06 18:00:00",
+                                    "parameter": {"parameterName": "多雲午後短暫雷陣雨", "parameterValue": "22"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 18:00:00",
+                                    "endTime": "2026-10-07 06:00:00",
+                                    "parameter": {"parameterName": "晴時多雲", "parameterValue": "02"},
+                                },
+                            ],
+                        },
+                        {
+                            "elementName": "MaxT",
+                            "time": [
+                                {
+                                    "startTime": "2026-10-05 18:00:00",
+                                    "endTime": "2026-10-06 06:00:00",
+                                    "parameter": {"parameterName": "29", "parameterUnit": "C"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 06:00:00",
+                                    "endTime": "2026-10-06 18:00:00",
+                                    "parameter": {"parameterName": "33.5", "parameterUnit": "C"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 18:00:00",
+                                    "endTime": "2026-10-07 06:00:00",
+                                    "parameter": {"parameterName": "28", "parameterUnit": "C"},
+                                },
+                            ],
+                        },
+                        {
+                            "elementName": "MinT",
+                            "time": [
+                                {
+                                    "startTime": "2026-10-05 18:00:00",
+                                    "endTime": "2026-10-06 06:00:00",
+                                    "parameter": {"parameterName": "25", "parameterUnit": "C"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 06:00:00",
+                                    "endTime": "2026-10-06 18:00:00",
+                                    "parameter": {"parameterName": "26", "parameterUnit": "C"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 18:00:00",
+                                    "endTime": "2026-10-07 06:00:00",
+                                    "parameter": {"parameterName": "24", "parameterUnit": "C"},
+                                },
+                            ],
+                        },
+                        {
+                            "elementName": "PoP",
+                            "time": [
+                                {
+                                    "startTime": "2026-10-05 18:00:00",
+                                    "endTime": "2026-10-06 06:00:00",
+                                    "parameter": {"parameterName": "40", "parameterUnit": "百分比"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 06:00:00",
+                                    "endTime": "2026-10-06 18:00:00",
+                                    "parameter": {"parameterName": "70", "parameterUnit": "百分比"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 18:00:00",
+                                    "endTime": "2026-10-07 06:00:00",
+                                    "parameter": {"parameterName": "10", "parameterUnit": "百分比"},
+                                },
+                            ],
+                        },
+                        {
+                            "elementName": "CI",
+                            "time": [
+                                {
+                                    "startTime": "2026-10-05 18:00:00",
+                                    "endTime": "2026-10-06 06:00:00",
+                                    "parameter": {"parameterName": "舒適至悶熱"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 06:00:00",
+                                    "endTime": "2026-10-06 18:00:00",
+                                    "parameter": {"parameterName": "悶熱"},
+                                },
+                                {
+                                    "startTime": "2026-10-06 18:00:00",
+                                    "endTime": "2026-10-07 06:00:00",
+                                    "parameter": {"parameterName": "舒適"},
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+        },
+    }
+
+
+def test_parse_short_term_forecast_success(sample_36h_payload):
+    """Verify parse_short_term_forecast parses 3 intervals with all fields and dataset_id."""
+    records = parse_short_term_forecast(sample_36h_payload)
+    assert len(records) == 3
+
+    r0 = records[0]
+    assert r0["dataset_id"] == "F-C0032-001"
+    assert r0["region_name"] == "臺中市"
+    assert r0["start_time"] == "2026-10-05 18:00:00"
+    assert r0["end_time"] == "2026-10-06 06:00:00"
+    assert r0["weather"] == "多雲短暫陣雨"
+    assert r0["weather_code"] == "08"
+    assert r0["min_temp"] == 25.0
+    assert r0["max_temp"] == 29.0
+    assert r0["pop"] == 40
+    assert r0["comfort_index"] == "舒適至悶熱"
+
+    r1 = records[1]
+    assert r1["weather"] == "多雲午後短暫雷陣雨"
+    assert r1["weather_code"] == "22"
+    assert r1["min_temp"] == 26.0
+    assert r1["max_temp"] == 33.5
+    assert r1["pop"] == 70
+    assert r1["comfort_index"] == "悶熱"
+
+
+def test_parse_short_term_forecast_legacy_file_style(sample_36h_payload):
+    """Verify legacy fileapi style (cwaopendata -> dataset -> location) is parsed."""
+    legacy_payload = {
+        "cwaopendata": {
+            "dataset": {
+                "location": sample_36h_payload["records"]["location"]
+            }
+        }
+    }
+    records = parse_short_term_forecast(legacy_payload)
+    assert len(records) == 3
+    assert records[0]["region_name"] == "臺中市"
+
+
+def test_parse_short_term_forecast_exact_composite_alignment():
+    """Verify intervals are aligned by (startTime, endTime) and NOT by array index."""
+    payload = {
+        "records": {
+            "location": [
+                {
+                    "locationName": "高雄市",
+                    "weatherElement": [
+                        {
+                            "elementName": "Wx",
+                            "time": [
+                                # Order reversed in Wx!
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "晴天"}},
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "雨天"}},
+                            ],
+                        },
+                        {
+                            "elementName": "PoP",
+                            "time": [
+                                # Normal order in PoP
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "90"}},
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "10"}},
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+    records = parse_short_term_forecast(payload)
+    assert len(records) == 2
+    # Records are sorted by start_time: 10-05 18:00 comes first
+    assert records[0]["start_time"] == "2026-10-05 18:00:00"
+    assert records[0]["weather"] == "雨天"
+    assert records[0]["pop"] == 90
+
+    assert records[1]["start_time"] == "2026-10-06 06:00:00"
+    assert records[1]["weather"] == "晴天"
+    assert records[1]["pop"] == 10
+
+
+def test_parse_short_term_forecast_missing_and_invalid_fields():
+    """Verify missing/invalid PoP, CI, or temperature become None without discarding the interval."""
+    payload = {
+        "records": {
+            "location": [
+                {
+                    "locationName": "臺北市",
+                    "weatherElement": [
+                        {
+                            "elementName": "Wx",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "陰天"}},
+                            ],
+                        },
+                        {
+                            "elementName": "PoP",
+                            "time": [
+                                # Invalid sentinel value
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "-999"}},
+                            ],
+                        },
+                        {
+                            "elementName": "MaxT",
+                            "time": [
+                                # Sentinel NaN
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "NaN"}},
+                            ],
+                        },
+                        # CI element is completely missing!
+                    ],
+                }
+            ]
+        }
+    }
+    records = parse_short_term_forecast(payload)
+    assert len(records) == 1
+    r = records[0]
+    assert r["weather"] == "陰天"
+    assert r["pop"] is None  # -999 filtered to None
+    assert r["max_temp"] is None  # NaN filtered to None
+    assert r["min_temp"] is None
+    assert r["comfort_index"] is None  # Missing CI is None
+

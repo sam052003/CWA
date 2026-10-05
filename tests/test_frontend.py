@@ -563,5 +563,86 @@ def test_phase_8a_refinements_and_corrections():
     assert "updateTable(forecasts)" in js
 
 
+def test_phase_8b_short_term_forecast_frontend():
+    """Verify Phase 8B 36-hour living forecast frontend elements, placement, JS logic, and responsive CSS."""
+    html_resp = client.get("/")
+    assert html_resp.status_code == 200
+    html = html_resp.text
+
+    css_resp = client.get("/static/css/style.css")
+    assert css_resp.status_code == 200
+    css = css_resp.text
+
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    # 1. HTML Section Hierarchy: below map workspace, before one-week chart
+    map_idx = html.find('id="taiwan-map"')
+    short_term_idx = html.find('id="short-term-section"')
+    chart_idx = html.find('id="temperature-chart"')
+    table_idx = html.find('id="forecast-table-body"')
+
+    assert map_idx != -1 and short_term_idx != -1 and chart_idx != -1 and table_idx != -1
+    assert map_idx < short_term_idx < chart_idx < table_idx
+
+    # Section elements
+    assert "今明 36 小時生活預報" in html
+    assert 'id="short-term-region-badge"' in html
+    assert 'id="short-term-loading"' in html
+    assert 'id="short-term-error"' in html
+    assert 'id="short-term-retry-btn"' in html
+    assert 'id="short-term-empty"' in html
+    assert 'id="short-term-cards-grid"' in html
+
+    # 2. JavaScript logic
+    assert "shortTermAbortController" in js
+    assert "loadShortTermForecast(" in js
+    assert "renderShortTermForecast(" in js
+    assert "setShortTermLoading(" in js
+    assert "setShortTermError(" in js
+    assert "getWeatherIcon(" in js
+    assert "/api/forecast/short-term?region=" in js
+
+    # Dedicated abort controller cancels in-flight requests on county switch
+    load_st_idx = js.find("async function loadShortTermForecast(")
+    assert load_st_idx != -1
+    load_st_end = js.find("async function loadForecast(", load_st_idx)
+    load_st_body = js[load_st_idx:load_st_end]
+    assert "shortTermAbortController.abort()" in load_st_body
+    assert "shortTermAbortController = new AbortController()" in load_st_body
+
+    # PoP and CI rendering
+    assert "st-pop-value" in js
+    assert "st-pop-bar-fill" in js
+    assert "st-ci-value" in js
+
+    # selectCounty triggers both 7-day and 36h short-term load
+    select_county_idx = js.find("function selectCounty(")
+    assert select_county_idx != -1
+    select_county_end = js.find("function onEachCountyFeature(", select_county_idx)
+    select_county_body = js[select_county_idx:select_county_end]
+    assert "loadForecast(countyName)" in select_county_body
+    assert "loadShortTermForecast(countyName)" in select_county_body
+
+    # Period selector semantics unchanged: setMapPeriod does NOT trigger short-term forecast
+    set_period_idx = js.find("function setMapPeriod(")
+    assert set_period_idx != -1
+    set_period_end = js.find("function selectCounty(", set_period_idx)
+    set_period_body = js[set_period_idx:set_period_end]
+    assert "loadShortTermForecast" not in set_period_body
+    assert "fetch(" not in set_period_body
+
+    # 3. CSS & Responsive Rules
+    assert ".short-term-section" in css
+    assert ".short-term-cards-grid" in css
+    assert ".short-term-card" in css
+    assert ".st-pop-bar-fill" in css
+    assert ".st-ci-value" in css
+    assert "@media (max-width: 960px)" in css
+    assert "@media (max-width: 600px)" in css
+
+
+
 
 

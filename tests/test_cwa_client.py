@@ -205,3 +205,71 @@ def test_fallback_invalid_json(mock_get, mock_client):
 
     assert mock_get.call_count == 2
     assert "Failed to parse CWA response" in str(exc_info.value)
+
+
+# ==============================================================================
+# Phase 8B: F-C0032-001 36-Hour Forecast Client Tests
+# ==============================================================================
+
+def test_dataset_forecast_36h_constant():
+    """Verify DATASET_FORECAST_36H constant is set to F-C0032-001."""
+    assert CWAClient.DATASET_FORECAST_36H == "F-C0032-001"
+
+
+@patch("requests.get")
+def test_fetch_forecast_36h_without_region(mock_get, mock_client):
+    """Verify fetch_forecast_36h calls F-C0032-001 without locationName when region is None."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "success": "true",
+        "result": {"resource_id": "F-C0032-001"},
+        "records": {"location": []},
+    }
+    mock_get.return_value = mock_resp
+
+    data = mock_client.fetch_forecast_36h()
+
+    assert data["success"] == "true"
+    mock_get.assert_called_once()
+    call_args = mock_get.call_args
+    assert "F-C0032-001" in call_args[0][0]
+    assert call_args[1]["params"] is None
+    # Verify Authorization header is passed server-side
+    assert call_args[1]["headers"]["Authorization"] == "CWA-TEST-DUMMY-KEY-12345"
+
+
+@patch("requests.get")
+def test_fetch_forecast_36h_with_region(mock_get, mock_client):
+    """Verify fetch_forecast_36h passes locationName query parameter when region is provided."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "success": "true",
+        "result": {"resource_id": "F-C0032-001"},
+        "records": {"location": [{"locationName": "臺中市"}]},
+    }
+    mock_get.return_value = mock_resp
+
+    data = mock_client.fetch_forecast_36h(region_name="臺中市")
+
+    assert data["success"] == "true"
+    mock_get.assert_called_once()
+    call_args = mock_get.call_args
+    assert "F-C0032-001" in call_args[0][0]
+    assert call_args[1]["params"] == {"locationName": "臺中市"}
+    assert call_args[1]["headers"]["Authorization"] == "CWA-TEST-DUMMY-KEY-12345"
+
+
+@patch("requests.get")
+def test_fetch_forecast_36h_cwa_error_mapped(mock_get, mock_client):
+    """Verify CWA error is mapped to CWAHTTPError during fetch_forecast_36h."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 502
+    mock_get.return_value = mock_resp
+
+    with pytest.raises(CWAHTTPError) as exc_info:
+        mock_client.fetch_forecast_36h(region_name="臺中市")
+
+    assert exc_info.value.status_code == 502
+

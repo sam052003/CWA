@@ -9,7 +9,9 @@ from app.api.schemas import (
     MapDataResponse,
     RefreshResponse,
     RegionsResponse,
+    ShortTermForecastResponse,
 )
+from app.clients.cwa_client import CWAClientError
 from app.core.config import get_settings
 from app.db.database import get_db
 from app.services import weather_service
@@ -103,6 +105,54 @@ def get_forecast_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving forecast",
+        )
+
+
+@router.get(
+    "/forecast/short-term",
+    response_model=ShortTermForecastResponse,
+    summary="Get 36-hour living weather forecast for a region",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid region parameter"},
+        404: {"model": ErrorResponse, "description": "Region not found or no forecast"},
+        502: {"model": ErrorResponse, "description": "Upstream CWA service unavailable"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+def get_short_term_forecast_endpoint(
+    region: str = Query(..., description="Target region name, e.g. 臺中市"),
+):
+    """Retrieve 36-hour rich living weather forecast (F-C0032-001) for the requested region."""
+    if not region or not region.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Region query parameter must not be empty",
+        )
+
+    clean_region = region.strip()
+
+    try:
+        data = weather_service.get_short_term_forecast(region_name=clean_region)
+        return ShortTermForecastResponse(**data)
+    except RegionNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Region '{clean_region}' not found",
+        )
+    except ForecastNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No active short-term forecast found for region '{clean_region}'",
+        )
+    except CWAClientError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Upstream weather data service unavailable",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving short-term forecast",
         )
 
 

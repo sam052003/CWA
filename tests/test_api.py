@@ -604,3 +604,99 @@ def test_map_data_and_forecast_latest_batch_rule_sqlite():
         app.dependency_overrides.clear()
         engine.dispose()
 
+
+# ==============================================================================
+# Phase 8B: GET /api/forecast/short-term Endpoint Tests
+# ==============================================================================
+
+from app.clients.cwa_client import CWAClientError, CWATimeoutError
+
+
+def test_get_short_term_forecast_api_success():
+    """Verify GET /api/forecast/short-term returns 200 with chronological 36h forecasts including PoP and CI."""
+    mock_data = {
+        "region": "臺中市",
+        "dataset_id": "F-C0032-001",
+        "updated_at": "2026-10-05T18:00:00+08:00",
+        "forecasts": [
+            {
+                "start_time": "2026-10-05T18:00:00+08:00",
+                "end_time": "2026-10-06T06:00:00+08:00",
+                "weather": "多雲短暫陣雨",
+                "weather_code": "08",
+                "min_temp": 25.0,
+                "max_temp": 29.0,
+                "pop": 40,
+                "comfort_index": "舒適至悶熱",
+            },
+            {
+                "start_time": "2026-10-06T06:00:00+08:00",
+                "end_time": "2026-10-06T18:00:00+08:00",
+                "weather": "多雲午後雷陣雨",
+                "weather_code": "22",
+                "min_temp": 26.0,
+                "max_temp": 33.0,
+                "pop": 70,
+                "comfort_index": "悶熱",
+            },
+        ],
+    }
+
+    with patch("app.api.routes.weather_service.get_short_term_forecast", return_value=mock_data) as mock_service:
+        response = client.get("/api/forecast/short-term?region=臺中市")
+        assert response.status_code == 200
+        mock_service.assert_called_once_with(region_name="臺中市")
+
+        body = response.json()
+        assert body["region"] == "臺中市"
+        assert body["dataset_id"] == "F-C0032-001"
+        assert len(body["forecasts"]) == 2
+        assert body["forecasts"][0]["pop"] == 40
+        assert body["forecasts"][0]["comfort_index"] == "舒適至悶熱"
+        assert body["forecasts"][1]["pop"] == 70
+
+
+def test_get_short_term_forecast_api_empty_region():
+    """Verify empty region returns 400 Bad Request."""
+    response = client.get("/api/forecast/short-term?region=")
+    assert response.status_code == 400
+    assert "Region query parameter must not be empty" in response.json()["detail"]
+
+
+def test_get_short_term_forecast_api_unknown_region():
+    """Verify unknown region returns 404 Not Found."""
+    with patch(
+        "app.api.routes.weather_service.get_short_term_forecast",
+        side_effect=RegionNotFoundError("Region '火星市' not found"),
+    ):
+        response = client.get("/api/forecast/short-term?region=火星市")
+        assert response.status_code == 404
+        assert "Region '火星市' not found" in response.json()["detail"]
+
+
+def test_get_short_term_forecast_api_upstream_cwa_failure():
+    """Verify CWA upstream failure returns 502 Bad Gateway without leaking internal details."""
+    with patch(
+        "app.api.routes.weather_service.get_short_term_forecast",
+        side_effect=CWAClientError("CWA API 503 gateway unavailable with CWA-KEY-12345"),
+    ):
+        response = client.get("/api/forecast/short-term?region=臺中市")
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Upstream weather data service unavailable"
+        # Verify no secret leaked
+        assert "CWA-KEY" not in response.text
+
+
+def test_get_short_term_forecast_api_unexpected_internal_error():
+    """Verify unexpected internal failure returns 500 without leaking raw traces."""
+    with patch(
+        "app.api.routes.weather_service.get_short_term_forecast",
+        side_effect=RuntimeError("Unexpected unhandled server crash with secret postgresql://user:pwd@db.host/db"),
+    ):
+        response = client.get("/api/forecast/short-term?region=臺中市")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error occurred while retrieving short-term forecast"
+        assert "postgresql://" not in response.text
+        assert "pwd" not in response.text
+
+

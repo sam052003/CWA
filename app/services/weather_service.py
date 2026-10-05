@@ -7,9 +7,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
+import time
 from app.clients.cwa_client import CWAClient, CWAClientError
 from app.core.config import get_settings
-from app.parsers.cwa_parser import parse_cwa_forecast
+from app.parsers.cwa_parser import parse_cwa_forecast, parse_short_term_forecast
 from app.repositories.weather_repository import (
     create_fetch_log,
     get_active_forecasts_by_region,
@@ -254,6 +255,132 @@ def get_map_data(
     }
 
 
+# ---------------------------------------------------------------------------
+# Phase 8B: Short-term 36h Living Forecast Service & In-Memory TTL Cache
+# ---------------------------------------------------------------------------
+
+VALID_TAIWAN_REGIONS = {
+    "基隆市", "臺北市", "新北市", "桃園市", "新竹市", "新竹縣", "苗栗縣",
+    "臺中市", "彰化縣", "南投縣", "雲林縣", "嘉義市", "嘉義縣", "臺南市",
+    "高雄市", "屏東縣", "宜蘭縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣",
+}
+
+_short_term_cache: Dict[str, Dict[str, Any]] = {}
+SHORT_TERM_CACHE_TTL_SECONDS = 900  # 15 minutes TTL
+
+
+def clear_short_term_cache() -> None:
+    """Clear in-memory short-term forecast cache (used for test isolation)."""
+    _short_term_cache.clear()
+
+
+def _to_taipei_iso(time_str: str) -> str:
+    """Normalize a time string like '2026-10-05 18:00:00' to ISO 8601 with Asia/Taipei offset."""
+    if not time_str:
+        return time_str
+    if "T" in time_str and ("+" in time_str or time_str.endswith("Z")):
+        return time_str
+    cleaned = time_str.replace(" ", "T")
+    if "+" not in cleaned and not cleaned.endswith("Z"):
+        return f"{cleaned}+08:00"
+    return cleaned
+
+
+def get_short_term_forecast(
+    region_name: str,
+    client: Optional[CWAClient] = None,
+    current_time: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Retrieve 36-hour rich county forecast (F-C0032-001) for a specific region.
+
+    Uses an in-memory process-local best-effort TTL cache (15 min).
+    Does NOT require a database session.
+
+    Args:
+        region_name: Target region name, e.g. '臺中市'.
+        client: Optional CWAClient instance for dependency injection / testing.
+        current_time: Optional unix timestamp float for deterministic cache testing.
+
+    Returns:
+        Dictionary formatted for ShortTermForecastResponse.
+
+    Raises:
+        RegionNotFoundError: If region_name is empty or not one of the 22 Taiwan counties.
+        ForecastNotFoundError: If region has no forecast intervals in CWA response.
+        CWAClientError / Exception: If upstream CWA request fails.
+    """
+    if not region_name or not region_name.strip():
+        raise RegionNotFoundError("Region name is required")
+
+    clean_region = region_name.strip().replace("台", "臺")
+    if clean_region not in VALID_TAIWAN_REGIONS:
+        raise RegionNotFoundError(f"Region '{clean_region}' not found")
+
+    now = current_time if current_time is not None else time.time()
+
+    # Check process-local best-effort cache
+    cached_entry = _short_term_cache.get(clean_region)
+    if cached_entry and cached_entry.get("expires_at", 0) > now:
+        cached_data = cached_entry.get("data")
+        if cached_data and cached_data.get("region") == clean_region:
+            return cached_data
+
+    # Fetch from CWA client
+    if client is None:
+        client = CWAClient()
+
+    raw_data = client.fetch_forecast_36h(region_name=clean_region)
+
+    # Parse using dedicated short-term parser
+    all_records = parse_short_term_forecast(raw_data)
+
+    # Filter for exact requested region
+    region_records = [r for r in all_records if r["region_name"] == clean_region]
+    if not region_records:
+        raise ForecastNotFoundError(f"No active short-term forecast found for region '{clean_region}'")
+
+    # Sort chronologically by start_time
+    region_records.sort(key=lambda r: r["start_time"])
+
+    # Determine updated_at timestamp
+    updated_at_str = None
+    if isinstance(raw_data, dict):
+        cwa_sent = raw_data.get("cwaopendata", {}).get("sent") if isinstance(raw_data.get("cwaopendata"), dict) else None
+        if cwa_sent and isinstance(cwa_sent, str):
+            updated_at_str = _to_taipei_iso(cwa_sent)
+    if not updated_at_str:
+        updated_at_str = to_taipei_isoformat(datetime.now(timezone.utc))
+
+    forecast_items = [
+        {
+            "start_time": _to_taipei_iso(r["start_time"]),
+            "end_time": _to_taipei_iso(r["end_time"]),
+            "weather": r["weather"],
+            "weather_code": r["weather_code"],
+            "min_temp": r["min_temp"],
+            "max_temp": r["max_temp"],
+            "pop": r["pop"],
+            "comfort_index": r["comfort_index"],
+        }
+        for r in region_records
+    ]
+
+    response_data = {
+        "region": clean_region,
+        "dataset_id": "F-C0032-001",
+        "updated_at": updated_at_str,
+        "forecasts": forecast_items,
+    }
+
+    # Store in process-local TTL cache
+    _short_term_cache[clean_region] = {
+        "data": response_data,
+        "expires_at": now + SHORT_TERM_CACHE_TTL_SECONDS,
+    }
+
+    return response_data
+
+
 def _record_failure_log(
     session: Session,
     dataset_id: str,
@@ -387,6 +514,8 @@ class WeatherService:
     list_regions = staticmethod(list_regions)
     get_forecast = staticmethod(get_forecast)
     get_map_data = staticmethod(get_map_data)
+    get_short_term_forecast = staticmethod(get_short_term_forecast)
+    clear_short_term_cache = staticmethod(clear_short_term_cache)
     refresh_forecasts = staticmethod(refresh_forecasts)
     to_taipei_isoformat = staticmethod(to_taipei_isoformat)
     sanitize_error = staticmethod(sanitize_error)

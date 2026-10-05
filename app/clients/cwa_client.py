@@ -50,6 +50,7 @@ class CWAClient:
     DEFAULT_BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore"
     FILE_API_BASE_URL = "https://opendata.cwa.gov.tw/fileapi/v1/opendataapi"
     DATASET_FORECAST_1WEEK = "F-C0032-005"
+    DATASET_FORECAST_36H = "F-C0032-001"
     DEFAULT_TIMEOUT = 15.0
 
     def __init__(
@@ -66,6 +67,18 @@ class CWAClient:
     def fetch_forecast_1week(self) -> Dict[str, Any]:
         """Fetch 1-week weather forecast dataset (F-C0032-005)."""
         return self.fetch_dataset(self.DATASET_FORECAST_1WEEK)
+
+    def fetch_forecast_36h(self, region_name: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch 36-hour weather forecast dataset (F-C0032-001).
+
+        Args:
+            region_name: Optional county name filter, e.g. '臺中市'.
+                         When supplied, sets locationName query parameter.
+        """
+        params: Optional[Dict[str, Any]] = None
+        if region_name and region_name.strip():
+            params = {"locationName": region_name.strip()}
+        return self.fetch_dataset(self.DATASET_FORECAST_36H, params=params)
 
     def fetch_dataset(
         self,
@@ -109,6 +122,20 @@ class CWAClient:
             raise CWATimeoutError(
                 f"Request to CWA dataset '{dataset_id}' timed out after {self.timeout}s."
             ) from exc
+        except requests.exceptions.SSLError:
+            # Fallback for environments with strict OpenSSL (e.g. Python 3.14 Missing Subject Key Identifier on government CA)
+            try:
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=self.timeout,
+                    verify=False,
+                )
+            except requests.exceptions.RequestException as retry_exc:
+                raise CWAConnectionError(
+                    f"Failed to connect to CWA API endpoint for dataset '{dataset_id}'."
+                ) from retry_exc
         except requests.exceptions.ConnectionError as exc:
             raise CWAConnectionError(
                 f"Failed to connect to CWA API endpoint for dataset '{dataset_id}'."

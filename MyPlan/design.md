@@ -1387,20 +1387,24 @@ Supabase PostgreSQL
   - `F-C0032-005`（7 天預報）：提供跨一週之長週期氣溫走勢圖（折線圖與 7 日趨勢）。
   - **批次與資料集隔離準則**：兩者透過 `dataset_id` 嚴密隔離，資料庫查詢、快取鍵與 API 路由絕對獨立，不混用預報批次時間與時段資料。
 
-#### 3.2 後端架構擴充設計
+#### 3.2 後端與快取架構設計（Phase 8B 架構修正）
+- **架構保護原則**：
+  - Phase 8B **不修改 PostgreSQL schema**，不在 `weather_forecasts` 表新增欄位，亦不建立新資料表。既有一週預報（`F-C0032-005`）與每日排程維持絕對穩定。
+  - 資料流：`Browser → FastAPI (/api/forecast/short-term) → WeatherService → in-memory TTL 快取 → CWAClient → CWA F-C0032-001`。
 - **CWAClient (`app/clients/cwa_client.py`)**：
-  - 擴充 `fetch_forecast_data(dataset_id: str)`，當指定 `F-C0032-001` 時自動呼叫對應 Datastore/File API 端點。
+  - 定義 `DATASET_FORECAST_36H = "F-C0032-001"`。
+  - 新增 `fetch_forecast_36h(region_name: Optional[str] = None)`，以 `locationName` 伺服器端過濾。嚴格不對前端暴露 `CWA_API_KEY`。
 - **CWAParser (`app/parsers/cwa_parser.py`)**：
-  - 新增 `parse_short_term_forecast(payload: dict) -> list[ShortTermForecastRecord]`。
-  - 精確解析每 12 小時段落中之 `PoP`（整數百分比）與 `CI`（字串描述）。
-- **Repository (`app/repositories/weather_repository.py`)**：
-  - 資料庫 schema 演進策略：在 `weather_forecasts` 表新增可為空的擴充欄位 `pop` (Integer, nullable) 與 `comfort_index` (String(50), nullable)。
-  - UPSERT 唯一限制條件 `(dataset_id, region_name, start_time, end_time)` 保證與既有一週預報（`dataset_id='F-C0032-005'`）零衝突。
-- **WeatherService (`app/services/weather_service.py`)**：
-  - 新增 `get_short_term_forecast(region_name: str)` 業務邏輯，套用最新批次規則（Latest Batch Rule）。
+  - 新增 `parse_short_term_forecast(data, dataset_id="F-C0032-001")`。
+  - 核心要素：`Wx`、`MinT`、`MaxT`、`PoP`、`CI`，以 `(start_time, end_time)` 複合鍵嚴格對齊（不依賴陣列索引）。
+  - 數值安全轉換：`PoP` 限制為 0~100 整數，無效值或遺漏時安全轉為 `null`，不因缺漏特定指標而丟棄整筆時段。
+- **WeatherService 與行程內快取 (`app/services/weather_service.py`)**：
+  - 新增 `get_short_term_forecast(region_name: str)`（不需 DB Session）。
+  - 內建行程級最佳努力（best-effort）TTL 快取（10~30 分鐘），冷啟動安全容錯，不干擾既有排程。
 - **API 端點設計**：
-  - `GET /api/forecast/short-term?region={region_name}`：回傳該縣市 36 小時三時段之豐富資訊（氣溫、天氣、降雨機率、舒適度）。
-  - `GET /api/map-data?type=short-term`：回傳全臺 22 縣市當前時段之降雨機率面量圖資料（Choropleth 可切換為降雨機率色階圖）。
+  - `GET /api/forecast/short-term?region={region_name}`：回傳該縣市 36 小時三時段之生活預報資料。
+- **Phase 8B2 — Rainfall Map Mode (選項目標)**：
+  - 降雨機率地圖面量圖切換（`GET /api/map-data?type=short-term`）移至 Phase 8B2，待 36 小時生活預報卡片於生產環境驗收後再行評估。既有地圖維持氣溫面量圖不變。
 
 ---
 
@@ -1660,7 +1664,7 @@ CWA Open Data API
 
 ### 11. 實作規劃路線圖 (Phase 8 Implementation Roadmap)
 
-- [ ] **Phase 8A — App Experience & Map Workspace** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+- [x] **Phase 8A — App Experience & Map Workspace** (已完成並通過生產環境驗收 / Completed and Production Verified)：
   - [x] 深淺色主題切換（Header 鈕、Sun/Moon 圖示、localStorage 持久化、prefers-color-scheme 零閃爍初始化）
   - [x] Chart.js 網格、標籤、Tooltip 主題動態同步更新（不破壞現有資料）
   - [x] Leaflet 控制項、Tooltip、圖例暗色適配與 OSM 底圖輕量 CSS 濾鏡
@@ -1670,7 +1674,13 @@ CWA Open Data API
   - [x] 重設臺灣視角控制按鈕（採用 GeoJSON `getBounds()` 動態計算，涵蓋本島與外島全境）
   - [x] 全螢幕地圖工作區控制按鈕（HTML5 Fullscreen API，支援尺寸動態重新計算）
   - [x] 跨裝置響應式支援（行動端 <= 960px 面板回歸靜態堆疊排版）
-- [ ] **Phase 8B — Rich County Forecast**：`F-C0032-001` 短期 36 小時預報串接（降雨機率 `PoP` 與舒適度 `CI` 展現，嚴格按 `dataset_id` 隔離）。
+- [ ] **Phase 8B — Rich County Forecast** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+  - [x] CWA `F-C0032-001` 今明 36 小時預報客戶端與安全過濾
+  - [x] 專屬短天期解析器（`(start_time, end_time)` 嚴格複合鍵對齊，PoP/CI 容錯與數值安全轉換）
+  - [x] 行程內最佳努力（best-effort）TTL 快取（10~30 分鐘，冷啟動自癒容錯，零 DB 結構變更）
+  - [x] `GET /api/forecast/short-term` 專屬 API 端點與錯誤遮罩
+  - [x] 前端今明 36 小時生活預報卡片（3 時段卡片、PoP 機率條、CI 舒適度文字標籤、獨立載入/錯誤狀態、防競態 AbortController）
+- [ ] **Phase 8B2 — Rainfall Map Mode (選項目標 / Optional Future Target)**：`GET /api/map-data?type=short-term` 與降雨機率面量圖切換模式（待 36 小時卡片生產驗收後進行評估）。
 - [ ] **Phase 8C — Current Weather Observations**：`O-A0001` 即時氣象觀測串接（測站標記圖層、目前觀測 vs 未來預報嚴格區隔 UI、選取縣市即時氣候摘要）。
 - [ ] **Phase 8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
 - [ ] **Phase 8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。

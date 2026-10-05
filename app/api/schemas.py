@@ -29,6 +29,28 @@ class ForecastResponse(BaseModel):
     forecasts: List[ForecastItem] = Field(..., description="Chronological active forecast records")
 
 
+class ShortTermForecastItem(BaseModel):
+    """Single short-term 36h forecast period data item (F-C0032-001)."""
+
+    start_time: str = Field(..., description="Forecast period start time in ISO 8601 (Asia/Taipei)")
+    end_time: str = Field(..., description="Forecast period end time in ISO 8601 (Asia/Taipei)")
+    weather: Optional[str] = Field(None, description="Weather description, e.g. 多雲短暫陣雨")
+    weather_code: Optional[str] = Field(None, description="Weather code, e.g. 08")
+    min_temp: Optional[float] = Field(None, description="Minimum temperature in Celsius")
+    max_temp: Optional[float] = Field(None, description="Maximum temperature in Celsius")
+    pop: Optional[int] = Field(None, description="Probability of precipitation (0-100)")
+    comfort_index: Optional[str] = Field(None, description="Comfort index description, e.g. 舒適至悶熱")
+
+
+class ShortTermForecastResponse(BaseModel):
+    """Response model for /api/forecast/short-term endpoint."""
+
+    region: str = Field(..., description="Region name, e.g. 臺中市")
+    dataset_id: str = Field("F-C0032-001", description="CWA Dataset ID, e.g. F-C0032-001")
+    updated_at: Optional[str] = Field(None, description="Data update timestamp in ISO 8601 (Asia/Taipei)")
+    forecasts: List[ShortTermForecastItem] = Field(..., description="Chronological short-term forecast records")
+
+
 class MapPeriodItem(BaseModel):
     """Single forecast period interval for map visualization."""
 

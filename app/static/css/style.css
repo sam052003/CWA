@@ -903,6 +903,258 @@ body {
     line-height: 1.35;
 }
 
+/* Phase 8B: Short-term 36h Living Forecast Section */
+.short-term-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.short-term-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.short-term-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.title-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.short-term-region-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background-color: var(--primary-light);
+    color: var(--primary);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.section-subtitle {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* Loading, Error, Empty states for short-term section */
+.short-term-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    justify-content: center;
+}
+
+.spinner-small {
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid var(--border-color);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.short-term-error {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background-color: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: var(--radius-md);
+    color: #ef4444;
+    font-size: 0.92rem;
+    margin-bottom: 1rem;
+}
+
+.st-error-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.short-term-retry-btn {
+    margin-left: auto;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: var(--primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.short-term-retry-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.short-term-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+/* 3-Column Responsive Cards Grid */
+.short-term-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+}
+
+.short-term-card {
+    background: var(--control-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.short-term-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.st-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.st-period-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.35;
+}
+
+.st-period-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.st-weather-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.st-weather-icon {
+    font-size: 2.3rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.st-weather-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.st-weather-desc {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+}
+
+.st-temp-range {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.st-metrics-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.85rem;
+}
+
+.st-metric-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.88rem;
+}
+
+.st-metric-label {
+    color: var(--text-muted);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.st-pop-value {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #0284c7;
+}
+
+/* PoP Progress Bar */
+.st-pop-bar-bg {
+    width: 100%;
+    height: 7px;
+    background-color: var(--border-color);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.st-pop-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0284c7, #38bdf8);
+    border-radius: 999px;
+    transition: width 0.4s ease;
+}
+
+.st-ci-row {
+    padding-top: 0.35rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.st-ci-value {
+    font-weight: 600;
+    color: var(--text-main);
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
 /* Chart Container */
 .chart-section {
     background: var(--bg-card);
@@ -1074,6 +1326,11 @@ body {
         gap: 0.85rem;
     }
 
+    .short-term-cards-grid {
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+
     .chart-container {
         height: 320px;
     }
@@ -1106,6 +1363,11 @@ body {
         flex-direction: column;
         align-items: stretch;
         gap: 0.65rem;
+    }
+
+    .short-term-cards-grid {
+        grid-template-columns: 1fr;
+        gap: 0.85rem;
     }
 
     .map-controls-group {

@@ -195,6 +195,42 @@
                 </aside>
             </div>
 
+            <!-- Phase 8B: 36-Hour Rich Living Forecast Section -->
+            <section class="short-term-section" id="short-term-section" aria-label="今明 36 小時生活預報">
+                <div class="section-header short-term-header">
+                    <div class="short-term-title-group">
+                        <div class="title-with-badge">
+                            <h3 class="section-title">今明 36 小時生活預報</h3>
+                            <span id="short-term-region-badge" class="short-term-region-badge">臺中市</span>
+                        </div>
+                        <p class="section-subtitle">降雨機率、舒適度與短期氣溫（CWA F-C0032-001）</p>
+                    </div>
+                </div>
+
+                <!-- Section Loading State -->
+                <div id="short-term-loading" class="short-term-loading" style="display: none;" role="status">
+                    <div class="spinner-small" aria-hidden="true"></div>
+                    <span id="short-term-loading-text">正在載入 36 小時預報...</span>
+                </div>
+
+                <!-- Section Error State -->
+                <div id="short-term-error" class="short-term-error" style="display: none;" role="alert">
+                    <span class="st-error-icon" aria-hidden="true">⚠️</span>
+                    <span id="short-term-error-text">暫時無法取得 36 小時生活預報</span>
+                    <button id="short-term-retry-btn" class="short-term-retry-btn" type="button">重試</button>
+                </div>
+
+                <!-- Section Empty State -->
+                <div id="short-term-empty" class="short-term-empty" style="display: none;">
+                    <span>目前無可用的 36 小時預報</span>
+                </div>
+
+                <!-- Three Period Forecast Cards Container -->
+                <div id="short-term-cards-grid" class="short-term-cards-grid">
+                    <!-- Dynamic forecast cards rendered via app.js -->
+                </div>
+            </section>
+
             <!-- Lower Section: Chart and Table -->
             <!-- Chart Section -->
             <section class="chart-section" aria-label="未來一週最高與最低溫趨勢">

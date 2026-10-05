@@ -400,3 +400,193 @@ def test_failure_log_error_does_not_mask_original_exception():
         with pytest.raises(WeatherRefreshError, match="CWA API request failed"):
             refresh_forecasts(mock_session, client=mock_client)
 
+
+# ==============================================================================
+# Phase 8B: Short-term 36h Living Forecast Service & Cache Tests
+# ==============================================================================
+
+from app.services.weather_service import (
+    clear_short_term_cache,
+    get_short_term_forecast,
+)
+
+
+@pytest.fixture(autouse=True)
+def reset_short_term_cache():
+    """Ensure clean short-term cache state for every test."""
+    clear_short_term_cache()
+    yield
+    clear_short_term_cache()
+
+
+def test_get_short_term_forecast_validation_empty_region():
+    """Verify get_short_term_forecast raises RegionNotFoundError for empty region."""
+    with pytest.raises(RegionNotFoundError, match="Region name is required"):
+        get_short_term_forecast("")
+
+    with pytest.raises(RegionNotFoundError, match="Region name is required"):
+        get_short_term_forecast("   ")
+
+
+def test_get_short_term_forecast_validation_unknown_region():
+    """Verify get_short_term_forecast raises RegionNotFoundError for non-existent region."""
+    with pytest.raises(RegionNotFoundError, match="Region '火星市' not found"):
+        get_short_term_forecast("火星市")
+
+
+def test_get_short_term_forecast_success():
+    """Verify get_short_term_forecast fetches, parses, and normalizes 36h forecast without DB."""
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.return_value = {
+        "records": {
+            "location": [
+                {
+                    "locationName": "臺中市",
+                    "weatherElement": [
+                        {
+                            "elementName": "Wx",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "多雲短暫陣雨", "parameterValue": "08"}},
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "晴午後雷陣雨", "parameterValue": "22"}},
+                            ],
+                        },
+                        {
+                            "elementName": "PoP",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "40"}},
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "70"}},
+                            ],
+                        },
+                        {
+                            "elementName": "CI",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "舒適"}},
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "悶熱"}},
+                            ],
+                        },
+                        {
+                            "elementName": "MinT",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "25"}},
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "26"}},
+                            ],
+                        },
+                        {
+                            "elementName": "MaxT",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "29"}},
+                                {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "33"}},
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+
+    data = get_short_term_forecast("臺中市", client=mock_client)
+    assert data["region"] == "臺中市"
+    assert data["dataset_id"] == "F-C0032-001"
+    assert len(data["forecasts"]) == 2
+    f0 = data["forecasts"][0]
+    assert f0["weather"] == "多雲短暫陣雨"
+    assert f0["weather_code"] == "08"
+    assert f0["pop"] == 40
+    assert f0["comfort_index"] == "舒適"
+    assert f0["min_temp"] == 25.0
+    assert f0["max_temp"] == 29.0
+
+
+def test_get_short_term_forecast_ttl_cache_behavior():
+    """Verify in-memory process cache returns cached result on subsequent calls within TTL."""
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.return_value = {
+        "records": {
+            "location": [
+                {
+                    "locationName": "臺北市",
+                    "weatherElement": [
+                        {
+                            "elementName": "Wx",
+                            "time": [
+                                {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "晴"}},
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+
+    t0 = 1000.0
+    # First call at t0: calls client
+    data1 = get_short_term_forecast("臺北市", client=mock_client, current_time=t0)
+    assert mock_client.fetch_forecast_36h.call_count == 1
+    assert data1["region"] == "臺北市"
+
+    # Second call at t0 + 300s (5 min, within 15 min TTL): hits cache without calling client again
+    data2 = get_short_term_forecast("臺北市", client=mock_client, current_time=t0 + 300.0)
+    assert mock_client.fetch_forecast_36h.call_count == 1
+    assert data2 == data1
+
+    # Third call at t0 + 1000s (after 15 min / 900s TTL): cache expired, re-fetches
+    data3 = get_short_term_forecast("臺北市", client=mock_client, current_time=t0 + 1000.0)
+    assert mock_client.fetch_forecast_36h.call_count == 2
+    assert data3["region"] == "臺北市"
+
+
+def test_get_short_term_forecast_cache_county_isolation():
+    """Verify cached result for one county does not return for another county."""
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.side_effect = lambda region_name: {
+        "records": {
+            "location": [
+                {
+                    "locationName": region_name,
+                    "weatherElement": [
+                        {"elementName": "Wx", "time": [{"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": f"{region_name}天氣"}}]}
+                    ],
+                }
+            ]
+        }
+    }
+
+    t0 = 1000.0
+    data_tc = get_short_term_forecast("臺中市", client=mock_client, current_time=t0)
+    data_kh = get_short_term_forecast("高雄市", client=mock_client, current_time=t0)
+
+    assert data_tc["region"] == "臺中市"
+    assert data_kh["region"] == "高雄市"
+    assert data_tc["forecasts"][0]["weather"] == "臺中市天氣"
+    assert data_kh["forecasts"][0]["weather"] == "高雄市天氣"
+    assert mock_client.fetch_forecast_36h.call_count == 2
+
+
+def test_get_short_term_forecast_exception_not_cached():
+    """Verify exceptions (e.g. CWA network failure) are not cached."""
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.side_effect = CWATimeoutError("CWA timeout")
+
+    with pytest.raises(CWATimeoutError):
+        get_short_term_forecast("臺中市", client=mock_client)
+
+    # Recovery: client succeeds next time
+    mock_client.fetch_forecast_36h.side_effect = None
+    mock_client.fetch_forecast_36h.return_value = {
+        "records": {
+            "location": [
+                {
+                    "locationName": "臺中市",
+                    "weatherElement": [
+                        {"elementName": "Wx", "time": [{"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "多雲"}}]}
+                    ],
+                }
+            ]
+        }
+    }
+
+    data = get_short_term_forecast("臺中市", client=mock_client)
+    assert data["region"] == "臺中市"
+    assert data["forecasts"][0]["weather"] == "多雲"
+
+
