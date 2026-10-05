@@ -1225,10 +1225,426 @@ Supabase PostgreSQL
 
 ---
 
-## 22. 未來擴充規劃 (Future Extensions)
+## 22. 未來擴充規劃演進 (Future Extensions Evolution)
 
-以下項目非屬本課程核心規格，保留為後續延伸功能：
-- 降雨機率雷達回波疊加
-- 自動輪播時段播放條（Timeline Autoplay）
-- 鄉鎮市區層級預報（F-D0047-093）
+前期於 Phase 7 保留之延伸規劃項目，已於下節正式提升並整合為完整的 **Phase 8 — Advanced Weather Platform** 系統設計架構藍圖。
+
+---
+
+## Phase 8 — Advanced Weather Platform
+
+> **階段願景**：將現有已通過生產環境驗收的中央氣象署天氣預報儀表板（Phase 1–7C），進一步演進為全方位、現代化且具備專業氣象工作台體驗的「進階氣象平台（Advanced Weather Platform）」，在無縫保留 Phase 7 所有既有驗收規格的前提下，擴展即時觀測、短中期降雨機率預報、雷達回波疊加、颱風動態中心與鄉鎮細緻預報。
+
+```text
++---------------------------------------------------------------------------------------------------+
+|                                CWA Advanced Weather Platform (Phase 8)                            |
++---------------------------------------------------------------------------------------------------+
+|  [Header] Brand Title | Theme Toggle (Light/Dark) | Map Mode Selector: [預報] [觀測] [雷達] [颱風]   |
++---------------------------------------------------------------------------------------------------+
+|                                                                                                   |
+|  +---------------------------------------------------------------+  +--------------------------+  |
+|  |                   Map Workspace (Leaflet)                     |  |  Floating / Collapsible  |  |
+|  |                                                               |  |  County & Detail Panel   |  |
+|  |   - Single Leaflet Map Instance                               |  |                          |  |
+|  |   - Height: 600–680px (~65–70vh)                              |  |  - Selected County Stat  |  |
+|  |   - Independent Layers:                                       |  |  - [即時觀測] Current Obs |  |
+|  |       * countyForecastLayer (Choropleth GeoJSON)              |  |  - [未來預報] 36h PoP/CI |  |
+|  |       * stationObservationLayer (Weather Stations)            |  |  - 7-Day Temp Trend Chart|  |
+|  |       * radarOverlayLayer (CWA Radar ImageOverlay)            |  |  - Detailed Period Table |  |
+|  |       * typhoonTrackLayer (Past/Forecast Tracks)              |  |                          |  |
+|  |       * typhoonRadiusLayer (7/10-Level Wind Radii)            |  |  (Desktop: Floating Card |  |
+|  |   - Interactive Controls: Reset View, Fullscreen, Opacity     |  |   Mobile: Stacked Below) |  |
+|  +---------------------------------------------------------------+  +--------------------------+  |
+|                                                                                                   |
++---------------------------------------------------------------------------------------------------+
+```
+
+---
+
+### 1. 總體設計原則與架構規範 (Guiding Principles)
+
+1. **嚴格保持 Phase 7 既有規格 (Preserve Verified Phase 7 Behavior)**：
+   - 既有縣市一週預報（`F-C0032-005`）、縣市下拉選單、7 日高低溫折線圖、詳細時段預報表、GeoJSON 分級面量圖、時段切換選單（Phase 7B）、指標點擊雙向連動與 Vercel Cron 排程皆為系統核心基石，任何 Phase 8 的擴充均不得破壞既有通過驗收之行為與資料一致性。
+2. **單一地圖實例原則 (ONE Leaflet Map Instance)**：
+   - 全應用程式維持唯一一個 `L.map` 實例，不因切換不同氣象模式或圖層而銷毀重建地圖，防止記憶體洩漏與底圖重複請求。
+3. **資料領域分離 (Domain Separation)**：
+   - 嚴禁將所有異質氣象資料全部混入 `weather_forecasts` 表。縣市預報、即時觀測、雷達中繼、颱風路徑與鄉鎮預報皆劃分專屬資料模型與獨立儲存結構。
+4. **觀測與預報嚴格區隔 (Strict Observation vs Forecast Separation)**：
+   - 「目前觀測（Current Observations）」代表既有過去發生之量測真值；「未來預報（Future Forecasts）」代表數值模式預測值。UI、API 及資料庫欄位必須徹底隔離，絕不相互指涉或混淆。
+5. **高效快取與零冗餘下載 (Smart Caching & Selective Download)**：
+   - 針對高頻更新與巨量資料集（如雷達回波、全臺自動觀測站、368 鄉鎮細緻預報），採用後端過濾與伺服器快取架構，避免前端下載數十 MB 無用封包或過度頻繁衝擊 CWA API。
+
+---
+
+### 2. 8A — App Experience & Map Workspace (使用者體驗與地圖工作台)
+
+#### 2.1 系統級 Light / Dark 主題體系
+- **主題切換互動 (Theme Toggle in Header)**：
+  - 於 Header 右側設置主題切換按鈕，支援流暢的 Sun/Moon 圖示翻轉過渡動效。
+  - 首度造訪時優先遵循瀏覽器或作業系統設定：`window.matchMedia('(prefers-color-scheme: dark)')`。
+  - 使用者手動切換後，設定值持久化於 `localStorage.getItem('cwa_theme')`（值域為 `'light'` 或 `'dark'`）。
+  - HTML 根節點以屬性 `data-theme="dark"` 即時響應，避免切換時出現畫面白閃（Flash of Unstyled Theme, FOUT）。
+- **CSS Custom Properties 設計代幣體系 (Design Tokens)**：
+  ```css
+  /* 基礎語意代幣體系 */
+  :root {
+    --bg-app: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #ffffff;
+    --bg-panel: rgba(255, 255, 255, 0.92);
+    --border-color: #e2e8f0;
+    --border-subtle: #edf2f7;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent-primary: #2563eb;
+    --accent-hover: #1d4ed8;
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-float: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --map-tile-filter: none;
+  }
+
+  [data-theme="dark"] {
+    --bg-app: #0f172a;
+    --bg-surface: #1e293b;
+    --bg-surface-elevated: #334155;
+    --bg-panel: rgba(30, 41, 59, 0.92);
+    --border-color: #334155;
+    --border-subtle: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+    --accent-primary: #3b82f6;
+    --accent-hover: #60a5fa;
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+    --shadow-float: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    /* OSM 底圖優化深色濾鏡，避免刺眼白底同時保留道路與地名 */
+    --map-tile-filter: brightness(0.82) contrast(1.12) invert(0.92) hue-rotate(185deg) saturate(0.65);
+  }
+  ```
+- **Chart.js 佈景主題動態同步**：
+  - 監聽主題變更事件，動態更新 Chart.js 全域或實例屬性：
+    - `scales.x.grid.color`: 淺色 `#e2e8f0` / 深色 `#334155`
+    - `scales.y.grid.color`: 淺色 `#e2e8f0` / 深色 `#334155`
+    - `scales.x.ticks.color` & `scales.y.ticks.color`: 淺色 `#475569` / 深色 `#cbd5e1`
+    - `plugins.legend.labels.color`: 淺色 `#1e293b` / 深色 `#f8fafc`
+    - `plugins.tooltip`: 背景更換為深灰/深藍，文字維持高對比反白。
+  - 切換時調用 `chartInstance.update()` 觸發平滑過渡。
+- **Leaflet 控制項與圖例暗色適配**：
+  - 縮放按鈕 (`.leaflet-bar a`)、圖層控制器與自訂工具箱適配 `var(--bg-surface)` 與 `var(--border-color)`。
+  - 縣市懸浮 Tooltip (`.cwa-county-tooltip`) 及面量圖圖例 (`.cwa-choropleth-legend`) 採用深色毛玻璃背景與清晰文字，確保符合 WCAG 對比度規範。
+  - **底圖保留政策**：初階段**不引進第三方深色圖磚服務**（避免第三方 API Key 依賴、計費限制或服務中斷），繼續保留現有標準 OpenStreetMap 底圖及 `&copy; OpenStreetMap contributors` 版權署名。深色模式下僅對 Leaflet 圖磚容器 `.leaflet-tile-pane` 套用 CSS 濾鏡，向量多邊形、標記與文字標註層則保持原始清晰色彩。
+
+#### 2.2 地圖工作台 UX (Map Workspace UX)
+- **桌面版大工作區設計**：
+  - 桌面視窗下將地圖高度由原本約 450px 擴大至 **600–680px（或約 65–70vh）**，使地圖真正成為探索氣象空間資料的主核心工作台。
+- **桌面浮動／收合面板 (Desktop Floating/Collapsible Panel)**：
+  - **桌面端 (Desktop)**：選定縣市摘要、溫度趨勢圖與預報資料表封裝為半透明毛玻璃浮動面板（Dockable Floating Card），懸浮於地圖右側或左側：
+    - 提供「收合／展開（Collapse / Expand）」切換鈕，收合時縮為輕量縣市摘要膠囊標籤，釋放 100% 完整寬幅地圖。
+    - 點擊地圖任一縣市時，若面板處於收合狀態則平滑滑入展開。
+  - **行動端 (Mobile)**：維持 Phase 7C 驗收良好之垂直響應式排版，地圖置於頂部（全螢幕寬度），詳細面板固定於地圖下方垂直捲動，防止行動小螢幕被懸浮面板遮擋操作空間。
+- **地圖互動手勢與輔助控制**：
+  - 桌面版啟用滾輪縮放（`scrollWheelZoom: true`），配合 GIS 操作習慣。
+  - 行動端完整保留單指拖曳、雙指捏合縮放（Pinch-to-zoom）與觸控雙擊縮放。
+  - 新增「**重設臺灣視角（Reset to Taiwan View）**」專屬控制按鈕：一鍵將地圖視角平滑動畫還原至全臺灣本島最佳可視範圍（邊界範圍：`[[21.8, 119.3], [25.4, 122.2]]`，中心 `[23.7, 121.0]`，縮放等級約 7.5）。
+  - 評估並預留全螢幕工作模式控制按鈕（HTML5 Fullscreen API），支援一鍵進入沉浸式氣象監控模式。
+
+---
+
+### 3. 8B — Rich County Forecast (富縣市短中期預報)
+
+#### 3.1 資料來源與氣象要素定義
+- **資料集代號**：`F-C0032-001` (一般天氣預報－今明 36 小時天氣預報 / 縣市天氣預報)
+- **核心候選欄位**：
+  - `Wx`：天氣現象名稱及天氣代碼（01–42，可對應圖示）
+  - `MinT`：預測最低溫度 (°C)
+  - `MaxT`：預測最高溫度 (°C)
+  - `PoP`：降雨機率（Probability of Precipitation, %）
+  - `CI`：舒適度指數（Comfort Index，如「舒適」、「悶熱」、「稍有寒意」等）
+- **與既有 F-C0032-005 預報之清晰職責區隔**：
+  - `F-C0032-001`（36 小時）：分為「今晚明晨」、「明日白天」、「明日晚上」等三個具體生活時段，提供民眾出門防雨與穿衣之高精度短時指引（含 `PoP` 與 `CI`）。
+  - `F-C0032-005`（7 天預報）：提供跨一週之長週期氣溫走勢圖（折線圖與 7 日趨勢）。
+  - **批次與資料集隔離準則**：兩者透過 `dataset_id` 嚴密隔離，資料庫查詢、快取鍵與 API 路由絕對獨立，不混用預報批次時間與時段資料。
+
+#### 3.2 後端架構擴充設計
+- **CWAClient (`app/clients/cwa_client.py`)**：
+  - 擴充 `fetch_forecast_data(dataset_id: str)`，當指定 `F-C0032-001` 時自動呼叫對應 Datastore/File API 端點。
+- **CWAParser (`app/parsers/cwa_parser.py`)**：
+  - 新增 `parse_short_term_forecast(payload: dict) -> list[ShortTermForecastRecord]`。
+  - 精確解析每 12 小時段落中之 `PoP`（整數百分比）與 `CI`（字串描述）。
+- **Repository (`app/repositories/weather_repository.py`)**：
+  - 資料庫 schema 演進策略：在 `weather_forecasts` 表新增可為空的擴充欄位 `pop` (Integer, nullable) 與 `comfort_index` (String(50), nullable)。
+  - UPSERT 唯一限制條件 `(dataset_id, region_name, start_time, end_time)` 保證與既有一週預報（`dataset_id='F-C0032-005'`）零衝突。
+- **WeatherService (`app/services/weather_service.py`)**：
+  - 新增 `get_short_term_forecast(region_name: str)` 業務邏輯，套用最新批次規則（Latest Batch Rule）。
+- **API 端點設計**：
+  - `GET /api/forecast/short-term?region={region_name}`：回傳該縣市 36 小時三時段之豐富資訊（氣溫、天氣、降雨機率、舒適度）。
+  - `GET /api/map-data?type=short-term`：回傳全臺 22 縣市當前時段之降雨機率面量圖資料（Choropleth 可切換為降雨機率色階圖）。
+
+---
+
+### 4. 8C — Current Weather Observations (現在即時氣象觀測)
+
+#### 4.1 資料來源與觀測資料結構
+- **資料集代號**：`O-A0001` (自動氣象站觀測資料－自動氣象站觀測資料 / 現在天氣觀測資料)
+- **核心候選欄位**：
+  - `StationId` / `StationName`：測站代碼與中文名稱（如 `467490` 臺中）
+  - `CountyName` / `TownshipName`：所屬縣市與鄉鎮
+  - `GeoPosition`：經度 (`Longitude`)、緯度 (`Latitude`)、測站高度 (`Altitude`)
+  - `AirTemperature`：即時測得大氣溫度 (°C)
+  - `RelativeHumidity`：相對濕度 (%)
+  - `WindDirection`：風向 (角度 0–360° 與十六方位描述)
+  - `WindSpeed`：平均風速 (m/s 或 蒲福風級)
+  - `PeakGustSpeed`：最大陣風風速 (m/s)
+  - `AirPressure`：測站大氣壓力 (hPa)
+  - `Precipitation`：累積雨量 (過去 1 小時 / 過去 24 小時累積雨量 mm)
+  - `ObservationTime`：實際觀測取樣時間（ISO 8601 時間戳記）
+
+#### 4.2 介面黃金原則：目前觀測 vs 未來預報嚴格區隔
+- **UI 視覺分離準則**：
+  - 介面採用高對比雙軌徽章與分區：
+    - **【目前觀測 (Current Observations)】**：採用「翠綠色/青色」專屬實心標籤，標註 `[即時觀測] 測站：臺中站 (14:00 觀測)`。顯示項為真實量測之氣溫、濕度、風速、氣壓、時雨量。
+    - **【未來預報 (Future Forecasts)】**：採用「晴空藍/靛藍」專屬標籤，標註 `[未來預報] 2026/10/05 晚上~明日清晨`。顯示項為預測天氣現象、預測高低溫、預測降雨機率。
+  - **嚴格禁令**：在系統任何一處，絕不允許將預報數值冠以「目前/即時」名稱，也絕不允許將觀測值標註為預報。
+
+#### 4.3 Leaflet 測站標記圖層與選取縣市摘要
+- **`stationObservationLayer` (測站標記圖層)**：
+  - 在 Leaflet 地圖上將全臺自動氣象站以 CircleMarker 或氣候圖標呈現。
+  - 標記點顯示當前氣溫數值；點擊標記彈出氣象站詳細資訊卡（氣溫、相對濕度、氣壓、風向風速、降水量、最後觀測時間）。
+  - 對密集測站支援輕量網格聚合（Grid Cluster），避免數百個點同時渲染造成地圖拖曳掉幀。
+- **選定縣市即時觀測摘要 (Selected County Observation Summary)**：
+  - 當使用者點選特定縣市時，詳細面板頂部自動載入該縣市基準代表測站之「即時觀測數據橫幅」，讓使用者一目了然「現在正在下雨嗎？現在氣溫多少？」，下方緊接著「未來幾天一週趨勢」。
+
+---
+
+### 5. 8D — Radar Layer (氣象雷達回波合成圖疊加)
+
+#### 5.1 資料來源與地理空間幾何
+- **資料集代號**：`O-A0058-002` (雷達回波合成圖－臺灣鄰近區域無地形)
+- **地理範圍邊界 (Geographic Bounding Box)**：
+  - 依氣象署官方圖資標準，臺灣鄰近區域無地形雷達回波合成圖涵蓋範圍約為：
+    - 南界 (South): `20.0° N`，北界 (North): `27.0° N`
+    - 西界 (West): `117.0° E`，東界 (East): `124.0° E`
+  - 使用 Leaflet `L.latLngBounds([20.0, 117.0], [27.0, 124.0])` 精準對齊底圖。
+
+#### 5.2 Leaflet ImageOverlay 圖層控制與互動
+- **`radarOverlayLayer` 實作**：
+  - 使用 `L.imageOverlay(radarImageUrl, bounds, { opacity: 0.65, interactive: false })`。
+- **圖層控制與工具條**：
+  - **雷達開關按鈕 (Radar Toggle)**：一鍵開啟／隱藏雷達回波。
+  - **透明度滑桿 (Opacity Slider)**：支援 0%–100% 動態微調（預設值 65%，讓底圖縣市邊界與道路名稱清晰透出）。
+  - **觀測時間戳記展示**：地圖角落顯著標記最新雷達掃描時間（如 `雷達回波觀測時間：2026-10-05 14:15 CST`）。
+  - **載入與錯誤狀態 (Loading & Error States)**：圖片載入中顯示微型 Spinner；若連線逾時或官方影像未產製，則顯示非阻塞性提示標籤，不影響底圖操作。
+
+#### 5.3 儲存與架構關鍵禁令
+- **二進位儲存禁令 (NO Large Binary in PostgreSQL)**：
+  - **嚴格禁止將數 MB 的雷達 PNG 圖片二進位資料（BLOB/bytea）存入 PostgreSQL 資料庫**！
+  - 資料庫或快取層僅記錄中繼資料（Metadata）：`observation_time`, `image_url`, `bounds`, `fetched_at`。
+  - 前端地圖圖磚直接由 CWA CDN 靜態圖片位址載入，或經由伺服器無狀態 Proxy 代理轉發，保持後端資料庫精簡輕巧。
+
+---
+
+### 6. 8E — Typhoon Center (颱風動態中心與路徑預報)
+
+#### 6.1 資料來源與氣象要素
+- **資料集代號**：`W-C0034-005` (熱帶氣旋分析與預報－警報與路徑預報資料)
+- **支援氣象要素**：
+  - 活動熱帶氣旋清單：颱風年份、編號、中文名稱、英文名稱、目前分級（輕度、中度、強烈颱風）。
+  - 過去分析路徑（Past Analyzed Track）：歷史各時段節點經緯度、強度、中心氣壓。
+  - 當前颱風中心（Current Cyclone Center）：即時定位經緯度、中心氣壓 (`CenterPressure` hPa)、近中心最大風速 (`MaxWindSpeed` m/s / 級)、最大陣風 (`PeakGust` m/s / 級)、移動方向與速度 (`Movement` km/h)。
+  - 未來預報路徑（Future Forecast Track）：未來 24h、48h、72h、96h、120h 預估中心位置。
+  - 暴風半徑與機率圓：
+    - 7 級風暴風半徑（15 m/s，暴風圈半徑 km）。
+    - 10 級風暴風半徑（25 m/s，十級風暴風半徑 km）。
+    - 四象限不對稱半徑（若官方提供東南、東北、西南、西北四象限差異，繪製非對稱風圈多邊形）。
+    - 70% 預報機率半徑圓（Forecast Probability Circle）。
+
+#### 6.2 Leaflet 颱風雙圖層架構
+- **`typhoonTrackLayer` (路徑圖層)**：
+  - 歷史分析路徑：以實線與實心圓點繪製過去節點，節點顏色反映當時強度。
+  - 當前颱風中心：旋轉颱風圖示標記，點擊彈出當前強度卡片。
+  - 未來預報路徑：以虛線連接未來預報節點，標示預計抵達時間與預估氣壓。
+- **`typhoonRadiusLayer` (暴風半徑圖層)**：
+  - 以半透明橘紅色面绘制 7 級風暴風圈；以深紅色面绘制 10 級風暴風圈。
+  - 以天藍色虛線圓繪製未來 70% 機率圓。
+
+#### 6.3 廣域視角與正常空狀態 (WNP View & Normal Empty State)
+- **西北太平洋廣域視角 (Western North Pacific View)**：
+  - 進入颱風模式時，地圖自動展開為西北太平洋廣域視野（緯度 `10°N–35°N`，經度 `110°E–150°E`），若有活動颱風則透過 `map.fitBounds(typhoonBounds.pad(0.2))` 自動框選颱風全路徑與臺灣全境，不鎖死在臺灣本島狹隘視角。
+- **正常空狀態處理 (Normal Empty State)**：
+  - 當目前西北太平洋無活動熱帶氣旋時，面板明確提示：
+    `「目前無活動熱帶氣旋 (No Active Tropical Cyclones)」`
+  - **核心規範**：無颱風為氣候正常狀態，**絕非系統錯誤或 API 故障**，UI 呈現乾淨寧靜之空狀態卡片，不彈出錯誤告警。
+
+---
+
+### 7. 8F — Township Detailed Forecast (鄉鎮市區細緻預報)
+
+#### 7.1 資料來源與氣象要素
+- **資料集代號**：`F-D0047-093` (臺灣各鄉鎮市區未來 1 週天氣預報) 或分縣市鄉鎮資料集
+- **候選氣象要素**：
+  - `T`：平均溫度 (°C)
+  - `Td`：露點溫度 (°C)
+  - `RH`：相對濕度 (%)
+  - `Wind`：風向與蒲福風級 / 風速 (m/s)
+  - `AT`：體感溫度 (°C)
+  - `CI`：舒適度指數描述
+  - `Wx`：天氣現象描述與圖示代碼
+  - `PoP`：3 小時 / 12 小時降雨機率 (%)
+  - `MaxT` / `MinT`：預測最高／最低溫
+
+#### 7.2 巨量資料防禦與伺服器端過濾機制 (Data Volume Strategy)
+- **痛點評估**：全臺共有 368 個鄉鎮市區，若將一週內每 3 小時之細緻資料一次性傳送至前端瀏覽器，JSON 體積往往達 15–30 MB，將造成行動端瀏覽器崩潰與巨大延遲。
+- **伺服器端過濾與漸進式 API**：
+  - **禁令**：嚴禁前端一次性下載全臺鄉鎮預報資料集！
+  - 採伺服器端分段解構與漸進加載（Progressive Query）：
+    1. `GET /api/townships?county={county_name}`：回傳該縣市轄下鄉鎮清單（名稱、代碼，傳輸量 < 3 KB）。
+    2. `GET /api/forecast/township?county={county_name}&township={township_name}`：僅查詢並回傳特定單一鄉鎮之時序預報（傳輸量 < 25 KB）。
+- **快取與資料庫儲存策略**：
+  - 建立專屬 `township_forecasts` 表或以最新批次 JSON 結構化儲存，建立 `(county_name, township_name, start_time)` 複合索引。
+  - 後端服務對鄉鎮查詢實施記憶體快取（TTL: 1–2 小時），大幅減輕資料庫查詢壓力。
+- **階層式選擇器流程 (Hierarchical Selector Flow)**：
+  - `選取縣市 (County Selector)` → `自動連動載入鄉鎮選單 (Township Selector)` → `呈現該鄉鎮 3 小時逐時天氣卡與體感溫度走勢`。
+
+---
+
+### 8. 8G — Application Polish / Future Features (平台精緻化與延伸特性)
+
+以下功能已完成架構規劃，保留為後續延伸實作項目：
+1. **喜愛縣市/鄉鎮收藏 (Saved Favorites)**：
+   - 支援將常用縣市/鄉鎮釘選為最愛，存於 `localStorage`；於介面頂端提供快速切換晶片籤（Quick Chips）。
+2. **可分享的網址狀態 (Shareable URL State)**：
+   - 透過 HTML5 History API (`pushState` / `replaceState`) 雙向同步網址參數，如 `/?region=臺中市&mode=observations` 或 `/?mode=typhoon`。
+   - 使用者複製連結即可精確重現相同的地圖位置與模式。
+3. **PWA 與可安裝應用程式 (Progressive Web App)**：
+   - 配置 `manifest.json` 與 Service Worker，支援手機「加入主畫面」獨立運行，並離線快取靜態資源。
+4. **氣象警特報整合 (Weather Warnings & Advisories)**：
+   - 串接 CWA 警特報資料集（大雨特報、低溫特報、陸上強風特報），於地圖相關縣市外框疊加動態警示光暈，並在頂部展示警特報公告橫幅。
+5. **地圖圖層偏好記憶 (Map Layer Preferences)**：
+   - 記住使用者偏好的預設模式、雷達透明度與面板折疊狀態，重訪時自動恢復。
+6. **全方位無障礙體驗 (Accessibility Polish)**：
+   - 完整支援鍵盤 Focus 操作、Tab 循環切換與跳過導覽鏈結。
+   - 資料非同步更新區域全面配置 `aria-live="polite"` 與語意化 ARIA 標籤。
+
+---
+
+### 9. 地圖整體架構設計 (Map Architecture)
+
+```text
++-----------------------------------------------------------------------+
+|                       Single L.map Instance                           |
++-----------------------------------------------------------------------+
+|  Base Layer:                                                          |
+|    - OpenStreetMap TileLayer (&copy; OpenStreetMap contributors)     |
+|      (Dark Mode: CSS filter applied to .leaflet-tile-pane)            |
++-----------------------------------------------------------------------+
+|  Independent Overlay Layers:                                          |
+|    1. countyForecastLayer     -> GeoJSON Choropleth (Phase 7 Core)    |
+|    2. stationObservationLayer -> Weather Station Markers              |
+|    3. radarOverlayLayer       -> ImageOverlay (Bounds, Opacity Slider)|
+|    4. typhoonTrackLayer       -> Polyline & Center Markers            |
+|    5. typhoonRadiusLayer      -> 7/10-Level Wind Radii & Circles      |
++-----------------------------------------------------------------------+
+|  Map Mode Controller (Segmented Bar):                                 |
+|    [ 預報 (Forecast) ]  [ 觀測 (Observation) ]  [ 雷達 ]  [ 颱風 ]     |
+|    - Single instance never destroyed                                  |
+|    - Switch active layer groups cleanly                               |
+|    - Preserve county pointer selection & highlight sync               |
++-----------------------------------------------------------------------+
+```
+
+1. **單一實例永續運行 (Single Leaflet Instance)**：
+   - 確保全站僅有一處 `L.map('map', ...)`。在模式切換（預報、觀測、雷達、颱風）時，僅進行圖層的 `addLayer` / `removeLayer` 或調整視角 `flyToBounds`，絕對不呼叫 `map.remove()` 重建實例。
+2. **獨立圖層樹結構 (Independent Layer Tree)**：
+   - `countyForecastLayer`：縣市多邊形面量圖（預報時段切換連動）。
+   - `stationObservationLayer`：自動氣象站觀測標記圖層。
+   - `radarOverlayLayer`：雷達回波合成圖（支援透明度動態滑動調整）。
+   - `typhoonTrackLayer`：颱風過去軌跡與未來預測路徑折線。
+   - `typhoonRadiusLayer`：颱風暴風圈多邊形與預報機率圓。
+3. **地圖模式切換列 (Map Mode UI)**：
+   - 頂部導覽列提供直覺模式切換（預報 / 觀測 / 雷達 / 颱風）。
+   - 支援複合圖層（如在預報模式或觀測模式下，可自由勾選是否疊加雷達回波）。
+4. **完整保留既有縣市指標選取架構 (Preserve Proven County Selection)**：
+   - Phase 7 驗證通過之 GeoJSON 多邊形點擊、高亮邊框（Highlight）、懸浮 Tooltip 與下拉選單雙向聯動機制 100% 保留。在切換至觀測或雷達模式時，使用者仍可點選縣市並切換聚焦目標。
+
+---
+
+### 10. 資料與 API 架構設計 (Data / API Architecture)
+
+#### 10.1 領域模型與資料庫表結構分工 (Domain Models & Tables)
+**絕對不將所有異質氣象資料混入同一張 `weather_forecasts` 表！**
+
+```text
++-----------------------+     +--------------------------+
+|   weather_forecasts   |     |   weather_observations   |
++-----------------------+     +--------------------------+
+| id (BigInt, PK)       |     | id (BigInt, PK)          |
+| dataset_id (VARCHAR)  |     | station_id (VARCHAR)     |
+| region_name (VARCHAR) |     | station_name (VARCHAR)   |
+| start_time (TIMESTAMPTZ)    | county_name (VARCHAR)    |
+| end_time (TIMESTAMPTZ)|     | latitude / longitude     |
+| weather (VARCHAR)     |     | observation_time (TS)    |
+| min_temp / max_temp   |     | temperature / humidity   |
+| pop (INT, nullable)   |     | wind_speed / direction   |
+| comfort_index (VAR)   |     | pressure / rain_1h       |
+| fetched_at (TS)       |     | fetched_at (TS)          |
++-----------------------+     +--------------------------+
+
++-----------------------+     +--------------------------+
+|    typhoon_events     |     |      radar_metadata      |
++-----------------------+     +--------------------------+
+| id (BigInt, PK)       |     | id (BigInt, PK)          |
+| typhoon_id (VARCHAR)  |     | dataset_id (VARCHAR)     |
+| cwa_id / name_zh/en   |     | observation_time (TS)    |
+| intensity (VARCHAR)   |     | image_url (TEXT)         |
+| is_active (BOOLEAN)   |     | bounds_geojson (TEXT)    |
+| latest_track_json     |     | fetched_at (TS)          |
++-----------------------+     +--------------------------+
+```
+
+1. `weather_forecasts`：縣市級預報（包含 `F-C0032-005` 一週預報與 `F-C0032-001` 短期預報，透過 `dataset_id` 嚴格區隔）。
+2. `weather_observations`：`O-A0001` 自動氣象站真實量測數據。
+3. `typhoon_events` & `typhoon_tracks`：`W-C0034-005` 颱風中繼、歷史與預報路徑座標。
+4. `radar_metadata`：`O-A0058-002` 雷達圖片時間戳與中繼 URL（零圖片二進位寫入資料庫）。
+5. `township_forecasts`：`F-D0047-093` 鄉鎮市區層級預報。
+
+#### 10.2 嚴謹分層軟體架構 (Strict Layered Architecture)
+維持高內聚低耦合之設計準則：
+```text
+CWA Open Data API
+       ↓
+  CWA Client       (app/clients/cwa_client.py)
+       ↓
+  CWA Parser       (app/parsers/cwa_parser.py)
+       ↓
+ Weather Repository (app/repositories/weather_repository.py)
+       ↓
+ Weather Service   (app/services/weather_service.py)
+       ↓
+  FastAPI Routes   (app/api/routes.py)
+       ↓
+ Frontend Client   (app/static/js/app.js)
+```
+
+#### 10.3 智慧快取策略 (Smart Caching Strategy)
+為防止高流量訪問對 CWA API 造成配額耗盡與頻寬浪費，設計基於資料更新特性的分級快取機制：
+- **雷達回波 (`O-A0058-002`)**：CWA 約 10 分鐘產製一次 → 伺服器快取 TTL: 6–8 分鐘。
+- **現在觀測 (`O-A0001`)**：氣象站約 10–15 分鐘取樣一次 → 伺服器快取 TTL: 10 分鐘。
+- **颱風資訊 (`W-C0034-005`)**：平時無颱風快取 1 小時；警報發布期間快取 TTL: 15–30 分鐘。
+- **短時預報 (`F-C0032-001`)**：每日固定發布 3 次 → 伺服器快取 TTL: 60 分鐘。
+- **鄉鎮預報 (`F-D0047-093`)**：每日更新 2–4 次 → 伺服器快取 TTL: 60–120 分鐘。
+- 快取架構：後端以內存記憶體快取（In-Memory TTLCache）作為第一防線，Supabase PostgreSQL 作為持久化批次備份，達成極速回應（< 50ms）。
+
+---
+
+### 11. 實作規劃路線圖 (Phase 8 Implementation Roadmap)
+
+- **8A — App Experience & Map Workspace**：深淺主題體系、CSS 代幣、OSM 濾鏡適配、地圖擴展為主工作台、桌面浮動收合面板、滾輪縮放與重設視角按鈕。
+- **8B — Rich County Forecast**：`F-C0032-001` 短期 36 小時預報串接（降雨機率 `PoP` 與舒適度 `CI` 展現，嚴格按 `dataset_id` 隔離）。
+- **8C — Current Weather Observations**：`O-A0001` 即時氣象觀測串接（測站標記圖層、目前觀測 vs 未來預報嚴格區隔 UI、選取縣市即時氣候摘要）。
+- **8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
+- **8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
+- **8F — Township Detailed Forecast**：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
+- **8G — Application Polish / Future Features**：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。
+
 
