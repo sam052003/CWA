@@ -390,3 +390,93 @@ def test_taiwan_weather_dashboard_phase_7c():
     assert "360px" in css
 
 
+def test_phase_8a_app_experience_and_map_workspace():
+    """Verify Phase 8A App Experience & Map Workspace elements, scripts, controls, and regressions."""
+    html_resp = client.get("/")
+    assert html_resp.status_code == 200
+    html = html_resp.text
+
+    css_resp = client.get("/static/css/style.css")
+    assert css_resp.status_code == 200
+    css = css_resp.text
+
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    # 1. HTML Controls & Hierarchy
+    assert 'id="theme-toggle"' in html
+    assert 'id="detail-panel-toggle"' in html
+    assert 'id="map-reset-view"' in html
+    assert 'id="map-fullscreen-toggle"' in html
+    assert 'id="region-select"' in html
+    assert 'id="map-period-select"' in html
+
+    # Canvas & Forecast table remain below map workspace in DOM hierarchy
+    map_idx = html.find('id="taiwan-map"')
+    chart_idx = html.find('id="temperature-chart"')
+    table_idx = html.find('id="forecast-table-body"')
+    assert map_idx != -1 and chart_idx != -1 and table_idx != -1
+    assert map_idx < chart_idx < table_idx
+
+    # Anti-flash theme initialization script in head before stylesheet
+    theme_script_idx = html.find('localStorage.getItem("cwa_theme")')
+    stylesheet_idx = html.find('href="/static/css/style.css"')
+    assert theme_script_idx != -1 and stylesheet_idx != -1
+    assert theme_script_idx < stylesheet_idx
+
+    # 2. JavaScript Theme & Map Workspace Logic
+    assert "cwa_theme" in js
+    assert "dataset.theme" in js
+    assert "prefers-color-scheme" in js
+    assert "getChartTheme" in js
+    assert "applyChartTheme" in js
+    assert "temperatureChartInstance.update()" in js
+    assert "taiwanDefaultBounds" in js
+    assert "geojsonLayer.getBounds()" in js
+    assert "leafletMap.fitBounds(taiwanDefaultBounds" in js
+    # Verify no hardcoded bounding box in JS
+    assert "[[21.8, 119.3], [25.4, 122.2]]" not in js
+
+    # Fullscreen API & resize invalidation
+    assert "requestFullscreen" in js
+    assert "exitFullscreen" in js
+    assert "fullscreenchange" in js
+    assert "leafletMap.invalidateSize()" in js
+
+    # Scroll wheel zoom sync
+    assert "syncMapWheelZoom" in js
+    assert "scrollWheelZoom" in js
+
+    # 3. Regressions: County pointer down, period switch, and chart/table integrity
+    assert "function handleCountyPointerDown(event)" in js
+    assert "path.leaflet-interactive" in js
+    assert "selectCounty(matchedCountyName, {" in js
+    assert "function setMapPeriod(" in js
+
+    # Period switch contains no fetch()
+    set_period_idx = js.find("function setMapPeriod(")
+    assert set_period_idx != -1
+    set_period_end = js.find("function selectCounty(", set_period_idx)
+    set_period_body = js[set_period_idx:set_period_end]
+    assert "fetch(" not in set_period_body
+    assert "loadForecast(" not in set_period_body
+
+    # loadForecast does not overwrite period summary
+    load_forecast_idx = js.find("async function loadForecast(")
+    assert load_forecast_idx != -1
+    load_forecast_end = js.find("async function loadMapDataAndGeoJSON(", load_forecast_idx)
+    load_forecast_body = js[load_forecast_idx:load_forecast_end]
+    assert "updateSummary(forecasts[0])" not in load_forecast_body
+
+    # 4. CSS Dark Theme & Workspace Rules
+    assert '[data-theme="dark"]' in css
+    assert "--map-tile-filter" in css
+    assert ".leaflet-tile-pane" in css
+    assert "600px" in css  # desktop map height >= 600px
+    assert "@media (max-width: 960px)" in css
+    assert "position: static" in css  # detail panel becomes static on tablet/mobile
+    assert "360px" in css  # mobile map height
+
+
+

@@ -23,7 +23,7 @@
 - Phase 7A ✅ Taiwan County Forecast Map
 - Phase 7B ✅ Forecast Period Map
 - Phase 7C ✅ Complete Taiwan Weather Dashboard
-- Phase 8 📋 Advanced Weather Platform (系統架構規劃完成，待逐子階段實作)
+- Phase 8A 📋 App Experience & Map Workspace (實作完成，待正式環境手動驗收)
 
 ---
 
@@ -333,8 +333,8 @@ Supabase PostgreSQL
   - [x] existing Chart.js integrated（既有 Chart.js 一週溫度趨勢折線圖整合）
   - [x] existing forecast table integrated（既有預報詳細時段資料表整合）
   - [x] responsive desktop/mobile（桌面／平板／手機跨裝置響應式排版）
-- [ ] **Phase 8: Advanced Weather Platform (進階氣象平台系統架構規劃完成)**
-  - [ ] **8A**: App Experience & Map Workspace（深淺模式、OSM 濾鏡適配、地圖擴展為 600–680px 主工作台、桌面浮動面板、重設視角）
+- [ ] **Phase 8: Advanced Weather Platform**
+  - [ ] **8A**: App Experience & Map Workspace（實作完成，待正式環境手動驗收 — 深淺模式、OSM 濾鏡適配、地圖擴展為 600–680px 主工作台、桌面浮動面板、重設視角、全螢幕地圖）
   - [ ] **8B**: Rich County Forecast（串接 `F-C0032-001` 今明 36 小時預報，新增降雨機率 `PoP` 與舒適度指數 `CI`）
   - [ ] **8C**: Current Weather Observations（串接 `O-A0001` 全臺自動氣象站即時觀測，UI 嚴格區隔「目前觀測」與「未來預報」）
   - [ ] **8D**: Radar Layer（串接 `O-A0058-002` 雷達回波合成圖，支援 ImageOverlay、透明度調整與時間戳記，零二進位寫庫）

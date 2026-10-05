@@ -1046,19 +1046,19 @@ https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/
 - [x] map/dropdown sync
 
 ##### Phase 7B — 驗收標準
-- [ ] forecast periods available
-- [ ] period selector
-- [ ] switching period updates all counties
-- [ ] no page reload
-- [ ] no 22 API requests
+- [x] forecast periods available
+- [x] period selector
+- [x] switching period updates all counties
+- [x] no page reload
+- [x] no 22 API requests
 
 ##### Phase 7C — 驗收標準
-- [ ] map-first dashboard layout
-- [ ] selected county detail panel
-- [ ] existing Chart.js integrated
-- [ ] existing forecast table integrated
-- [ ] responsive desktop/mobile
-- [ ] Production deployment
+- [x] map-first dashboard layout
+- [x] selected county detail panel
+- [x] existing Chart.js integrated
+- [x] existing forecast table integrated
+- [x] responsive desktop/mobile
+- [x] Production deployment
 
 ---
 
@@ -1244,18 +1244,28 @@ Supabase PostgreSQL
 |                                                                                                   |
 |  +---------------------------------------------------------------+  +--------------------------+  |
 |  |                   Map Workspace (Leaflet)                     |  |  Floating / Collapsible  |  |
-|  |                                                               |  |  County & Detail Panel   |  |
+|  |                                                               |  |  County Summary Panel    |  |
 |  |   - Single Leaflet Map Instance                               |  |                          |  |
-|  |   - Height: 600–680px (~65–70vh)                              |  |  - Selected County Stat  |  |
-|  |   - Independent Layers:                                       |  |  - [即時觀測] Current Obs |  |
-|  |       * countyForecastLayer (Choropleth GeoJSON)              |  |  - [未來預報] 36h PoP/CI |  |
-|  |       * stationObservationLayer (Weather Stations)            |  |  - 7-Day Temp Trend Chart|  |
-|  |       * radarOverlayLayer (CWA Radar ImageOverlay)            |  |  - Detailed Period Table |  |
-|  |       * typhoonTrackLayer (Past/Forecast Tracks)              |  |                          |  |
-|  |       * typhoonRadiusLayer (7/10-Level Wind Radii)            |  |  (Desktop: Floating Card |  |
-|  |   - Interactive Controls: Reset View, Fullscreen, Opacity     |  |   Mobile: Stacked Below) |  |
+|  |   - Height: 600–680px (~65–70vh)                              |  |  - Region Selector       |  |
+|  |   - Independent Layers:                                       |  |  - Selected County Name  |  |
+|  |       * countyForecastLayer (Choropleth GeoJSON)              |  |  - Selected Forecast     |  |
+|  |       * stationObservationLayer (Weather Stations)            |  |    Period                |  |
+|  |       * radarOverlayLayer (CWA Radar ImageOverlay)            |  |  - Weather Phenomenon    |  |
+|  |       * typhoonTrackLayer (Past/Forecast Tracks)              |  |  - Predicted Min/Max     |  |
+|  |       * typhoonRadiusLayer (7/10-Level Wind Radii)            |  |    Temperature           |  |
+|  |   - Interactive Controls: Reset View (GeoJSON getBounds),     |  |  - updated_at            |  |
+|  |     Fullscreen, Map Toolbar, Opacity Slider                   |  |                          |  |
+|  |                                                               |  |  (Desktop: Floating Card |  |
+|  |                                                               |  |   Mobile: Stacked Below) |  |
 |  +---------------------------------------------------------------+  +--------------------------+  |
 |                                                                                                   |
++---------------------------------------------------------------------------------------------------+
+|  [Detailed Sections Below Map Workspace]                                                          |
+|  +---------------------------------------------------------------------------------------------+  |
+|  |  7-Day Temperature Trend Chart (Chart.js - Full-width section below map)                    |  |
+|  +---------------------------------------------------------------------------------------------+  |
+|  |  Detailed Period Forecast Table (Full-width responsive table below map)                     |  |
+|  +---------------------------------------------------------------------------------------------+  |
 +---------------------------------------------------------------------------------------------------+
 ```
 
@@ -1338,16 +1348,27 @@ Supabase PostgreSQL
 #### 2.2 地圖工作台 UX (Map Workspace UX)
 - **桌面版大工作區設計**：
   - 桌面視窗下將地圖高度由原本約 450px 擴大至 **600–680px（或約 65–70vh）**，使地圖真正成為探索氣象空間資料的主核心工作台。
-- **桌面浮動／收合面板 (Desktop Floating/Collapsible Panel)**：
-  - **桌面端 (Desktop)**：選定縣市摘要、溫度趨勢圖與預報資料表封裝為半透明毛玻璃浮動面板（Dockable Floating Card），懸浮於地圖右側或左側：
-    - 提供「收合／展開（Collapse / Expand）」切換鈕，收合時縮為輕量縣市摘要膠囊標籤，釋放 100% 完整寬幅地圖。
-    - 點擊地圖任一縣市時，若面板處於收合狀態則平滑滑入展開。
-  - **行動端 (Mobile)**：維持 Phase 7C 驗收良好之垂直響應式排版，地圖置於頂部（全螢幕寬度），詳細面板固定於地圖下方垂直捲動，防止行動小螢幕被懸浮面板遮擋操作空間。
+- **桌面浮動／收合面板範圍修正 (Desktop Floating/Collapsible Panel Scope)**：
+  - **桌面端 (Desktop)**：浮動面板僅承載縣市焦點控制與即時摘要，**絕對不把 Chart.js 圖表與完整預報時段資料表塞入浮動面板**：
+    - 浮動面板內容**僅包含**：
+      1. 縣市下拉選單（Region Selector）
+      2. 選定縣市名稱（Selected County Name）
+      3. 當前選擇之預報時段標籤（Selected Forecast Period）
+      4. 天氣現象描述與圖示（Weather Phenomenon）
+      5. 預測最低溫與最高溫（Predicted Min/Max Temperature）
+      6. 資料最後更新時間（updated_at）
+    - **Chart.js 折線圖與詳細預報資料表（Forecast Table）**：始終維持在「地圖工作台下方」作為全寬詳情展示區塊，防止遮擋地圖工作視野並確保長型資料維持最佳閱讀體驗。
+    - 提供「收合／展開（Collapse / Expand）」切換鈕（`id="detail-panel-toggle"`），收合時縮為輕量縣市摘要膠囊標籤，釋放 100% 完整寬幅地圖。
+  - **行動端 (Mobile)**：維持 Phase 7C 驗收良好之垂直響應式排版，在 `<= 960px` 視窗下浮動面板自動切換為正常靜態文件流（`position: static`，寬度 100%），固定於地圖下方垂直堆疊展開，收合按鈕可隱藏，防止行動小螢幕被懸浮圖層遮擋。
 - **地圖互動手勢與輔助控制**：
   - 桌面版啟用滾輪縮放（`scrollWheelZoom: true`），配合 GIS 操作習慣。
   - 行動端完整保留單指拖曳、雙指捏合縮放（Pinch-to-zoom）與觸控雙擊縮放。
-  - 新增「**重設臺灣視角（Reset to Taiwan View）**」專屬控制按鈕：一鍵將地圖視角平滑動畫還原至全臺灣本島最佳可視範圍（邊界範圍：`[[21.8, 119.3], [25.4, 122.2]]`，中心 `[23.7, 121.0]`，縮放等級約 7.5）。
-  - 評估並預留全螢幕工作模式控制按鈕（HTML5 Fullscreen API），支援一鍵進入沉浸式氣象監控模式。
+  - **重設臺灣視角邊界修正 (Reset to Taiwan View Bounds)**：
+    - 新增專屬控制按鈕（`id="map-reset-view"`，Accessible label: `重設臺灣視角`）。
+    - **嚴禁硬編碼邊界座標**（如 `[[21.8, 119.3], [25.4, 122.2]]`，會造成金門、連江等離島被裁切排除）。
+    - 實作規範：於 GeoJSON 圖層載入後，直接透過 `geojsonLayer.getBounds()` 取得官方完整圖資邊界並儲存為正規臺灣邊界（`taiwanDefaultBounds`），重設時以 `leafletMap.fitBounds(taiwanDefaultBounds, { padding: [15, 15], animate: true })` 準確還原全臺全境（含所有外島）。
+  - **全螢幕工作模式控制按鈕 (Fullscreen Control)**：
+    - 新增 `id="map-fullscreen-toggle"` 控制鈕，使用標準 HTML5 Fullscreen API（`requestFullscreen` / `exitFullscreen`）將地圖工作區放大為沉浸式全螢幕，並在 `fullscreenchange` 事件中調用 `leafletMap.invalidateSize()` 確保地圖圖磚自動補齊。
 
 ---
 
@@ -1639,12 +1660,21 @@ CWA Open Data API
 
 ### 11. 實作規劃路線圖 (Phase 8 Implementation Roadmap)
 
-- **8A — App Experience & Map Workspace**：深淺主題體系、CSS 代幣、OSM 濾鏡適配、地圖擴展為主工作台、桌面浮動收合面板、滾輪縮放與重設視角按鈕。
-- **8B — Rich County Forecast**：`F-C0032-001` 短期 36 小時預報串接（降雨機率 `PoP` 與舒適度 `CI` 展現，嚴格按 `dataset_id` 隔離）。
-- **8C — Current Weather Observations**：`O-A0001` 即時氣象觀測串接（測站標記圖層、目前觀測 vs 未來預報嚴格區隔 UI、選取縣市即時氣候摘要）。
-- **8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
-- **8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
-- **8F — Township Detailed Forecast**：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
-- **8G — Application Polish / Future Features**：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。
+- [ ] **Phase 8A — App Experience & Map Workspace** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+  - [x] 深淺色主題切換（Header 鈕、Sun/Moon 圖示、localStorage 持久化、prefers-color-scheme 零閃爍初始化）
+  - [x] Chart.js 網格、標籤、Tooltip 主題動態同步更新（不破壞現有資料）
+  - [x] Leaflet 控制項、Tooltip、圖例暗色適配與 OSM 底圖輕量 CSS 濾鏡
+  - [x] 桌面版地圖擴展為主工作台（高度 600–680px，最大寬度 1440–1520px）
+  - [x] 桌面浮動/收合縣市摘要面板（Chart.js 與預報資料表保留於地圖下方作為全寬詳情區塊）
+  - [x] 桌面滾輪縮放（細指標裝置）與行動端手勢完整保留
+  - [x] 重設臺灣視角控制按鈕（採用 GeoJSON `getBounds()` 動態計算，涵蓋本島與外島全境）
+  - [x] 全螢幕地圖工作區控制按鈕（HTML5 Fullscreen API，支援尺寸動態重新計算）
+  - [x] 跨裝置響應式支援（行動端 <= 960px 面板回歸靜態堆疊排版）
+- [ ] **Phase 8B — Rich County Forecast**：`F-C0032-001` 短期 36 小時預報串接（降雨機率 `PoP` 與舒適度 `CI` 展現，嚴格按 `dataset_id` 隔離）。
+- [ ] **Phase 8C — Current Weather Observations**：`O-A0001` 即時氣象觀測串接（測站標記圖層、目前觀測 vs 未來預報嚴格區隔 UI、選取縣市即時氣候摘要）。
+- [ ] **Phase 8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
+- [ ] **Phase 8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
+- [ ] **Phase 8F — Township Detailed Forecast**：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
+- [ ] **Phase 8G — Application Polish / Future Features**：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。
 
 

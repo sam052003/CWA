@@ -1,6 +1,6 @@
 /**
  * CWA Taiwan Weather Forecast — Client Application
- * Phase 7A: Taiwan County Weather Map (Leaflet GIS Dashboard)
+ * Phase 8A: Light / Dark Theme, Map Workspace Controls, Chart.js Theme Sync
  */
 
 // Global state holders
@@ -13,6 +13,7 @@ let currentMapPeriod = null;
 let selectedCountyName = null;
 let activeTooltipLayer = null;
 let hoveredCountyLayer = null;
+let taiwanDefaultBounds = null;
 const countyLayersByName = new Map();
 
 // DOM Element References
@@ -36,6 +37,13 @@ const elements = {
     mapPeriodBadge: document.getElementById("map-period-badge"),
     mapPeriodSelect: document.getElementById("map-period-select"),
     detailLastUpdated: document.getElementById("detail-last-updated"),
+    themeToggle: document.getElementById("theme-toggle"),
+    mapResetView: document.getElementById("map-reset-view"),
+    mapFullscreenToggle: document.getElementById("map-fullscreen-toggle"),
+    detailPanel: document.getElementById("detail-panel"),
+    detailPanelToggle: document.getElementById("detail-panel-toggle"),
+    detailPanelSummaryLabel: document.getElementById("detail-panel-summary-label"),
+    mapSection: document.querySelector(".map-section"),
 };
 
 // ---------------------------------------------------------------------------
@@ -77,6 +85,138 @@ function formatUpdatedTimestamp(isoString) {
     const m = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     if (!m) return isoString;
     return `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Theme Management & Chart.js Synchronization (Phase 8A)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return palette colors for Chart.js based on active data-theme.
+ */
+function getChartTheme() {
+    const isDark = document.documentElement.dataset.theme === "dark";
+    return {
+        gridColor: isDark ? "#334155" : "#f1f5f9",
+        tickColor: isDark ? "#94a3b8" : "#64748b",
+        legendColor: isDark ? "#f8fafc" : "#334155",
+        titleColor: isDark ? "#94a3b8" : "#64748b",
+        tooltipBg: isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(15, 23, 42, 0.9)",
+        tooltipTitle: "#f8fafc",
+        tooltipBody: "#f8fafc",
+    };
+}
+
+/**
+ * Dynamically synchronize Chart.js options with current theme without reloading data.
+ */
+function applyChartTheme() {
+    if (!temperatureChartInstance) return;
+    const theme = getChartTheme();
+
+    if (temperatureChartInstance.options.scales && temperatureChartInstance.options.scales.x) {
+        temperatureChartInstance.options.scales.x.grid.color = theme.gridColor;
+        temperatureChartInstance.options.scales.x.ticks.color = theme.tickColor;
+    }
+    if (temperatureChartInstance.options.scales && temperatureChartInstance.options.scales.y) {
+        temperatureChartInstance.options.scales.y.grid.color = theme.gridColor;
+        temperatureChartInstance.options.scales.y.ticks.color = theme.tickColor;
+        if (temperatureChartInstance.options.scales.y.title) {
+            temperatureChartInstance.options.scales.y.title.color = theme.titleColor;
+        }
+    }
+    if (
+        temperatureChartInstance.options.plugins &&
+        temperatureChartInstance.options.plugins.legend &&
+        temperatureChartInstance.options.plugins.legend.labels
+    ) {
+        temperatureChartInstance.options.plugins.legend.labels.color = theme.legendColor;
+    }
+    temperatureChartInstance.update();
+}
+
+/**
+ * Update theme toggle button UI (aria attributes, title, label text).
+ */
+function updateThemeToggleUI(theme) {
+    if (!elements.themeToggle) return;
+    const isDark = theme === "dark";
+    elements.themeToggle.setAttribute("aria-pressed", isDark ? "true" : "false");
+    elements.themeToggle.setAttribute("aria-label", isDark ? "切換為淺色模式" : "切換為深色模式");
+    elements.themeToggle.title = isDark ? "切換為淺色模式" : "切換為深色模式";
+    const textSpan = elements.themeToggle.querySelector(".theme-toggle-text");
+    if (textSpan) {
+        textSpan.textContent = isDark ? "淺色模式" : "深色模式";
+    }
+}
+
+/**
+ * Switch and persist active theme.
+ */
+function setTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    try {
+        localStorage.setItem("cwa_theme", theme);
+    } catch (_) {}
+    updateThemeToggleUI(theme);
+    applyChartTheme();
+}
+
+/**
+ * Initialize theme system, attach event listeners and system preference fallback.
+ */
+function initTheme() {
+    let theme = document.documentElement.dataset.theme;
+    if (!theme) {
+        try {
+            const stored = localStorage.getItem("cwa_theme");
+            if (stored === "light" || stored === "dark") {
+                theme = stored;
+            }
+        } catch (_) {}
+        if (!theme) {
+            theme = window.matchMedia &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+        }
+        document.documentElement.dataset.theme = theme;
+    }
+
+    updateThemeToggleUI(theme);
+
+    // Follow OS preference only if user has not explicitly set preference
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        const handleChange = (e) => {
+            let hasStored = false;
+            try {
+                const stored = localStorage.getItem("cwa_theme");
+                if (stored === "light" || stored === "dark") {
+                    hasStored = true;
+                }
+            } catch (_) {}
+            if (!hasStored) {
+                const sysTheme = e.matches ? "dark" : "light";
+                document.documentElement.dataset.theme = sysTheme;
+                updateThemeToggleUI(sysTheme);
+                applyChartTheme();
+            }
+        };
+        if (typeof mediaQuery.addEventListener === "function") {
+            mediaQuery.addEventListener("change", handleChange);
+        } else if (typeof mediaQuery.addListener === "function") {
+            mediaQuery.addListener(handleChange);
+        }
+    }
+
+    if (elements.themeToggle) {
+        elements.themeToggle.addEventListener("click", () => {
+            const currentTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+            const newTheme = currentTheme === "dark" ? "light" : "dark";
+            setTheme(newTheme);
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -148,104 +288,81 @@ function getForecastForCounty(countyName) {
             ) || null
         );
     }
-    return mapDataCache.forecasts.find((f) => f.region_name === countyName) || null;
+    return (
+        mapDataCache.forecasts.find((f) => f.region_name === countyName) || null
+    );
 }
 
 /**
- * Determine polygon style based on county forecast and selected state.
+ * Leaflet style function: Returns styling object based on county temperature.
  */
 function getCountyStyle(feature) {
     const countyName = feature.properties.COUNTYNAME || feature.properties.name;
     const forecast = getForecastForCounty(countyName);
-    const maxTemp = forecast ? forecast.max_temp : null;
+    const fillColor = forecast ? getTemperatureColor(forecast.max_temp) : "#cbd5e1";
+
     const isSelected = selectedCountyName && selectedCountyName === countyName;
 
     return {
-        interactive: true,
-        fillColor: getTemperatureColor(maxTemp),
+        fillColor: fillColor,
         weight: isSelected ? 3.5 : 1.2,
         opacity: 1,
-        color: isSelected ? "#1e3a8a" : "#475569",
-        dashArray: "",
-        fillOpacity: isSelected ? 0.92 : 0.78,
+        color: isSelected ? "#1e3a8a" : "#ffffff",
+        fillOpacity: isSelected ? 0.95 : 0.78,
     };
 }
 
 /**
- * Generate secure DOM element for hover tooltip using document.createElement & textContent.
- * Prevents HTML injection of weather strings while cleanly styling weather info.
+ * Build rich HTML DOM element for county hover tooltip.
  */
 function createTooltipElement(countyName) {
+    const forecast = getForecastForCounty(countyName);
+
     const container = document.createElement("div");
     container.className = "county-tooltip";
 
-    const countyDiv = document.createElement("div");
-    countyDiv.className = "tooltip-county";
-    countyDiv.textContent = countyName;
-    container.appendChild(countyDiv);
+    const titleEl = document.createElement("div");
+    titleEl.className = "tooltip-county";
+    titleEl.textContent = countyName;
+    container.appendChild(titleEl);
 
-    const forecast = getForecastForCounty(countyName);
-    if (!forecast) {
-        const noDataDiv = document.createElement("div");
-        noDataDiv.className = "tooltip-weather";
-        noDataDiv.textContent = "暫無預報資料";
-        container.appendChild(noDataDiv);
-        return container;
-    }
+    const weatherEl = document.createElement("div");
+    weatherEl.className = "tooltip-weather";
+    weatherEl.textContent = forecast ? (forecast.weather || "無資料") : "無預報資料";
+    container.appendChild(weatherEl);
 
-    const weatherDiv = document.createElement("div");
-    weatherDiv.className = "tooltip-weather";
-    weatherDiv.textContent = forecast.weather || "未知";
-    container.appendChild(weatherDiv);
-
-    const tempsDiv = document.createElement("div");
-    tempsDiv.className = "tooltip-temps";
+    const tempsEl = document.createElement("div");
+    tempsEl.className = "tooltip-temps";
 
     const minSpan = document.createElement("span");
     minSpan.className = "temp-label-cold";
-    const minStr = forecast.min_temp !== null && forecast.min_temp !== undefined ? `${forecast.min_temp}°C` : "--";
-    minSpan.textContent = `預測最低 ${minStr}`;
-    tempsDiv.appendChild(minSpan);
+    minSpan.textContent = forecast && forecast.min_temp !== null ? `低 ${forecast.min_temp}°C` : "低 --";
+    tempsEl.appendChild(minSpan);
 
     const maxSpan = document.createElement("span");
     maxSpan.className = "temp-label-warm";
-    const maxStr = forecast.max_temp !== null && forecast.max_temp !== undefined ? `${forecast.max_temp}°C` : "--";
-    maxSpan.textContent = `預測最高 ${maxStr}`;
-    tempsDiv.appendChild(maxSpan);
+    maxSpan.textContent = forecast && forecast.max_temp !== null ? `高 ${forecast.max_temp}°C` : "高 --";
+    tempsEl.appendChild(maxSpan);
 
-    container.appendChild(tempsDiv);
+    container.appendChild(tempsEl);
+
     return container;
 }
 
 /**
- * Explicitly close any active county tooltip across all layers.
- * Enforces requirement that at most ONE county tooltip is visible at a time.
+ * Single Tooltip Manager: Closes currently active tooltip if one is open.
  */
 function closeActiveTooltip() {
     if (activeTooltipLayer) {
         try {
             activeTooltipLayer.closeTooltip();
-        } catch (e) {
-            // ignore
-        }
+        } catch (_) {}
         activeTooltipLayer = null;
     }
-    countyLayersByName.forEach((layer) => {
-        if (layer && typeof layer.closeTooltip === "function") {
-            try {
-                if (layer.isTooltipOpen && layer.isTooltipOpen()) {
-                    layer.closeTooltip();
-                }
-            } catch (e) {
-                // ignore
-            }
-        }
-    });
 }
 
 /**
- * Restore polygon style for a county layer.
- * If the layer is currently selected, preserves its selected highlight.
+ * Reset style for a county layer, preserving selected-county highlight.
  */
 function resetCountyStyle(layer) {
     if (!layer || !geojsonLayer) return;
@@ -405,6 +522,11 @@ function selectCounty(countyName, options = {}) {
         elements.selectedRegionName.textContent = countyName;
     }
 
+    // Update detail panel collapsed summary label if present
+    if (elements.detailPanelSummaryLabel) {
+        elements.detailPanelSummaryLabel.textContent = `📍 ${countyName}`;
+    }
+
     // 6. Immediately update nearest-period summary using mapDataCache for currently displayed period
     const cachedForecast = getForecastForCounty(countyName);
     updateSummary(cachedForecast);
@@ -537,6 +659,20 @@ function handleCountyPointerDown(event) {
 }
 
 /**
+ * Enable scroll-wheel zoom for fine-pointer desktop devices, disable for mobile/touch.
+ */
+function syncMapWheelZoom() {
+    if (!leafletMap) return;
+    const isFinePointer = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
+    const isDesktopWidth = window.innerWidth > 960;
+    if (isFinePointer && isDesktopWidth) {
+        leafletMap.scrollWheelZoom.enable();
+    } else {
+        leafletMap.scrollWheelZoom.disable();
+    }
+}
+
+/**
  * Initialize Leaflet Map with neutral OpenStreetMap basemap.
  */
 function initMap() {
@@ -548,7 +684,7 @@ function initMap() {
         minZoom: 6,
         maxZoom: 12,
         zoomSnap: 0.25,
-        scrollWheelZoom: false, // Prevent unintentional zooming on page scroll
+        scrollWheelZoom: false, // Safely initialized, dynamically enabled via syncMapWheelZoom()
     });
 
     // Basemap: OpenStreetMap tiles with required attribution
@@ -556,6 +692,9 @@ function initMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
         maxZoom: 18,
     }).addTo(leafletMap);
+
+    // Apply wheel zoom synchronization
+    syncMapWheelZoom();
 
     // Map-level click and mouseout cleanup
     leafletMap.on("click", () => {
@@ -588,6 +727,81 @@ function initMap() {
     }
 }
 
+/**
+ * Initialize map toolbar controls (Reset Taiwan View & Fullscreen) and Collapsible Panel.
+ */
+function initMapControls() {
+    // 1. Reset Taiwan View (using GeoJSON getBounds() canonical bounds)
+    if (elements.mapResetView) {
+        elements.mapResetView.addEventListener("click", () => {
+            if (leafletMap && taiwanDefaultBounds) {
+                leafletMap.fitBounds(taiwanDefaultBounds, {
+                    padding: [15, 15],
+                    animate: true,
+                });
+            }
+        });
+    }
+
+    // 2. Fullscreen Map Workspace
+    if (elements.mapFullscreenToggle && elements.mapSection) {
+        elements.mapFullscreenToggle.addEventListener("click", () => {
+            const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (!isFull) {
+                if (elements.mapSection.requestFullscreen) {
+                    elements.mapSection.requestFullscreen().catch((err) => console.warn("Fullscreen request error:", err));
+                } else if (elements.mapSection.webkitRequestFullscreen) {
+                    elements.mapSection.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch((err) => console.warn("Exit fullscreen error:", err));
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        });
+
+        const handleFullscreenChange = () => {
+            const inFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            elements.mapFullscreenToggle.setAttribute("aria-label", inFull ? "退出全螢幕" : "全螢幕地圖");
+            elements.mapFullscreenToggle.title = inFull ? "退出全螢幕" : "全螢幕地圖";
+            const iconSpan = elements.mapFullscreenToggle.querySelector(".tool-icon");
+            if (iconSpan) iconSpan.textContent = inFull ? "🗗" : "⛶";
+            const labelSpan = elements.mapFullscreenToggle.querySelector(".tool-label");
+            if (labelSpan) labelSpan.textContent = inFull ? "退出" : "全螢幕";
+
+            elements.mapSection.classList.toggle("is-fullscreen", inFull);
+
+            setTimeout(() => {
+                if (leafletMap) {
+                    leafletMap.invalidateSize();
+                }
+            }, 100);
+        };
+
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    }
+
+    // 3. Collapsible Desktop Detail Panel
+    if (elements.detailPanelToggle && elements.detailPanel) {
+        elements.detailPanelToggle.addEventListener("click", () => {
+            const isCollapsed = elements.detailPanel.classList.toggle("collapsed");
+            elements.detailPanelToggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+            elements.detailPanelToggle.setAttribute("aria-label", isCollapsed ? "展開詳細資訊面板" : "收合詳細資訊面板");
+            elements.detailPanelToggle.title = isCollapsed ? "展開面板" : "收合面板";
+            const iconSpan = elements.detailPanelToggle.querySelector(".toggle-icon");
+            if (iconSpan) iconSpan.textContent = isCollapsed ? "▶" : "◀";
+            const textSpan = elements.detailPanelToggle.querySelector(".toggle-text");
+            if (textSpan) textSpan.textContent = isCollapsed ? "展開" : "收合";
+        });
+    }
+
+    // 4. Scroll-wheel zoom sync
+    syncMapWheelZoom();
+}
+
 // ---------------------------------------------------------------------------
 // Render Functions (Secure DOM manipulation with textContent & createElement)
 // ---------------------------------------------------------------------------
@@ -605,11 +819,14 @@ function updateSummary(firstForecast) {
         firstForecast.start_time,
         firstForecast.end_time
     );
-    elements.cardWeather.textContent = firstForecast.weather || "未知";
+
+    elements.cardWeather.textContent = firstForecast.weather || "--";
+
     elements.cardMinTemp.textContent =
         firstForecast.min_temp !== null && firstForecast.min_temp !== undefined
             ? `${firstForecast.min_temp} °C`
             : "--";
+
     elements.cardMaxTemp.textContent =
         firstForecast.max_temp !== null && firstForecast.max_temp !== undefined
             ? `${firstForecast.max_temp} °C`
@@ -617,19 +834,24 @@ function updateSummary(firstForecast) {
 }
 
 function updateChart(forecasts) {
-    if (!elements.chartCanvas || typeof Chart === "undefined") return;
+    if (!elements.chartCanvas) return;
 
-    // Destroy existing Chart instance if present to avoid overlay duplication
+    // Destroy existing chart instance to prevent canvas reuse conflicts
     if (temperatureChartInstance) {
         temperatureChartInstance.destroy();
         temperatureChartInstance = null;
     }
 
-    if (!forecasts || forecasts.length === 0) return;
+    if (!forecasts || forecasts.length === 0) {
+        return;
+    }
 
+    // Extract time labels and min/max temperatures chronologically
     const labels = forecasts.map((f) => formatShortDateTime(f.start_time));
     const maxTemps = forecasts.map((f) => f.max_temp);
     const minTemps = forecasts.map((f) => f.min_temp);
+
+    const theme = getChartTheme();
 
     const ctx = elements.chartCanvas.getContext("2d");
     temperatureChartInstance = new Chart(ctx, {
@@ -678,10 +900,13 @@ function updateChart(forecasts) {
                         usePointStyle: true,
                         pointStyle: "circle",
                         font: { size: 13, weight: "600" },
-                        color: "#334155",
+                        color: theme.legendColor,
                     },
                 },
                 tooltip: {
+                    backgroundColor: theme.tooltipBg,
+                    titleColor: theme.tooltipTitle,
+                    bodyColor: theme.tooltipBody,
                     callbacks: {
                         label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y + " °C" : "--"}`,
                     },
@@ -690,11 +915,11 @@ function updateChart(forecasts) {
             scales: {
                 x: {
                     grid: {
-                        color: "#f1f5f9",
+                        color: theme.gridColor,
                     },
                     ticks: {
                         font: { size: 12 },
-                        color: "#64748b",
+                        color: theme.tickColor,
                         maxRotation: 45,
                         minRotation: 0,
                     },
@@ -703,15 +928,15 @@ function updateChart(forecasts) {
                     title: {
                         display: true,
                         text: "溫度 (°C)",
-                        color: "#64748b",
+                        color: theme.titleColor,
                         font: { size: 12, weight: "600" },
                     },
                     grid: {
-                        color: "#e2e8f0",
+                        color: theme.gridColor,
                     },
                     ticks: {
                         font: { size: 12 },
-                        color: "#64748b",
+                        color: theme.tickColor,
                         stepSize: 2,
                     },
                 },
@@ -750,16 +975,16 @@ function updateTable(forecasts) {
         tdWeather.textContent = f.weather || "--";
         tr.appendChild(tdWeather);
 
-        // Min temp column
+        // Min Temp column
         const tdMin = document.createElement("td");
         tdMin.className = "num-col temp-cold";
-        tdMin.textContent = f.min_temp !== null && f.min_temp !== undefined ? `${f.min_temp}°C` : "--";
+        tdMin.textContent = f.min_temp !== null && f.min_temp !== undefined ? `${f.min_temp} °C` : "--";
         tr.appendChild(tdMin);
 
-        // Max temp column
+        // Max Temp column
         const tdMax = document.createElement("td");
         tdMax.className = "num-col temp-warm";
-        tdMax.textContent = f.max_temp !== null && f.max_temp !== undefined ? `${f.max_temp}°C` : "--";
+        tdMax.textContent = f.max_temp !== null && f.max_temp !== undefined ? `${f.max_temp} °C` : "--";
         tr.appendChild(tdMax);
 
         elements.tableBody.appendChild(tr);
@@ -767,35 +992,33 @@ function updateTable(forecasts) {
 }
 
 function updateMetadata(data) {
-    if (!data) return;
-    const timeStr = formatUpdatedTimestamp(data.updated_at);
-    if (elements.lastUpdated) {
-        elements.lastUpdated.textContent = `最後資料更新：${timeStr}`;
-    }
-    if (elements.detailLastUpdated && (!mapDataCache || !mapDataCache.updated_at)) {
-        elements.detailLastUpdated.textContent = timeStr;
+    if (elements.lastUpdated && data && data.updated_at) {
+        const formatted = formatUpdatedTimestamp(data.updated_at);
+        elements.lastUpdated.textContent = `最後資料更新：${formatted}`;
+        if (elements.detailLastUpdated) {
+            elements.detailLastUpdated.textContent = formatted;
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Data Fetching: API Calls (GET /api/forecast, /api/map-data, /api/regions)
+// Data Fetching Functions
 // ---------------------------------------------------------------------------
 
 async function loadForecast(regionName) {
     if (!regionName) return;
 
-    // Abort previous in-flight forecast request to prevent race conditions on rapid switching
+    // Abort previous in-flight forecast request
     if (forecastAbortController) {
         forecastAbortController.abort();
     }
     forecastAbortController = new AbortController();
-    const signal = forecastAbortController.signal;
 
     setLoading(true, `正在載入 ${regionName} 天氣預報...`);
 
     try {
-        const encodedRegion = encodeURIComponent(regionName);
-        const response = await fetch(`/api/forecast?region=${encodedRegion}`, { signal });
+        const url = `/api/forecast?region=${encodeURIComponent(regionName)}`;
+        const response = await fetch(url, { signal: forecastAbortController.signal });
 
         if (!response.ok) {
             throw new Error(`API responded with status: ${response.status}`);
@@ -885,8 +1108,11 @@ async function loadMapDataAndGeoJSON() {
                 onEachFeature: onEachCountyFeature,
             }).addTo(leafletMap);
 
+            // Store canonical Taiwan bounds covering all GeoJSON counties and offshore islands
+            taiwanDefaultBounds = geojsonLayer.getBounds();
+
             // Fit map bounds to Taiwan
-            leafletMap.fitBounds(geojsonLayer.getBounds(), {
+            leafletMap.fitBounds(taiwanDefaultBounds, {
                 padding: [15, 15],
             });
 
@@ -954,16 +1180,22 @@ async function loadRegions() {
 // ---------------------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // 0. Initialize theme system
+    initTheme();
+
     // 1. Initialize Leaflet map
     initMap();
 
-    // 2. Load Map Data and GeoJSON
+    // 2. Initialize map controls & toolbar (Reset View, Fullscreen, Collapsible Panel)
+    initMapControls();
+
+    // 3. Load Map Data and GeoJSON
     await loadMapDataAndGeoJSON();
 
-    // 3. Load Regions and initial forecast
+    // 4. Load Regions and initial forecast
     await loadRegions();
 
-    // 4. Attach change event listener to region selector
+    // 5. Attach change event listener to region selector
     if (elements.regionSelect) {
         elements.regionSelect.addEventListener("change", (event) => {
             const selectedRegion = event.target.value;
@@ -971,7 +1203,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // 5. Attach change event listener to forecast period selector
+    // 6. Attach change event listener to forecast period selector
     if (elements.mapPeriodSelect) {
         elements.mapPeriodSelect.addEventListener("change", (event) => {
             const selectedKey = event.target.value;
@@ -984,10 +1216,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // 6. Invalidate map size on window resize
+    // 7. Invalidate map size and synchronize wheel zoom on window resize
     window.addEventListener("resize", () => {
         if (leafletMap) {
             leafletMap.invalidateSize();
+            syncMapWheelZoom();
         }
     });
 });

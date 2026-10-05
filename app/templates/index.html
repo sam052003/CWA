@@ -6,6 +6,27 @@
     <title>Taiwan Weather Forecast — 中央氣象署一週天氣預報</title>
     <!-- Leaflet CSS pinned stable version 1.9.4 -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Theme initialization script before stylesheet to prevent light/dark flash -->
+    <script>
+        (function () {
+            let theme = null;
+            try {
+                const stored = localStorage.getItem("cwa_theme");
+                if (stored === "light" || stored === "dark") {
+                    theme = stored;
+                }
+            } catch (_) {}
+
+            if (!theme) {
+                theme = window.matchMedia &&
+                    window.matchMedia("(prefers-color-scheme: dark)").matches
+                    ? "dark"
+                    : "light";
+            }
+
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Chart.js pinned stable version for temperature line chart -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
@@ -16,9 +37,27 @@
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <h1 class="main-title">Taiwan Weather Forecast</h1>
-            <h2 class="sub-title">中央氣象署一週天氣預報</h2>
-            <p class="subtitle">Data Source: Central Weather Administration (CWA)</p>
+            <div class="header-inner">
+                <div class="header-title-wrap">
+                    <h1 class="main-title">Taiwan Weather Forecast</h1>
+                    <h2 class="sub-title">中央氣象署一週天氣預報</h2>
+                    <p class="subtitle">Data Source: Central Weather Administration (CWA)</p>
+                </div>
+                <div class="header-controls">
+                    <button
+                        id="theme-toggle"
+                        class="theme-toggle-btn"
+                        type="button"
+                        aria-label="切換深色模式"
+                        aria-pressed="false"
+                        title="切換深色/淺色主題"
+                    >
+                        <span class="theme-icon theme-icon-sun" aria-hidden="true">☀️</span>
+                        <span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span>
+                        <span class="theme-toggle-text">深色模式</span>
+                    </button>
+                </div>
+            </div>
         </header>
 
         <!-- Status Banners: Loading & Error -->
@@ -33,20 +72,44 @@
 
         <!-- Main Dashboard Content -->
         <main id="weather-content" class="weather-content">
-            <!-- Upper Section: Map (65-70%) + Detail/Summary Panel (30-35%) -->
+            <!-- Upper Section: Map Workspace (Full Width) + Desktop Floating/Collapsible Detail Panel -->
             <div class="dashboard-main-grid">
-                <!-- Map Section -->
+                <!-- Map Section (Main Application Workspace) -->
                 <section class="map-section" aria-label="台灣縣市預報地圖">
                     <div class="map-header">
                         <div class="map-title-group">
                             <h3 class="section-title">臺灣縣市預報地圖</h3>
                             <span id="map-period-badge" class="map-period-badge">載入中...</span>
                         </div>
-                        <div class="map-period-control">
-                            <label for="map-period-select" class="map-period-label">預報時段</label>
-                            <select id="map-period-select" class="map-period-select" aria-label="選擇預報時段">
-                                <option value="" disabled selected>載入時段中...</option>
-                            </select>
+                        <div class="map-controls-group">
+                            <div class="map-period-control">
+                                <label for="map-period-select" class="map-period-label">預報時段</label>
+                                <select id="map-period-select" class="map-period-select" aria-label="選擇預報時段">
+                                    <option value="" disabled selected>載入時段中...</option>
+                                </select>
+                            </div>
+                            <div class="map-toolbar" id="map-toolbar" role="toolbar" aria-label="地圖工具列">
+                                <button
+                                    id="map-reset-view"
+                                    class="map-tool-btn"
+                                    type="button"
+                                    aria-label="重設臺灣視角"
+                                    title="重設臺灣視角（包含外島全境）"
+                                >
+                                    <span class="tool-icon" aria-hidden="true">🎯</span>
+                                    <span class="tool-label">臺灣全圖</span>
+                                </button>
+                                <button
+                                    id="map-fullscreen-toggle"
+                                    class="map-tool-btn"
+                                    type="button"
+                                    aria-label="全螢幕地圖"
+                                    title="全螢幕地圖工作區"
+                                >
+                                    <span class="tool-icon" aria-hidden="true">⛶</span>
+                                    <span class="tool-label">全螢幕</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="map-container" id="map-container">
@@ -68,49 +131,65 @@
                     </div>
                 </section>
 
-                <!-- Detail Panel: Region Selector & Summary Cards -->
-                <aside class="detail-panel" aria-label="縣市預報詳細資訊">
-                    <div class="panel-card selector-panel-card">
-                        <label for="region-select" class="selector-label">選擇地區</label>
-                        <select id="region-select" class="region-select" aria-label="選擇地區">
-                            <option value="" disabled selected>正在載入縣市...</option>
-                        </select>
+                <!-- Detail Panel: Region Selector & Summary Cards (Floating/Collapsible on Desktop, Static below map on Mobile) -->
+                <aside class="detail-panel" id="detail-panel" aria-label="縣市預報詳細資訊">
+                    <div class="detail-panel-header-bar">
+                        <span id="detail-panel-summary-label" class="detail-panel-header-title">📍 縣市天氣摘要</span>
+                        <button
+                            id="detail-panel-toggle"
+                            class="detail-panel-toggle-btn"
+                            type="button"
+                            aria-expanded="true"
+                            aria-label="收合詳細資訊面板"
+                            title="收合面板"
+                        >
+                            <span class="toggle-icon" aria-hidden="true">◀</span>
+                            <span class="toggle-text">收合</span>
+                        </button>
                     </div>
+                    <div class="detail-panel-content" id="detail-panel-content">
+                        <div class="panel-card selector-panel-card">
+                            <label for="region-select" class="selector-label">選擇地區</label>
+                            <select id="region-select" class="region-select" aria-label="選擇地區">
+                                <option value="" disabled selected>正在載入縣市...</option>
+                            </select>
+                        </div>
 
-                    <div class="panel-card summary-panel-card">
-                        <div class="selected-region-header">
-                            <div class="selected-region-title-wrap">
-                                <h3 id="selected-region-name" class="selected-region-name">臺中市</h3>
-                                <span class="selected-region-subtitle">預報時段摘要</span>
+                        <div class="panel-card summary-panel-card">
+                            <div class="selected-region-header">
+                                <div class="selected-region-title-wrap">
+                                    <h3 id="selected-region-name" class="selected-region-name">臺中市</h3>
+                                    <span class="selected-region-subtitle">預報時段摘要</span>
+                                </div>
+                                <span id="summary-period" class="summary-period-badge">--</span>
                             </div>
-                            <span id="summary-period" class="summary-period-badge">--</span>
-                        </div>
-                        <div class="cards-grid vertical-cards-grid">
-                            <div class="card weather-card">
-                                <div class="card-icon" aria-hidden="true">🌤️</div>
-                                <div class="card-info">
-                                    <span class="card-label">天氣現象</span>
-                                    <strong id="card-weather" class="card-value">--</strong>
+                            <div class="cards-grid vertical-cards-grid">
+                                <div class="card weather-card">
+                                    <div class="card-icon" aria-hidden="true">🌤️</div>
+                                    <div class="card-info">
+                                        <span class="card-label">天氣現象</span>
+                                        <strong id="card-weather" class="card-value">--</strong>
+                                    </div>
+                                </div>
+                                <div class="card min-temp-card">
+                                    <div class="card-icon" aria-hidden="true">🌡️</div>
+                                    <div class="card-info">
+                                        <span class="card-label">預測最低溫</span>
+                                        <strong id="card-min-temp" class="card-value temp-cold">--</strong>
+                                    </div>
+                                </div>
+                                <div class="card max-temp-card">
+                                    <div class="card-icon" aria-hidden="true">☀️</div>
+                                    <div class="card-info">
+                                        <span class="card-label">預測最高溫</span>
+                                        <strong id="card-max-temp" class="card-value temp-warm">--</strong>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="card min-temp-card">
-                                <div class="card-icon" aria-hidden="true">🌡️</div>
-                                <div class="card-info">
-                                    <span class="card-label">預測最低溫</span>
-                                    <strong id="card-min-temp" class="card-value temp-cold">--</strong>
-                                </div>
+                            <div class="detail-updated-bar">
+                                <span class="detail-updated-label">資料更新</span>
+                                <span id="detail-last-updated" class="detail-updated-time">--</span>
                             </div>
-                            <div class="card max-temp-card">
-                                <div class="card-icon" aria-hidden="true">☀️</div>
-                                <div class="card-info">
-                                    <span class="card-label">預測最高溫</span>
-                                    <strong id="card-max-temp" class="card-value temp-warm">--</strong>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="detail-updated-bar">
-                            <span class="detail-updated-label">資料更新</span>
-                            <span id="detail-last-updated" class="detail-updated-time">--</span>
                         </div>
                     </div>
                 </aside>
