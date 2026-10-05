@@ -1035,7 +1035,7 @@ https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/
 
 ---
 
-#### Phase 7 驗收標準 (Acceptance Criteria — 待實作，全數保持未勾選)
+#### Phase 7 驗收標準 (Acceptance Criteria — 已驗收完成)
 
 ##### Phase 7A — 驗收標準
 - [x] Taiwan map renders

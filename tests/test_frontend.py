@@ -479,4 +479,89 @@ def test_phase_8a_app_experience_and_map_workspace():
     assert "360px" in css  # mobile map height
 
 
+def test_phase_8a_refinements_and_corrections():
+    """Verify Phase 8A focused corrections: detail panel updated_at ownership, Chart.js live tooltip theme sync,
+    fullscreen fallback, floating summary stacked layout overrides, and interaction regressions."""
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    css_resp = client.get("/static/css/style.css")
+    assert css_resp.status_code == 200
+    css = css_resp.text
+
+    # 1. Detail panel updated_at ownership:
+    # updateMetadata does NOT overwrite detailLastUpdated when mapDataCache.updated_at exists
+    update_meta_idx = js.find("function updateMetadata(")
+    assert update_meta_idx != -1
+    update_meta_end = js.find("async function loadForecast(", update_meta_idx)
+    update_meta_body = js[update_meta_idx:update_meta_end]
+
+    assert "!mapDataCache || !mapDataCache.updated_at" in update_meta_body
+    assert "elements.detailLastUpdated.textContent = timeStr" in update_meta_body
+
+    # loadMapDataAndGeoJSON owns mapDataCache.updated_at detail display
+    load_map_idx = js.find("async function loadMapDataAndGeoJSON(")
+    assert load_map_idx != -1
+    load_map_body = js[load_map_idx:load_map_idx + 1200]
+    assert "if (mapDataCache.updated_at)" in load_map_body
+    assert "elements.detailLastUpdated.textContent = timeStr" in load_map_body
+
+    # 2. Complete Chart.js live theme synchronization:
+    # applyChartTheme updates tooltip backgroundColor, titleColor, bodyColor safely without reload
+    apply_theme_idx = js.find("function applyChartTheme(")
+    assert apply_theme_idx != -1
+    apply_theme_end = js.find("function updateThemeToggleUI(", apply_theme_idx)
+    apply_theme_body = js[apply_theme_idx:apply_theme_end]
+
+    assert "temperatureChartInstance.options.plugins.tooltip.backgroundColor = theme.tooltipBg" in apply_theme_body
+    assert "temperatureChartInstance.options.plugins.tooltip.titleColor = theme.tooltipTitle" in apply_theme_body
+    assert "temperatureChartInstance.options.plugins.tooltip.bodyColor = theme.tooltipBody" in apply_theme_body
+    assert "temperatureChartInstance.update()" in apply_theme_body
+
+    # 3. Fullscreen unsupported state handling:
+    # initMapControls detects requestFullscreen or webkitRequestFullscreen; disables button with explanatory title if neither supported
+    assert "const isFullscreenSupported = !!" in js
+    assert "elements.mapSection.requestFullscreen ||" in js
+    assert "elements.mapSection.webkitRequestFullscreen" in js
+    assert "elements.mapFullscreenToggle.disabled = true" in js
+    assert "此瀏覽器不支援全螢幕模式" in js
+
+    # 4. Detail summary card overflow / layout bug fix:
+    # Final CSS contains .cards-grid.vertical-cards-grid selector
+    assert ".cards-grid.vertical-cards-grid" in css
+
+    # Placed after generic .cards-grid to guarantee higher specificity override
+    cards_grid_idx = css.find(".cards-grid {")
+    vertical_override_idx = css.find(".cards-grid.vertical-cards-grid {")
+    assert cards_grid_idx != -1
+    assert vertical_override_idx != -1
+    assert vertical_override_idx > cards_grid_idx
+
+    # Selector uses flex-direction: column and grid-template-columns: none
+    assert "grid-template-columns: none" in css
+    # Individual summary cards remain horizontal rows
+    assert ".cards-grid.vertical-cards-grid .card {" in css
+    assert "flex-direction: row" in css
+    assert "overflow-wrap: anywhere" in css
+
+    # 5. Preserved interaction regressions:
+    # Pointerdown bridge with path.leaflet-interactive
+    assert "function handleCountyPointerDown(event)" in js
+    assert "path.leaflet-interactive" in js
+    assert "countyLayersByName" in js
+
+    # Period switching contains no fetch()
+    set_period_idx = js.find("function setMapPeriod(")
+    assert set_period_idx != -1
+    set_period_end = js.find("function selectCounty(", set_period_idx)
+    set_period_body = js[set_period_idx:set_period_end]
+    assert "fetch(" not in set_period_body
+
+    # Chart and Table behavior remains intact
+    assert "updateChart(forecasts)" in js
+    assert "updateTable(forecasts)" in js
+
+
+
 

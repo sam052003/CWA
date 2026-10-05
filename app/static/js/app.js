@@ -132,6 +132,14 @@ function applyChartTheme() {
     ) {
         temperatureChartInstance.options.plugins.legend.labels.color = theme.legendColor;
     }
+    if (
+        temperatureChartInstance.options.plugins &&
+        temperatureChartInstance.options.plugins.tooltip
+    ) {
+        temperatureChartInstance.options.plugins.tooltip.backgroundColor = theme.tooltipBg;
+        temperatureChartInstance.options.plugins.tooltip.titleColor = theme.tooltipTitle;
+        temperatureChartInstance.options.plugins.tooltip.bodyColor = theme.tooltipBody;
+    }
     temperatureChartInstance.update();
 }
 
@@ -745,43 +753,54 @@ function initMapControls() {
 
     // 2. Fullscreen Map Workspace
     if (elements.mapFullscreenToggle && elements.mapSection) {
-        elements.mapFullscreenToggle.addEventListener("click", () => {
-            const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
-            if (!isFull) {
-                if (elements.mapSection.requestFullscreen) {
-                    elements.mapSection.requestFullscreen().catch((err) => console.warn("Fullscreen request error:", err));
-                } else if (elements.mapSection.webkitRequestFullscreen) {
-                    elements.mapSection.webkitRequestFullscreen();
+        const isFullscreenSupported = !!(
+            elements.mapSection.requestFullscreen ||
+            elements.mapSection.webkitRequestFullscreen
+        );
+
+        if (!isFullscreenSupported) {
+            elements.mapFullscreenToggle.disabled = true;
+            elements.mapFullscreenToggle.title = "此瀏覽器不支援全螢幕模式";
+            elements.mapFullscreenToggle.setAttribute("aria-disabled", "true");
+        } else {
+            elements.mapFullscreenToggle.addEventListener("click", () => {
+                const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (!isFull) {
+                    if (elements.mapSection.requestFullscreen) {
+                        elements.mapSection.requestFullscreen().catch((err) => console.warn("Fullscreen request error:", err));
+                    } else if (elements.mapSection.webkitRequestFullscreen) {
+                        elements.mapSection.webkitRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen().catch((err) => console.warn("Exit fullscreen error:", err));
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
                 }
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen().catch((err) => console.warn("Exit fullscreen error:", err));
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                }
-            }
-        });
+            });
 
-        const handleFullscreenChange = () => {
-            const inFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
-            elements.mapFullscreenToggle.setAttribute("aria-label", inFull ? "退出全螢幕" : "全螢幕地圖");
-            elements.mapFullscreenToggle.title = inFull ? "退出全螢幕" : "全螢幕地圖";
-            const iconSpan = elements.mapFullscreenToggle.querySelector(".tool-icon");
-            if (iconSpan) iconSpan.textContent = inFull ? "🗗" : "⛶";
-            const labelSpan = elements.mapFullscreenToggle.querySelector(".tool-label");
-            if (labelSpan) labelSpan.textContent = inFull ? "退出" : "全螢幕";
+            const handleFullscreenChange = () => {
+                const inFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                elements.mapFullscreenToggle.setAttribute("aria-label", inFull ? "退出全螢幕" : "全螢幕地圖");
+                elements.mapFullscreenToggle.title = inFull ? "退出全螢幕" : "全螢幕地圖";
+                const iconSpan = elements.mapFullscreenToggle.querySelector(".tool-icon");
+                if (iconSpan) iconSpan.textContent = inFull ? "🗗" : "⛶";
+                const labelSpan = elements.mapFullscreenToggle.querySelector(".tool-label");
+                if (labelSpan) labelSpan.textContent = inFull ? "退出" : "全螢幕";
 
-            elements.mapSection.classList.toggle("is-fullscreen", inFull);
+                elements.mapSection.classList.toggle("is-fullscreen", inFull);
 
-            setTimeout(() => {
-                if (leafletMap) {
-                    leafletMap.invalidateSize();
-                }
-            }, 100);
-        };
+                setTimeout(() => {
+                    if (leafletMap) {
+                        leafletMap.invalidateSize();
+                    }
+                }, 100);
+            };
 
-        document.addEventListener("fullscreenchange", handleFullscreenChange);
-        document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+            document.addEventListener("fullscreenchange", handleFullscreenChange);
+            document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+        }
     }
 
     // 3. Collapsible Desktop Detail Panel
@@ -992,12 +1011,20 @@ function updateTable(forecasts) {
 }
 
 function updateMetadata(data) {
-    if (elements.lastUpdated && data && data.updated_at) {
-        const formatted = formatUpdatedTimestamp(data.updated_at);
-        elements.lastUpdated.textContent = `最後資料更新：${formatted}`;
-        if (elements.detailLastUpdated) {
-            elements.detailLastUpdated.textContent = formatted;
-        }
+    if (!data) return;
+
+    const timeStr = formatUpdatedTimestamp(data.updated_at);
+
+    if (elements.lastUpdated) {
+        elements.lastUpdated.textContent =
+            `最後資料更新：${timeStr}`;
+    }
+
+    if (
+        elements.detailLastUpdated &&
+        (!mapDataCache || !mapDataCache.updated_at)
+    ) {
+        elements.detailLastUpdated.textContent = timeStr;
     }
 }
 
