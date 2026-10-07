@@ -1435,6 +1435,73 @@ def test_phase_8e_correction_js_world_wrapping_and_navigation_bounds():
     assert "leafletMap.setMaxBounds(NORMAL_NAVIGATION_BOUNDS)" in js
 
 
+def test_phase_8e_map_canvas_and_mobile_layout_dom_css():
+    """Verify Phase 8E DOM hierarchy & mobile flow:
+    - #taiwan-map and #map-error exist inside .map-canvas wrapper
+    - #typhoon-panel is inside .map-container but outside .map-canvas
+    - Desktop .map-canvas is height: 100%
+    - <=960px .map-container is height: auto and overflow: visible
+    - <=960px .map-canvas is height: 440px
+    - <=600px .map-canvas is height: 360px
+    - #typhoon-panel.hidden consumes zero space (.hidden has display: none !important)
+    - Leaflet initializes against L.map("taiwan-map")
+    """
+    html_resp = client.get("/")
+    assert html_resp.status_code == 200
+    html = html_resp.text
+
+    # DOM Hierarchy check
+    map_container_idx = html.find('id="map-container"')
+    assert map_container_idx != -1
+    map_canvas_idx = html.find('id="map-canvas"', map_container_idx)
+    assert map_canvas_idx != -1
+    taiwan_map_idx = html.find('id="taiwan-map"', map_canvas_idx)
+    assert taiwan_map_idx != -1
+    map_error_idx = html.find('id="map-error"', map_canvas_idx)
+    assert map_error_idx != -1
+    typhoon_panel_idx = html.find('id="typhoon-panel"', map_container_idx)
+    assert typhoon_panel_idx != -1
+    assert typhoon_panel_idx > map_canvas_idx
+
+    css_resp = client.get("/static/css/style.css")
+    assert css_resp.status_code == 200
+    css = css_resp.text
+
+    # Base .map-canvas rule
+    assert ".map-canvas {" in css
+    canvas_idx = css.find(".map-canvas {")
+    canvas_end = css.find("}", canvas_idx)
+    canvas_body = css[canvas_idx:canvas_end]
+    assert "height: 100%;" in canvas_body
+
+    # Hidden rule
+    assert ".hidden {" in css
+    assert "display: none !important;" in css
+
+    # 960px breakpoint rules
+    assert "@media (max-width: 960px)" in css
+    m960_idx = css.find("@media (max-width: 960px)")
+    m600_idx = css.find("@media (max-width: 600px)")
+    m960_block = css[m960_idx:m600_idx]
+
+    assert ".map-container {" in m960_block
+    assert "height: auto;" in m960_block
+    assert "overflow: visible;" in m960_block
+    assert ".map-canvas {" in m960_block
+    assert "height: 440px;" in m960_block
+
+    # 600px breakpoint rules
+    m600_block = css[m600_idx:]
+    assert ".map-canvas {" in m600_block
+    assert "height: 360px;" in m600_block
+
+    # Leaflet initialization check
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    assert 'leafletMap = L.map("taiwan-map"' in js_resp.text
+
+
+
 
 
 
