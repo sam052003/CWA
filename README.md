@@ -1,115 +1,155 @@
-# CWA Taiwan Weather Forecast (中央氣象署一週天氣預報)
+# Taiwan Weather Forecast (中央氣象署臺灣天氣預報與氣象儀表板)
 
-以**中央氣象署（CWA）Open Data API** 為資料來源的臺灣天氣預報網站，支援 22 縣市一週預報、最高/最低溫折線圖與預報資料表。
+以中央氣象署（CWA）Open Data 為資料來源的臺灣天氣預報與氣象 GIS 儀表板，整合一週縣市預報、降雨機率、即時氣象站觀測、雷達回波與熱帶氣旋路徑，並部署於 Vercel。
 
-> **專案規格與主要設計原則**：請參閱 [`MyPlan/design.md`](MyPlan/design.md)。
-
----
-
-## Live Demo
-
-- **Production URL**: [https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/](https://cwa-9cyxfmmd2-cwa-weather-project.vercel.app/)
-
-> **說明**：本網址為目前專案正式上線之 Vercel Production 站台，已完整串接 Supabase PostgreSQL 資料庫與每日定時 Vercel Cron 排程自動更新。
-
-### 專案階段狀態摘要
-
-- Phase 1 ✅ Environment
-- Phase 2 ✅ CWA API & Parser
-- Phase 3 ✅ Supabase PostgreSQL
-- Phase 4 ✅ FastAPI Web API
-- Phase 5 ✅ Frontend Dashboard
-- Phase 6 ✅ Vercel Production Deployment & Scheduled Refresh
-- Phase 7A ✅ Taiwan County Forecast Map
-- Phase 7B ✅ Forecast Period Map
-- Phase 7C ✅ Complete Taiwan Weather Dashboard
-- Phase 8A ✅ App Experience & Map Workspace (已完成並通過生產環境驗收)
-- Phase 8B ✅ Rich County Forecast 今明 36 小時生活預報 (已完成並通過生產環境驗收)
-- Phase 8B2 ✅ Rainfall Probability Map Mode 降雨機率地圖模式 (已完成並通過生產環境驗收)
-- Phase 8C ✅ Current Weather Observations 目前氣象觀測 (已完成並通過生產環境驗收)
-- Phase 8D ✅ Radar Reflectivity Overlay 雷達整合回波圖層 (已完成並通過生產環境驗收)
-- Phase 8E 📋 Typhoon Center / Tropical Cyclone Track 颱風動態中心與路徑 (實作完成，待正式環境手動驗收；最後規劃功能 / FINAL Planned Feature)
-- Phase 8F ⏳ Township Detailed Forecast 鄉鎮細緻預報 (延後規劃 / 專案當前範圍外 / Deferred / Out of Scope)
-- Phase 8G ⏳ Application Polish 應用程式優化 (延後規劃 / 專案當前範圍外 / Deferred / Out of Scope)
-
-> **最後功能里程碑聲明**：
-> - **Phase 8E 為本專案最後一項規劃功能**。
-> - 在 Phase 8E 驗收完成後，本專案將直接進入 **Final Project Closeout（專案最終結案）**，不進行 Phase 8F 或 Phase 8G 之實作。
-
-> **資料語義與技術架構說明**：
-> - `W-C0034-005`：西北太平洋及南海熱帶氣旋/颱風動態與路徑（約每 6 小時常態更新、警報期間約每 3 小時更新；若無活動氣旋回傳 HTTP 200 正常空狀態，絕非系統錯誤；支援歷史路徑、預報路徑、7/10級暴風半徑與 70% 預報機率範圍；獨立於地圖模式之 Overlay 疊加層）
-> - `O-A0058-001`：雷達整合回波圖－臺灣（較大範圍）_無地形（觀測圖資，約每 10 分鐘更新一次，經度 115.00–126.50，緯度 17.75–29.25，解析度 3600×3600；無地形底色適合作為 Web 地圖疊加圖層，搭配 OSM 底圖聚焦淡化）
->   - *已知限制*：氣象署雷達圖為預先渲染之點陣影像（raster product），疊加於 Leaflet / Web Mercator 投影與縣市 GeoJSON 上時可能存在細微地理擬合差異，系統不引入任意經驗偏移量（magic offsets），維持官方標準邊界與底圖淡化架構。
-> - `O-A0001`：氣象測站即時觀測資料（真實物理測量值，非預報值）
-> - `F-C0032-001`：今明 36 小時生活天氣預報（預測值）
-> - `F-C0032-005`：一週天氣預報（預測值）
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![Leaflet](https://img.shields.io/badge/Leaflet-1.9.4-199900.svg)](https://leafletjs.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-black.svg)](https://vercel.com/)
 
 ---
 
-## 技術架構
+## 🌐 Live Demo
 
-- **後端 Web 框架**：FastAPI
-- **資料庫**：PostgreSQL (Supabase)，使用 SQLAlchemy + psycopg driver（不使用 SQLite）
-- **前端介面**：HTML + CSS + JavaScript + Chart.js
-- **部署平台**：Vercel (Serverless)
-- **版本控制**：Git + GitHub
+- **線上展示網址**：[🚀 開啟 Taiwan Weather Forecast Live Demo](https://cwa-4b4l182iq-cwa-weather-project.vercel.app/)
+- **雲端部署平台**：Vercel (Serverless Functions)
+- **資料庫後端**：Supabase (PostgreSQL with Transaction Pooler)
+- **定時更新排程**：Vercel Cron (受保護的排程定時更新)
 
 ---
 
-## 專案目錄結構
+## 📸 System Preview
+
+### Taiwan Weather Dashboard
+![Taiwan Weather Dashboard](docs/screenshots/dashboard-overview.png)
+*縣市溫度面量圖、預報時段切換與縣市詳細資訊整合介面。*
+
+### Radar Reflectivity & Current Observations
+![Radar Reflectivity and Current Observations](docs/screenshots/radar-observations.png)
+*CWA 雷達回波與自動氣象站即時觀測資料的多圖層整合。*
+
+### Typhoon Center & Forecast Track
+![Typhoon Center and Forecast Track](docs/screenshots/typhoon-center.png)
+*熱帶氣旋目前中心、歷史分析路徑、預報路徑、暴風半徑與 70% 預報機率範圍。*
+
+---
+
+## ✨ Main Features (主要功能)
+
+- **全臺 22 縣市一週天氣預報**：整合 CWA `F-C0032-005`，提供各時段天氣現象、預測最高溫與最低溫。
+- **互動式氣象 GIS 面量圖 (Choropleth)**：以 Leaflet 1.9.4 構建向量地圖，依預報溫度分級上色，支援懸浮提示 (Tooltip) 與雙向縣市選取連動。
+- **預報時段即時切換**：下拉切換未來不同預報區間，地圖多邊形與摘要卡零頁面重整立即反應。
+- **今明 36 小時生活預報**：整合 CWA `F-C0032-001`，提供逐 12 小時降雨機率 (PoP) 與舒適度指數 (CI)。
+- **自動氣象站即時觀測 (Observations)**：串接 CWA `O-A0001`，在地圖上即時呈現全臺氣象測站溫度、雨量、風向風速與氣壓（真實物理測量值）。
+- **雷達整合回波疊加圖層 (Radar Reflectivity)**：串接 CWA `O-A0058-001`（無地形圖資），以獨立 ImageOverlay 呈現即時回波，支援焦點渲染（自動淡化 OSM 底圖）與透明度調整。
+- **颱風動態中心與路徑 (Typhoon Center & Track)**：串接 CWA `W-C0034-005`，動態繪製熱帶氣旋中心、歷史分析路徑（實線）、未來預報路徑（虛線）、7級/10級暴風半徑與 70% 預報機率圈。
+- **多颱風切換與廣域視角**：多氣旋時提供下拉切換，開啟時自動擴展為西北太平洋廣域視角，關閉時精準還原臺灣視角。
+- **一週溫度趨勢折線圖**：整合 Chart.js，動態繪製選定縣市高低溫變化曲線，支援主題色彩同步。
+- **詳細時段資料表**：條列呈現未來一週完整時段氣象要素，支援行動裝置水平捲動。
+- **深淺色主題切換 (Light / Dark Mode)**：全站支援深色與淺色主題，地圖底圖、圖表、下拉選單與面板無縫適配。
+- **響應式工作台 (Responsive Layout)**：桌面版支援左側颱風面板、地圖縮放按鈕無遮蔽與右側詳細面板自動收合；行動版自適應為友善垂直流式版面。
+
+---
+
+## 🏗 Architecture & Data Flow (系統架構)
 
 ```text
-CWA/
-├─ MyPlan/
-│  └─ design.md              # 系統主要設計規格文件
-├─ app/
-│  ├─ main.py                # FastAPI 應用程式主入口
-│  ├─ core/
-│  │  ├─ __init__.py
-│  │  └─ config.py           # 集中環境變數管理 (pydantic-settings)
-│  ├─ api/
-│  │  └─ routes.py           # API 路由與 Health Check
-│  ├─ services/
-│  │  └─ weather_service.py  # 業務邏輯服務層 (Phase 4)
-│  ├─ repositories/
-│  │  └─ weather_repository.py # 資料庫存取層 (Phase 3)
-│  ├─ clients/
-│  │  └─ cwa_client.py       # CWA API 連線 Client (Phase 2)
-│  ├─ parsers/
-│  │  └─ cwa_parser.py       # JSON 解析與正規化 (Phase 2)
-│  ├─ db/
-│  │  ├─ database.py         # PostgreSQL 連線設定 (Supabase)
-│  │  └─ models.py           # SQLAlchemy Data Models
-│  ├─ templates/
-│  │  └─ index.html          # 前端 HTML 模板 (Phase 5)
-│  └─ static/
-│     ├─ css/style.css       # 樣式表 (Phase 5)
-│     └─ js/app.js           # 前端互動邏輯 (Phase 5)
-├─ scripts/
-│  ├─ init_db.py             # 資料庫初始化腳本
-│  └─ fetch_weather.py       # 天氣資料更新腳本
-├─ tests/
-│  ├─ test_api.py            # API 端點測試
-│  ├─ test_config.py         # 設定與環境變數測試
-│  ├─ test_cwa_client.py     # CWA 連線 Client 測試 (Phase 2)
-│  ├─ test_deployment.py     # 部署準備與受保護 Cron 測試 (Phase 6)
-│  ├─ test_frontend.py       # 前端模板與靜態資源測試 (Phase 5)
-│  ├─ test_parser.py         # JSON Parser 測試 (Phase 2)
-│  ├─ test_repository.py     # Repository 測試 (Phase 3)
-│  └─ test_weather_service.py# 業務服務層測試 (Phase 4)
-├─ .env.example              # 環境變數範本 (集中管理 APP_NAME, ENVIRONMENT, PORT, CWA_API_KEY, DATABASE_URL)
-├─ .gitignore                # 排除敏感檔案與虛擬環境
-├─ requirements.txt          # Python 依賴套件清單
-├─ vercel.json               # Vercel 部署設定
-├─ README.md                 # 專案說明與啟動指南
-└─ .python-version           # Python 版本聲明
+       ┌──────────────────────────────────────────────┐
+       │   Central Weather Administration Open Data   │
+       └──────────────────────┬───────────────────────┘
+                              │ HTTPS (JSON / XML)
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │          Python CWA Client (Backend)         │
+       └──────────────────────┬───────────────────────┘
+                              │
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │         Parser / Data Normalizer Layer       │
+       └──────────────────────┬───────────────────────┘
+                              │
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │            Weather Service Layer             │
+       └──────────────┬────────────────┬──────────────┘
+                      │                │
+       (Forecast Data)│                │(Observations / Radar / Typhoon)
+                      ▼                ▼
+     ┌──────────────────────┐    ┌────────────────────────┐
+     │ Supabase PostgreSQL  │    │ In-Memory Process      │
+     │ (Persistent Storage) │    │ Best-Effort Cache      │
+     └──────────┬───────────┘    └───────────┬────────────┘
+                │                            │
+                └─────────────┬──────────────┘
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │              FastAPI Application             │
+       └──────────────────────┬───────────────────────┘
+                              │ REST JSON API & Jinja2 Templates
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │     Frontend: HTML5 + Vanilla CSS + ES6 JS   │
+       │     Visualizations: Leaflet.js + Chart.js    │
+       └──────────────────────┬───────────────────────┘
+                              │
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │         Vercel Serverless Production         │
+       │   (with Scheduled Protected Cron Refresh)    │
+       └──────────────────────────────────────────────┘
 ```
+
+> **資料存取與快取架構說明**：
+> - **一週預報資料**：由背景排程或更新端點寫入 Supabase PostgreSQL 資料庫持久化儲存，前端透過 `/api/forecast` 與 `/api/map-data` 查詢最新批次資料。
+> - **即時觀測、雷達圖與颱風動態**：由伺服器端即時自氣象署取得並解析，於各 Serverless 執行個體內提供最佳努力 (Best-Effort) 的行程內 TTL 快取，各執行個體記憶體獨立不共享。
 
 ---
 
-## 本機快速啟動指南
+## 🛠 Tech Stack (技術選型)
 
-### 1. 建立並啟用 Python 虛擬環境
+| 領域 | 技術 / 工具 | 說明 |
+|---|---|---|
+| **Backend** | Python 3.12+ | 核心後端開發語言 |
+| | FastAPI | 高效能非同步 Web API 框架與 OpenAPI/Swagger 文件生成 |
+| | SQLAlchemy & psycopg | PostgreSQL ORM 與高效能資料庫驅動（支援 Transaction Pooler） |
+| | pydantic-settings | 集中型型別安全環境變數與組態管理 |
+| **Frontend** | HTML5 / Vanilla CSS | 結構化語意標籤與精準 CSS 設計系統（無第三方 CSS 框架負擔） |
+| | JavaScript (ES6+) | 原生模組化前端互動邏輯與安全 DOM 操作 |
+| | Leaflet 1.9.4 | 互動式 Web GIS 地圖圖層、GeoJSON 面量圖與 ImageOverlay 控制 |
+| | Chart.js 4.5.1 | 響應式氣溫趨勢圖表繪製 |
+| **Database** | PostgreSQL | 關聯式預報資料持久化 |
+| | Supabase | 雲端託管 PostgreSQL 服務 (Transaction Pooler, port 6543) |
+| **Infrastructure** | Vercel | Zero-Config Serverless 部署平台 |
+| | Vercel Cron | 定時觸發受保護氣象資料更新排程 (`GET /api/cron/refresh`) |
+| | GitHub | Git 版本控制與 CI 流程管理 |
+| **Testing** | pytest | 包含單元測試、整合測試、Parser 驗證與前端迴歸測試（共 209 項測試全數通過） |
+
+---
+
+## 📊 CWA Open Data Datasets (氣象署開放資料集)
+
+| 資料集代碼 | 資料集名稱 | 類型 | 專案應用說明 |
+|---|---|---|---|
+| **F-C0032-005** | 一般天氣預報－1週縣市天氣預報 | 預報 (7天) | 22 縣市一週最高溫/最低溫/天氣現象，儲存於 PostgreSQL |
+| **F-C0032-001** | 一般天氣預報－今明 36 小時天氣預報 | 預報 (36小時) | 今明 36 小時逐 12 小時預報、降雨機率 (PoP) 與舒適度指數 (CI) |
+| **O-A0001** | 自動氣象站即時觀測資料 | 觀測 (即時) | 全臺地面測站即時物理測量值（氣溫、雨量、風速、氣壓） |
+| **O-A0058-001** | 雷達整合回波圖－臺灣（較大範圍）_無地形 | 觀測 (圖資) | 3600×3600 高解析度無地形回波圖層，約每 10 分鐘更新 |
+| **W-C0034-005** | 颱風動態與路徑預報資料 | 預報/分析 | 西北太平洋及南海熱帶氣旋中心、歷史分析路徑、預報路徑與暴風半徑 |
+| **twCounty2010** | 臺灣直轄市、縣市界線 GeoJSON | 圖資 | g0v 釋出之 CC0 邊界向量資料，經座標標準化對齊 22 縣市 |
+
+---
+
+## 🚀 Setup & Local Development (本機開發指南)
+
+### 1. 複製專案庫
+
+```bash
+git clone https://github.com/sam052003/CWA.git
+cd CWA
+```
+
+### 2. 建立並啟動虛擬環境
 
 **Windows (PowerShell)**:
 ```powershell
@@ -123,112 +163,91 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 2. 安裝依賴套件
+### 3. 安裝依賴套件
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 設定環境變數
+### 4. 設定環境變數
 
 複製範本檔案 `.env.example` 為 `.env`：
 
-**Windows (PowerShell)**:
-```powershell
-Copy-Item .env.example .env
-```
-
-**macOS / Linux**:
 ```bash
-cp .env.example .env
+# Windows PowerShell: Copy-Item .env.example .env
+# macOS / Linux: cp .env.example .env
 ```
 
-編輯 `.env` 檔案並填入相應的金鑰與資料庫連線資訊：
+在 `.env` 中填入你的 CWA API 金鑰與資料庫連線字串（**切勿將真實金鑰提交至版本庫**）：
+
 ```env
-APP_NAME=CWA Taiwan Weather Forecast
+APP_NAME=Taiwan Weather Forecast
 ENVIRONMENT=development
 PORT=8000
 CWA_API_KEY=your_cwa_api_key_here
 DATABASE_URL=postgresql+psycopg://postgres.<PROJECT_REF>:<PASSWORD>@<POOLER_HOST>:6543/postgres
+CRON_SECRET=your_local_cron_secret_here
 ```
 
-> **重要安全須知**：
-> - `.env` 檔案已被 `.gitignore` 排除，**切勿將真實的 API Key 或密碼 commit 到 GitHub**。
-> - Production 部署時，請在 Vercel 後台 Project Settings → Environment Variables 中設定。
+### 5. 啟動本機伺服器
 
-### 4. 啟動本機開發伺服器
-
-使用 `uvicorn` 啟動：
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
-或直接執行：
-```bash
-python -m app.main
-```
 
-### 5. 檢視與測試端點
+啟動後即可在瀏覽器開啟：
+- **儀表板首頁**：[http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+- **Swagger API 文件**：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **系統健康檢查**：[http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 
-啟動後，瀏覽器或 API 測試工具可訪問：
-- **氣象預報儀表板首頁**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-- **系統健康檢查 (Health Check)**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
-- **API 健康檢查**: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
-- **FastAPI 自動化 Swagger API 文件**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- **縣市列表 API**: [http://127.0.0.1:8000/api/regions](http://127.0.0.1:8000/api/regions)
-- **指定縣市天氣預報 API**: [http://127.0.0.1:8000/api/forecast?region=臺中市](http://127.0.0.1:8000/api/forecast?region=臺中市)
-- **全臺縣市地圖預報資料 API**: [http://127.0.0.1:8000/api/map-data](http://127.0.0.1:8000/api/map-data)
-- **臺灣縣市邊界 GeoJSON**: [http://127.0.0.1:8000/static/data/taiwan_counties.geojson](http://127.0.0.1:8000/static/data/taiwan_counties.geojson)
-- **手動更新預報 API (POST, 開發環境)**: `http://127.0.0.1:8000/api/refresh`
-- **ReDoc 文件**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+---
 
-### 6. 執行自動化測試
+## 🧪 Testing (自動化測試)
+
+本專案具備完整的自動化測試套件，涵蓋 API 路由、資料庫存取層、Parser 解析邏輯、氣象服務層、前端模板與 CSS 斷點結構驗證：
 
 ```bash
 pytest
 ```
 
+執行結果：
+```text
+============================= test session starts =============================
+collected 209 items
+
+tests/test_api.py .........................................              [ 19%]
+tests/test_config.py ...                                                 [ 21%]
+tests/test_cwa_client.py .........................                       [ 33%]
+tests/test_deployment.py ..............                                  [ 39%]
+tests/test_frontend.py ................................                  [ 55%]
+tests/test_geojson.py ...                                                [ 56%]
+tests/test_parser.py ...............................                     [ 71%]
+tests/test_repository.py ..............                                  [ 77%]
+tests/test_weather_service.py .......................................... [ 98%]
+....                                                                     [100%]
+
+======================= 209 passed in 2.09s ==================================
+```
+
 ---
 
-## Vercel 雲端正式部署指南 (Phase 6 準備)
+## ☁️ Deployment (雲端部署)
 
-本專案支援 **Vercel Zero-Config FastAPI** 原生辨識部署，無需自訂 legacy builds 或 catch-all rewrites。
+本專案支援 **Vercel Zero-Config** 部署。
 
-### 1. 建立 Vercel 專案
+### 1. Vercel 專案設定
+1. 於 Vercel 匯入 GitHub 專案庫 `sam052003/CWA`。
+2. Framework Preset 選擇 **Other**。
 
-1. 登入 [Vercel Dashboard](https://vercel.com/)。
-2. 點擊 **Add New...** → **Project**。
-3. 匯入 GitHub 專案 `sam052003/CWA`。
-4. Framework Preset 選擇 **Other**（Vercel 將自動辨識 `app/main.py` 的 FastAPI 實例）。
+### 2. 環境變數設定
+於 Vercel **Project Settings → Environment Variables** 填入：
+- `APP_NAME`: `Taiwan Weather Forecast`
+- `ENVIRONMENT`: `production`
+- `CWA_API_KEY`: 中央氣象署 API 授權碼
+- `DATABASE_URL`: Supabase Transaction Pooler 連線字串 (port 6543)
+- `CRON_SECRET`: 安全隨機字串（用於驗證定時排程請求）
 
-### 2. 設定 Vercel 環境變數
-
-在 Vercel 專案設定頁面 (**Settings** → **Environment Variables**) 加入以下變數：
-
-#### 應用程式一般設定 (Config)
-```text
-APP_NAME=CWA Taiwan Weather Forecast
-ENVIRONMENT=production
-```
-
-> **注意**：Vercel Serverless Function 環境無需設定 `PORT`。
-
-#### 機敏金鑰 (Secrets)
-| 變數名稱 | 說明 | 範例 / 格式 |
-|---|---|---|
-| `CWA_API_KEY` | 中央氣象署 Open Data API Key | `CWA-XXXXXXXX-XXXX-...` |
-| `DATABASE_URL` | Supabase Transaction Pooler (port 6543) | `postgresql+psycopg://postgres.<REF>:<PWD>@<POOLER_HOST>:6543/postgres` |
-| `CRON_SECRET` | Vercel Cron 受保護端點驗證金鑰 | 由安全指令產生的 32+ 字元隨機字串 |
-
-#### 安全產生 `CRON_SECRET` 指令
-請在本機終端機執行下列指令產生隨機金鑰，直接貼至 Vercel 後台（**切勿將真實金鑰提交至版本庫**）：
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-### 3. Vercel Cron 定時資料更新排程
-
-本專案於 `vercel.json` 配置每日 UTC 00:00 透過受保護端點 `GET /api/cron/refresh` 自動觸發氣象資料更新：
-
+### 3. 排程設定 (`vercel.json`)
 ```json
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
@@ -241,136 +260,62 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 }
 ```
 
-> **Production 排程與方案說明**：
-> - **Cron expression 使用 UTC**：`0 0 * * *` 代表每日一次（UTC 00:00）。
-> - **Hobby 方案執行時間**：Vercel Hobby（免費方案）之定時工作會排入該小時的佇列中執行，因此臺灣時間大約於 **08:00～08:59** 觸發更新。
-> - **更新管道**：
->   ```text
->   Vercel Cron → protected GET /api/cron/refresh → CWA → Supabase
->   ```
-> - **升級至 Pro**：若未來升級至 Vercel Pro 方案，可將 schedule 修改為 `0 */6 * * *` 實現約每 6 小時自動更新。
+---
+
+## 📌 Project Status (專案狀態)
+
+- [x] **Phase 1: Environment & Architecture Setup** (已完成)
+- [x] **Phase 2: CWA API Client & JSON/XML Parsers** (已完成)
+- [x] **Phase 3: Supabase PostgreSQL Persistence & Repository** (已完成)
+- [x] **Phase 4: FastAPI REST API Endpoints** (已完成)
+- [x] **Phase 5: Frontend Visualization (HTML/CSS/JS/Chart.js)** (已完成)
+- [x] **Phase 6: Vercel Production Deployment & Scheduled Refresh** (已完成)
+- [x] **Phase 7A: Taiwan County Forecast Choropleth Map (Leaflet)** (已完成)
+- [x] **Phase 7B: Forecast Period Selector Map Controls** (已完成)
+- [x] **Phase 7C: Integrated Taiwan Weather Dashboard** (已完成)
+- [x] **Phase 8A: Workspace Expansion & Light/Dark Themes** (已完成並通過生產驗收)
+- [x] **Phase 8B: Rich 36h Living Forecast (PoP & CI)** (已完成並通過生產驗收)
+- [x] **Phase 8B2: Rainfall Probability Map Mode** (已完成並通過生產驗收)
+- [x] **Phase 8C: Real-time Weather Observations Mode** (已完成並通過生產驗收)
+- [x] **Phase 8D: Radar Reflectivity Overlay Layer (O-A0058-001)** (已完成並通過生產驗收)
+- [x] **Phase 8E: Typhoon Center & Tropical Cyclone Track (W-C0034-005)** (已完成並通過生產驗收)
+
+> **🎉 專案結案聲明 (Project Closeout)**：
+> - **Phase 8E 為本專案最終規劃功能，現已全數實作完成並通過生產環境驗收**。
+> - 本專案正式進入 **Final Project Closeout** 階段，所有既定功能皆已就緒。
 
 ---
 
-## 正式上線系統架構 (Production Architecture)
+## ⚠️ Known Limitations (已知限制)
 
-```text
-CWA Open Data API
-        ↓
-    CWA Client
-        ↓
-Parser / Normalizer
-        ↓
-  Weather Service
-        ↓
-Supabase PostgreSQL
-        ↓
-    FastAPI API
-        ↓
- HTML / JavaScript
-        ↓
-Chart.js / Forecast Table
-        ↓
- Vercel Production
-
-Scheduled Update：
-
-Vercel Cron
-    ↓
-GET /api/cron/refresh
-    ↓
-CRON_SECRET authentication
-    ↓
-Weather Service
-    ↓
-CWA Open Data API
-    ↓
-Supabase PostgreSQL
-```
+1. **雷達圖層點陣影像擬合**：中央氣象署雷達圖為預先渲染之點陣影像（Raster Product），疊加於 Leaflet / Web Mercator 投影與縣市向量邊界上時，邊界區域可能存在細微視覺擬合差異。系統維持官方標準地理經緯度邊界與底圖淡化策略，不引入任意經驗偏移常數。
+2. **Serverless 行程快取特性**：即時觀測、雷達圖中繼資料與颱風動態採用伺服器行程內快取（In-Memory Cache），於 Vercel Serverless Function 跨執行個體間為獨立運作，屬 Best-Effort 特性。
 
 ---
 
-## 目前開發進度
+## 🔮 Future Work (可選未來擴充項目)
 
-- [x] **Phase 1: 環境與基礎架構**
-  - 專案目錄結構建立
-  - FastAPI 基礎架構與 Health Check / Hello World 端點
-  - `requirements.txt`、`.gitignore`、`.env.example`
-  - 安全保護機制（預留 `CWA_API_KEY` 與 `DATABASE_URL`，確保 Secrets 不外洩）
-  - 本機啟動與測試流程建立
-- [x] **Phase 2: CWA API 資料串接與解析**
-  - CWA Client 實作（Timeout、例外處理、Datastore 404 至 File API fallback）
-  - 取得真實 CWA 一週預報 Sample JSON Fixture（無 Secret）
-  - CWA JSON Parser（以 `(startTime, endTime)` 對齊 Wx, MinT, MaxT，具備完整異常處理）
-  - 完整 Mock 單元測試與 Fixture 結構測試
-- [x] **Phase 3: Supabase PostgreSQL 資料庫串接與 Repository**
-  - Supabase PostgreSQL connection（採用 Transaction Pooler + NullPool 連線策略，停用 prepared statements）
-  - `weather_forecasts` 與 `fetch_logs` 資料表結構
-  - PostgreSQL UPSERT（以 `(dataset_id, region_name, start_time, end_time)` 為鍵避免重複累積）
-  - Repository query（縣市列表去重排序與指定縣市依時間排序預報）
-  - Transaction handling（全成功 commit，失敗自動 rollback 並記錄 failure log）
-  - `--save-db` 指令列旗標支援真實資料寫入與安全摘要輸出
-- [x] **Phase 4: Web API 端點 (`/api/regions`, `/api/forecast`, `/api/refresh`)**
-  - `GET /api/regions`：取得資料庫中現有 22 縣市清單
-  - `GET /api/forecast?region={region_name}`：查詢指定縣市最新未過期預報（依 `start_time ASC` 排序，時間為 `Asia/Taipei (+08:00)`）
-  - `POST /api/refresh`：觸發從 CWA API 更新並寫入資料庫（開發環境可用，production 環境回傳 403）
-  - 完整業務邏輯與驗證封裝於 Weather Service 層，提供統一例外處理與安全機敏字串過濾
-- [x] **Phase 5: 前端視覺化 (HTML, CSS, JavaScript, Chart.js)**
-  - 首頁 `GET /` 整合 Jinja2 模板動態提供天氣儀表板
-  - 22 縣市下拉選單（預設臺中市，非同步動態載入無刷新切換）
-  - 近期預報時段摘要資訊卡（天氣現象、預測最低溫與最高溫）
-  - Chart.js 折線圖（呈現未來一週最高溫與最低溫趨勢，切換地區自動銷毀重建避免重疊）
-  - 完整時段預報詳細資料表（保留 CWA 約 12 小時真實區間，支援行動版水平捲動與響應式排版）
-  - 載入中（Loading）與錯誤處理（Error Banner）狀態提示，XSS 安全過濾與無障礙設計 (a11y)
-- [x] **Phase 6: Vercel 雲端正式部署與定時更新 (正式完成)**
-  - [x] Vercel Zero-Config 設定（`vercel.json` 移除 catch-all rewrites）
-  - [x] Vercel Project 建立並連結 GitHub
-  - [x] Production Environment Variables 已設定 (`APP_NAME`, `ENVIRONMENT`, `CWA_API_KEY`, `DATABASE_URL`, `CRON_SECRET`)
-  - [x] Supabase production connection 驗證正常
-  - [x] Vercel Build & Deployment 成功部署
-  - [x] Production smoke test 驗收通過
-  - [x] Protected Cron endpoint 部署完成 (`GET /api/cron/refresh`)
-  - [x] Supabase fetch_logs success verified（成功寫入 success 更新日誌）
-- [x] **Phase 7A: 臺灣縣市預報地圖 (Leaflet 互動地圖視覺化)**
-  - [x] 整合 Leaflet 1.9.4 與 OpenStreetMap 底圖（保留官方圖資版權與署名）
-  - [x] 新增 `GET /api/map-data`：套用 Latest Batch Rule，依最新批次與非過期時段回傳 22 縣市預報資料
-  - [x] 資料一致性修正：同步將 Latest Batch Rule 套用至 `GET /api/forecast`，排除歷史重複批次之干擾
-  - [x] 臺灣 22 縣市行政邊界 GeoJSON（`app/static/data/taiwan_counties.geojson`）
-  - [x] 縣市分級面量圖（Choropleth）：依最近預報時段之預測最高溫分級著色，搭配「預測最高溫 °C」圖例
-  - [x] 懸浮互動提示（Tooltip）：即時呈現縣市名稱、天氣現象、預測最低／最高溫
-  - [x] 地圖點擊與縣市選單雙向同步（點擊多邊形立即更新摘要卡、Chart.js 折線圖與詳細預報清單）
-  - [x] 專業氣象 GIS 儀表板排版（桌面版地圖 65–70% + 摘要面板 30–35%）與跨裝置響應式支援
-- [x] **Phase 7B: 預報時段切換控制 (選擇日期／預報時段顯示地圖 — 生產環境已驗收完成)**
-  - [x] forecast periods available（有效預報時段可用）
-  - [x] period selector（時段下拉選單）
-  - [x] switching period updates all counties（切換時段即時更新全縣市多邊形與摘要）
-  - [x] no page reload（零頁面重整）
-  - [x] no 22 API requests（零額外網路請求，不發送 22 次 API）
-- [x] **Phase 7C: 完整成果展示 Taiwan Weather Dashboard (對應課程第 19 項 — 已完成並通過生產環境驗收)**
-  - [x] map-first dashboard layout（地圖優先氣象儀表板整體整合）
-  - [x] selected county detail panel（選定縣市即時摘要面板，含資料更新時間）
-  - [x] existing Chart.js integrated（既有 Chart.js 一週溫度趨勢折線圖整合）
-  - [x] existing forecast table integrated（既有預報詳細時段資料表整合）
-  - [x] responsive desktop/mobile（桌面／平板／手機跨裝置響應式排版）
-- [x] **Phase 8D: Radar Layer** (已完成並通過生產環境驗收 — 串接 `O-A0058-001` 雷達整合回波圖－臺灣（較大範圍）_無地形；雷達為獨立 Leaflet ImageOverlay 圖層而非第 4 種地圖模式。支援聚焦渲染：雷達開啟時 CWA O-A0058-001 成為主視覺焦點並自動淡化 OSM 底圖以消除雙重底圖干擾，雷達關閉時 OSM 立即恢復正常；支援透明度滑桿、時間戳記、自動/手動重新整理與無阻塞錯誤防禦，零二進位寫庫)
-- [x] **Phase 8E: Typhoon Center / Tropical Cyclone Track** (最後規劃功能 / FINAL planned feature，實作完成，待正式環境手動驗收 — 串接 `W-C0034-005` 颱風分析與預報、路徑線段、7/10級暴風半徑與 70% 機率圈；桌面版左側獨立浮動面板與自動收合右側縣市面板、行動版 static 友善排版；原生選單深淺色主題適配；OSM 底圖防世界重複複製 `noWrap: true` 與常態臺灣 `[17, 110] ~ [32, 135]` 及西北太平洋 `[0, 90] ~ [45, 180]` 導航邊界控制；嚴格區隔正常無氣旋空狀態與資料庫/網路錯誤狀態)
-- [ ] **Phase 8F: Township Detailed Forecast** (延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope — 串接 `F-D0047-093` 鄉鎮市區細緻預報)
-- [ ] **Phase 8G: Application Polish / Future Features** (延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope — 最愛縣市、分享網址狀態、PWA 支援、警特報橫幅)
-
-> **完整系統設計規格**：請參閱 [`MyPlan/design.md#phase-8--advanced-weather-platform`](MyPlan/design.md#phase-8--advanced-weather-platform)。
+以下項目已於專案設計初期審慎評估，列為**未來可選進階擴充功能（Optional Future Work）**，不屬於當前版本之必要範圍：
+- **Phase 8F**: 鄉鎮市區細緻預報（串接 `F-D0047-093`，提供二階選單與鄉鎮逐 3 小時預報）
+- **Phase 8G**: 應用程式進階體驗（喜愛縣市瀏覽器本機收藏、網址狀態分享參數、PWA 離線支援與警特報即時推播橫幅）
 
 ---
 
-## 地圖圖資與 GeoJSON 資料來源說明
+## 🔒 Security (安全性原則)
 
-| 項目 | 說明 |
-|---|---|
-| **資料集名稱** | 臺灣直轄市、縣市界線（twCounty2010.geo.json） |
-| **直接來源** | g0v/twgeojson（[https://github.com/g0v/twgeojson](https://github.com/g0v/twgeojson)） |
-| **圖資授權** | CC0 1.0 Universal |
-| **座標系統** | WGS84 (EPSG:4326) 經緯度 |
-| **圖資處理** | 進行適度幾何簡化以縮減靜態資源傳輸大小（約 636 KB），並將縣市名稱標準化（例如將「台」統一為「臺」、「桃園縣」更新為「桃園市」），確保 22 縣市名稱與中央氣象署 CWA `region_name` 100% 精準對齊。 |
-| **底圖來源** | OpenStreetMap Tiles（&copy; OpenStreetMap contributors） |
+- **零機密洩漏**：所有 API Key、資料庫密碼與 CRON 驗證金鑰均透過環境變數管理，版本庫中絕無任何機密寫入。
+- **安全防禦**：前端無直接存取資料庫或外部 CWA 金鑰，所有請求皆經由後端代理與例外過濾，錯誤回應絕不洩漏連線字串或系統堆疊資訊。
+- **XSS 與 DOM 安全**：地圖懸浮提示、彈出視窗與動態資訊卡全數採用安全 DOM API（`createElement`、`textContent`）建構，杜絕 `innerHTML` 數據插值注入風險。
+
+---
+
+## 📄 License & Attribution (授權與資料來源標註)
+
+- **程式碼授權**：MIT License
+- **氣象資料來源**：[中華民國交通部中央氣象署 (CWA) 開放資料平台](https://opendata.cwa.gov.tw/)
+- **地理圖資來源**：[g0v 臺灣縣市界線 GeoJSON](https://github.com/g0v/twgeojson) (CC0 1.0 Universal)
+- **底圖圖資**：&copy; [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors
+
 
 
 
