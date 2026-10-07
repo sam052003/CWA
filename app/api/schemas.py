@@ -111,6 +111,41 @@ class ShortTermMapDataResponse(BaseModel):
     forecasts: List[ShortTermMapForecastItem] = Field(..., description="Active short-term forecasts across all regions sorted by start_time ASC, region_name ASC")
 
 
+# ==============================================================================
+# Phase 8C: Current Weather Observations Schemas (O-A0001)
+# ==============================================================================
+
+class ObservationStationItem(BaseModel):
+    """Normalized observation station data model for O-A0001."""
+
+    station_id: str = Field(..., description="Station identifier, e.g. 467490")
+    station_name: str = Field(..., description="Station Chinese name, e.g. 臺中")
+    observation_time: Optional[str] = Field(None, description="Observation timestamp in ISO 8601 (Asia/Taipei)")
+    county_name: Optional[str] = Field(None, description="County name, e.g. 臺中市")
+    town_name: Optional[str] = Field(None, description="Township name, e.g. 北區")
+    latitude: Optional[float] = Field(None, description="WGS84 latitude coordinate")
+    longitude: Optional[float] = Field(None, description="WGS84 longitude coordinate")
+    altitude: Optional[float] = Field(None, description="Station altitude in meters")
+    weather: Optional[str] = Field(None, description="Observed weather condition description")
+    temperature: Optional[float] = Field(None, description="Measured air temperature in Celsius")
+    relative_humidity: Optional[float] = Field(None, description="Measured relative humidity percentage (0-100)")
+    wind_direction: Optional[float] = Field(None, description="Wind direction in degrees (0-360)")
+    wind_direction_text: Optional[str] = Field(None, description="Traditional compass wind direction description, e.g. 西南風")
+    wind_speed: Optional[float] = Field(None, description="Wind speed in meters per second (m/s)")
+    air_pressure: Optional[float] = Field(None, description="Atmospheric air pressure in hPa")
+    precipitation: Optional[float] = Field(None, description="Measured precipitation in mm (or null for non-numeric/sentinel)")
+    precipitation_status: Optional[str] = Field(None, description="Precipitation semantic state: trace, instrument_error, no_precipitation_6h, missing, or null")
+    peak_gust_speed: Optional[float] = Field(None, description="Peak gust wind speed in m/s")
+
+
+class ObservationResponse(BaseModel):
+    """Response model for GET /api/observations endpoint."""
+
+    dataset_id: str = Field("O-A0001", description="CWA Dataset ID")
+    updated_at: str = Field(..., description="Observation snapshot update timestamp in ISO 8601 (Asia/Taipei)")
+    stations: List[ObservationStationItem] = Field(..., description="Sorted list of weather station observations")
+
+
 
 class RefreshResponse(BaseModel):
     """Response model for /api/refresh endpoint."""

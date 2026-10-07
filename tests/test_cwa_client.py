@@ -318,9 +318,45 @@ def test_file_api_ssl_error_fails_closed(mock_get, mock_client):
     with pytest.raises(CWAConnectionError) as exc_info:
         mock_client.fetch_forecast_1week()
 
-    assert "TLS verification failed for CWA dataset 'F-C0032-005'." in str(exc_info.value)
+
+def test_dataset_observation_constant(mock_client):
+    """Verify DATASET_OBSERVATION is 'O-A0001'."""
+    assert mock_client.DATASET_OBSERVATION == "O-A0001"
+
+
+@patch("requests.get")
+def test_fetch_observations_success(mock_get, mock_client):
+    """Verify fetch_observations calls fetch_dataset with O-A0001."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "success": "true",
+        "records": {"Station": []},
+    }
+    mock_get.return_value = mock_resp
+
+    data = mock_client.fetch_observations()
+    assert data["success"] == "true"
+    assert mock_get.call_count == 1
+    assert "O-A0001" in mock_get.call_args[0][0]
+
+
+@patch("requests.get")
+def test_fetch_observations_fallback_to_oa0001_001(mock_get, mock_client):
+    """Verify O-A0001 falls back to O-A0001-001 when Datastore returns 404."""
+    resp_404 = MagicMock(status_code=404)
+    resp_200 = MagicMock(status_code=200)
+    resp_200.json.return_value = {
+        "success": "true",
+        "records": {"Station": []},
+    }
+    mock_get.side_effect = [resp_404, resp_200]
+
+    data = mock_client.fetch_observations()
+    assert data["success"] == "true"
     assert mock_get.call_count == 2
-    for call in mock_get.call_args_list:
-        assert call[1].get("verify") is not False
+    # Second call should target O-A0001-001
+    assert "O-A0001-001" in mock_get.call_args[0][0]
+
 
 

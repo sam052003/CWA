@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session
 import time
 from app.clients.cwa_client import CWAClient, CWAClientError
 from app.core.config import get_settings
-from app.parsers.cwa_parser import parse_cwa_forecast, parse_short_term_forecast
+from app.parsers.cwa_parser import (
+    parse_cwa_forecast,
+    parse_observation_stations,
+    parse_short_term_forecast,
+)
 from app.repositories.weather_repository import (
     create_fetch_log,
     get_active_forecasts_by_region,
@@ -271,6 +275,9 @@ SHORT_TERM_CACHE_TTL_SECONDS = 900  # 15 minutes TTL
 _short_term_map_cache: Dict[str, Dict[str, Any]] = {}
 SHORT_TERM_MAP_CACHE_TTL_SECONDS = 900  # 15 minutes TTL
 
+_observation_cache: Dict[str, Dict[str, Any]] = {}
+OBSERVATION_CACHE_TTL_SECONDS = 600  # 10 minutes TTL
+
 
 def clear_short_term_cache() -> None:
     """Clear in-memory short-term forecast cache (used for test isolation)."""
@@ -280,6 +287,11 @@ def clear_short_term_cache() -> None:
 def clear_short_term_map_cache() -> None:
     """Clear in-memory short-term all-county map data cache (used for test isolation)."""
     _short_term_map_cache.clear()
+
+
+def clear_observation_cache() -> None:
+    """Clear in-memory weather station observation cache (used for test isolation)."""
+    _observation_cache.clear()
 
 
 def _to_taipei_iso(time_str: str) -> str:
@@ -487,6 +499,80 @@ def get_short_term_map_data(
     _short_term_map_cache["all_counties"] = {
         "data": response_data,
         "expires_at": now + SHORT_TERM_MAP_CACHE_TTL_SECONDS,
+    }
+
+    return response_data
+
+
+# ==============================================================================
+# Phase 8C: Current Weather Observations Service (O-A0001)
+# ==============================================================================
+
+def get_observations(
+    client: Optional[CWAClient] = None,
+    current_time: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Retrieve current weather station observations (O-A0001).
+
+    Uses an in-memory process-local best-effort TTL cache (10 min).
+    Does NOT require a database session.
+    Fetches the all-station dataset in ONE CWA request.
+
+    Args:
+        client: Optional CWAClient instance for dependency injection / testing.
+        current_time: Optional unix timestamp float for deterministic cache testing.
+
+    Returns:
+        Dictionary formatted for ObservationResponse.
+
+    Raises:
+        ForecastNotFoundError: If no valid station observations exist in response.
+        CWAClientError / Exception: If upstream CWA request fails.
+    """
+    now = current_time if current_time is not None else time.time()
+
+    # 1. Check process-local best-effort cache
+    cached_entry = _observation_cache.get("all_stations")
+    if cached_entry and cached_entry.get("expires_at", 0) > now:
+        cached_data = cached_entry.get("data")
+        if cached_data:
+            return cached_data
+
+    # 2. Fetch from CWA client
+    if client is None:
+        client = CWAClient()
+
+    raw_data = client.fetch_observations()
+
+    # 3. Parse using dedicated observation parser
+    stations = parse_observation_stations(raw_data)
+    if not stations:
+        raise ForecastNotFoundError("No active weather observation records found")
+
+    # Determine updated_at timestamp
+    updated_at_str = None
+    if isinstance(raw_data, dict):
+        cwa_sent = raw_data.get("cwaopendata", {}).get("sent") if isinstance(raw_data.get("cwaopendata"), dict) else None
+        if cwa_sent and isinstance(cwa_sent, str):
+            updated_at_str = _to_taipei_iso(cwa_sent)
+    if not updated_at_str:
+        for s in stations:
+            if s.get("observation_time"):
+                updated_at_str = s["observation_time"]
+                break
+    if not updated_at_str:
+        updated_at_str = to_taipei_isoformat(datetime.now(timezone.utc))
+
+    response_data = {
+        "dataset_id": "O-A0001",
+        "updated_at": updated_at_str,
+        "stations": stations,
+    }
+
+    # Cache successful result only
+    _observation_cache["all_stations"] = {
+        "data": response_data,
+        "expires_at": now + OBSERVATION_CACHE_TTL_SECONDS,
     }
 
     return response_data

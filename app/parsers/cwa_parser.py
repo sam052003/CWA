@@ -1,5 +1,6 @@
 """CWA JSON Parser - parses and normalizes raw CWA JSON payload into structured forecast records."""
 
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -342,3 +343,275 @@ def parse_short_term_forecast(
     # Sort primarily by region_name ascending, then start_time ascending
     normalized_records.sort(key=lambda r: (r["region_name"], r["start_time"]))
     return normalized_records
+
+
+# ==============================================================================
+# Phase 8C: O-A0001 Current Weather Station Observation Parser
+# ==============================================================================
+
+def get_wind_direction_text(
+    wind_dir: Optional[float],
+    wind_speed: Optional[float] = None,
+) -> Optional[str]:
+    """Convert meteorological wind direction degrees (0-360) into traditional compass label.
+
+    Special cases:
+        - wind_speed == 0: '靜風'
+        - wind_dir in (990, 999): '風向不定'
+        - invalid or outside 0-360: None
+    """
+    if wind_speed is not None and wind_speed == 0:
+        return "靜風"
+    if wind_dir is None:
+        return None
+    if wind_dir in (990, 999, 990.0, 999.0):
+        return "風向不定"
+    if not (0 <= wind_dir <= 360):
+        return None
+    if 337.5 <= wind_dir <= 360 or 0 <= wind_dir < 22.5:
+        return "北風"
+    elif 22.5 <= wind_dir < 67.5:
+        return "東北風"
+    elif 67.5 <= wind_dir < 112.5:
+        return "東風"
+    elif 112.5 <= wind_dir < 157.5:
+        return "東南風"
+    elif 157.5 <= wind_dir < 202.5:
+        return "南風"
+    elif 202.5 <= wind_dir < 247.5:
+        return "西南風"
+    elif 247.5 <= wind_dir < 292.5:
+        return "西風"
+    elif 292.5 <= wind_dir < 337.5:
+        return "西北風"
+    return None
+
+
+def _normalize_iso_time(time_str: Any) -> Optional[str]:
+    """Clean and normalize time string to ISO 8601 representation (+08:00 offset)."""
+    if not time_str or not isinstance(time_str, str):
+        return None
+    cleaned = time_str.strip()
+    if not cleaned or cleaned in ("-99", "null", "none"):
+        return None
+    cleaned = cleaned.replace(" ", "T")
+    if "+" not in cleaned and not cleaned.endswith("Z"):
+        return f"{cleaned}+08:00"
+    return cleaned
+
+
+def _safe_parse_float(
+    val: Any,
+    min_val: Optional[float] = None,
+    max_val: Optional[float] = None,
+) -> Optional[float]:
+    """Parse numeric float, handling missing/sentinel strings (-99, X, NaN)."""
+    if val is None:
+        return None
+    val_str = str(val).strip().rstrip("C").rstrip("°C").rstrip("°").rstrip("hPa").rstrip("m/s")
+    if val_str in ("", "-99", "-99.0", "-99.00", "X", "x", "null", "none", "nan", "undefined", "-"):
+        return None
+    try:
+        num = float(val_str)
+        if math.isnan(num) or math.isinf(num) or num in (-99.0, -999.0):
+            return None
+        if min_val is not None and num < min_val:
+            return None
+        if max_val is not None and num > max_val:
+            return None
+        return num
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_parse_humidity(val: Any) -> Optional[float]:
+    """Parse relative humidity parameter clamped to valid 0-100 range."""
+    if val is None:
+        return None
+    val_str = str(val).strip().rstrip("%")
+    if val_str in ("", "-99", "-99.0", "X", "x", "null", "none", "nan", "undefined"):
+        return None
+    try:
+        num = float(val_str)
+        if math.isnan(num) or math.isinf(num) or num < 0 or num > 100:
+            return None
+        return num
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_parse_precipitation(val: Any) -> Tuple[Optional[float], Optional[str]]:
+    """Parse precipitation value, preserving semantic precipitation_status."""
+    if val is None:
+        return (None, "missing")
+    val_str = str(val).strip().rstrip("mm")
+    if val_str in ("", "-99", "-99.0", "null", "none", "nan", "undefined"):
+        return (None, "missing")
+    if val_str.upper() == "X":
+        return (None, "instrument_error")
+    if val_str.upper() == "T":
+        return (None, "trace")
+    if val_str in ("-98", "-98.0"):
+        return (None, "no_precipitation_6h")
+    try:
+        num = float(val_str)
+        if math.isnan(num) or math.isinf(num):
+            return (None, "missing")
+        if num == -98.0:
+            return (None, "no_precipitation_6h")
+        if num < 0:
+            return (None, "missing")
+        return (num, None)
+    except (ValueError, TypeError):
+        return (None, "missing")
+
+
+def parse_observation_stations(data: Any) -> List[Dict[str, Any]]:
+    """Parse CWA O-A0001 automatic weather station observation dataset.
+
+    Supports:
+        - Datastore format: records -> Station[]
+        - File API format: cwaopendata -> dataset -> Station[]
+
+    Coordinates:
+        Searches GeoInfo.Coordinates for CoordinateName == 'WGS84'.
+        Validates latitude (-90..90) and longitude (-180..180).
+        Rejects TWD67 coordinates for Leaflet display.
+
+    Missing / special value handling:
+        - Sentinels (-99, X): parsed as None
+        - Relative humidity: validated 0-100%
+        - Precipitation: preserves numeric mm or None, with precipitation_status
+        - Wind direction: converts valid 0-360 to compass text, maps 990 to '風向不定'
+
+    Sorting:
+        Sorted deterministically by (county_name, station_name, station_id).
+    """
+    if not isinstance(data, dict):
+        return []
+
+    stations_list: List[Dict[str, Any]] = []
+
+    # 1. Primary: Datastore format (records -> Station)
+    records_obj = data.get("records")
+    if isinstance(records_obj, dict):
+        st_candidate = records_obj.get("Station")
+        if isinstance(st_candidate, list):
+            stations_list = st_candidate
+
+    # 2. Fallback: File API format (cwaopendata -> dataset -> Station)
+    if not stations_list:
+        cwa_obj = data.get("cwaopendata")
+        if isinstance(cwa_obj, dict):
+            ds_obj = cwa_obj.get("dataset")
+            if isinstance(ds_obj, dict):
+                st_candidate = ds_obj.get("Station")
+                if isinstance(st_candidate, list):
+                    stations_list = st_candidate
+
+    if not stations_list:
+        return []
+
+    normalized_stations: List[Dict[str, Any]] = []
+
+    for loc in stations_list:
+        if not isinstance(loc, dict):
+            continue
+
+        raw_id = loc.get("StationId")
+        raw_name = loc.get("StationName")
+        if not raw_id or not str(raw_id).strip():
+            continue
+        if not raw_name or not str(raw_name).strip():
+            continue
+
+        station_id = str(raw_id).strip()
+        station_name = str(raw_name).strip()
+
+        # Observation time
+        obs_time_raw = loc.get("ObsTime", {}).get("DateTime") if isinstance(loc.get("ObsTime"), dict) else None
+        obs_time = _normalize_iso_time(obs_time_raw) if obs_time_raw else None
+
+        # GeoInfo
+        geo_info = loc.get("GeoInfo", {}) if isinstance(loc.get("GeoInfo"), dict) else {}
+        county_name = str(geo_info.get("CountyName", "")).strip() or None
+        town_name = str(geo_info.get("TownName", "")).strip() or None
+        altitude = _safe_parse_float(geo_info.get("StationAltitude"))
+
+        # WGS84 Coordinates selection
+        latitude = None
+        longitude = None
+        coordinates = geo_info.get("Coordinates", [])
+        if isinstance(coordinates, list):
+            for coord in coordinates:
+                if isinstance(coord, dict) and coord.get("CoordinateName") == "WGS84":
+                    lat_cand = _safe_parse_float(coord.get("StationLatitude"), min_val=-90.0, max_val=90.0)
+                    lon_cand = _safe_parse_float(coord.get("StationLongitude"), min_val=-180.0, max_val=180.0)
+                    if lat_cand is not None and lon_cand is not None:
+                        latitude = lat_cand
+                        longitude = lon_cand
+                    break
+
+        # WeatherElement
+        we = loc.get("WeatherElement", {}) if isinstance(loc.get("WeatherElement"), dict) else {}
+
+        # Weather
+        raw_wx = we.get("Weather")
+        weather = None
+        if raw_wx is not None:
+            wx_str = str(raw_wx).strip()
+            if wx_str and wx_str not in ("-99", "-99.0", "X", "x", "null", "none"):
+                weather = wx_str
+
+        # Temperature
+        temperature = _safe_parse_float(we.get("AirTemperature"), min_val=-50.0, max_val=60.0)
+
+        # Relative humidity
+        relative_humidity = _safe_parse_humidity(we.get("RelativeHumidity"))
+
+        # Wind direction & speed
+        wind_dir = _safe_parse_float(we.get("WindDirection"), min_val=0.0, max_val=999.0)
+        wind_speed = _safe_parse_float(we.get("WindSpeed"), min_val=0.0, max_val=150.0)
+        wind_dir_text = get_wind_direction_text(wind_dir, wind_speed)
+
+        # Air pressure
+        air_pressure = _safe_parse_float(we.get("AirPressure"), min_val=300.0, max_val=1100.0)
+
+        # Precipitation
+        now_info = we.get("Now", {}) if isinstance(we.get("Now"), dict) else {}
+        precip_cand = now_info.get("Precipitation") if "Precipitation" in now_info else we.get("Precipitation")
+        precipitation, precipitation_status = _safe_parse_precipitation(precip_cand)
+
+        # Peak gust speed
+        gust_info = we.get("GustInfo", {}) if isinstance(we.get("GustInfo"), dict) else {}
+        gust_cand = gust_info.get("PeakGustSpeed") if "PeakGustSpeed" in gust_info else we.get("PeakGustSpeed")
+        peak_gust_speed = _safe_parse_float(gust_cand, min_val=0.0, max_val=200.0)
+
+        station_record = {
+            "station_id": station_id,
+            "station_name": station_name,
+            "observation_time": obs_time,
+            "county_name": county_name,
+            "town_name": town_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "altitude": altitude,
+            "weather": weather,
+            "temperature": temperature,
+            "relative_humidity": relative_humidity,
+            "wind_direction": wind_dir,
+            "wind_direction_text": wind_dir_text,
+            "wind_speed": wind_speed,
+            "air_pressure": air_pressure,
+            "precipitation": precipitation,
+            "precipitation_status": precipitation_status,
+            "peak_gust_speed": peak_gust_speed,
+        }
+        normalized_stations.append(station_record)
+
+    # Sort deterministically: county_name ASC, station_name ASC, station_id ASC
+    normalized_stations.sort(
+        key=lambda s: (s["county_name"] or "", s["station_name"] or "", s["station_id"] or "")
+    )
+    return normalized_stations
+

@@ -552,3 +552,150 @@ def test_parse_short_term_forecast_missing_and_invalid_fields():
     assert r["min_temp"] is None
     assert r["comfort_index"] is None  # Missing CI is None
 
+
+# ==============================================================================
+# Phase 8C: O-A0001 Observation Parser Tests
+# ==============================================================================
+
+from app.parsers.cwa_parser import parse_observation_stations, get_wind_direction_text
+
+OBS_FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "cwa_o_a0001_sample.json"
+
+
+@pytest.fixture
+def obs_fixture_data():
+    """Load sample O-A0001 JSON fixture data."""
+    assert OBS_FIXTURE_PATH.exists(), f"Fixture file not found: {OBS_FIXTURE_PATH}"
+    with open(OBS_FIXTURE_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_wind_direction_conversion():
+    """Verify degrees converted to 8 compass directions and special cases handled."""
+    assert get_wind_direction_text(0, wind_speed=0.0) == "靜風"
+    assert get_wind_direction_text(0, wind_speed=2.0) == "北風"
+    assert get_wind_direction_text(360, wind_speed=2.0) == "北風"
+    assert get_wind_direction_text(45, wind_speed=2.0) == "東北風"
+    assert get_wind_direction_text(90, wind_speed=2.0) == "東風"
+    assert get_wind_direction_text(135, wind_speed=2.0) == "東南風"
+    assert get_wind_direction_text(180, wind_speed=2.0) == "南風"
+    assert get_wind_direction_text(225, wind_speed=2.0) == "西南風"
+    assert get_wind_direction_text(270, wind_speed=2.0) == "西風"
+    assert get_wind_direction_text(315, wind_speed=2.0) == "西北風"
+    # Special variable wind sentinels
+    assert get_wind_direction_text(990) == "風向不定"
+    assert get_wind_direction_text(999) == "風向不定"
+    # Invalid values
+    assert get_wind_direction_text(-99) is None
+    assert get_wind_direction_text(None) is None
+
+
+def test_parse_observation_stations_with_fixture(obs_fixture_data):
+    """Verify O-A0001 fixture parsing with WGS84 coordinates and special sentinels."""
+    stations = parse_observation_stations(obs_fixture_data)
+    assert isinstance(stations, list)
+    assert len(stations) == 6
+
+    # Test deterministic sorting: (county_name, station_name, station_id)
+    # Counties in fixture: 嘉義縣, 臺中市, 臺北市, 臺東縣, 花蓮縣, 高雄市
+    county_names = [s["county_name"] for s in stations]
+    assert county_names == ["嘉義縣", "臺中市", "臺北市", "臺東縣", "花蓮縣", "高雄市"]
+
+    # 1. 臺中 Station: WGS84 preferred over TWD67
+    tc = next(s for s in stations if s["station_id"] == "467490")
+    assert tc["station_name"] == "臺中"
+    assert tc["observation_time"] == "2026-10-07T18:00:00+08:00"
+    assert tc["county_name"] == "臺中市"
+    assert tc["town_name"] == "北區"
+    # WGS84 is 24.1453, 120.6841 (not TWD67 24.145, 120.683)
+    assert tc["latitude"] == 24.1453
+    assert tc["longitude"] == 120.6841
+    assert tc["altitude"] == 84.0
+    assert tc["weather"] == "多雲"
+    assert tc["temperature"] == 27.4
+    assert tc["relative_humidity"] == 76
+    assert tc["wind_direction"] == 220
+    assert tc["wind_direction_text"] == "西南風"
+    assert tc["wind_speed"] == 2.1
+    assert tc["air_pressure"] == 1008.4
+    assert tc["precipitation"] == 0.0
+    assert tc["precipitation_status"] is None
+    assert tc["peak_gust_speed"] == 5.4
+
+    # 2. 陽明山 Station: Trace precipitation ('T') & variable wind (990)
+    ym = next(s for s in stations if s["station_id"] == "466910")
+    assert ym["precipitation"] is None
+    assert ym["precipitation_status"] == "trace"
+    assert ym["wind_direction"] == 990
+    assert ym["wind_direction_text"] == "風向不定"
+    assert ym["temperature"] == 21.0
+    assert ym["relative_humidity"] == 85
+
+    # 3. 高雄 Station: -98 no-rain, -99 temperature/humidity missing, calm wind (0)
+    kh = next(s for s in stations if s["station_id"] == "467440")
+    assert kh["precipitation"] is None
+    assert kh["precipitation_status"] == "no_precipitation_6h"
+    assert kh["temperature"] is None  # -99 converted to None
+    assert kh["relative_humidity"] is None  # -99 converted to None
+    assert kh["peak_gust_speed"] is None  # -99 converted to None
+    assert kh["wind_speed"] == 0.0
+    assert kh["wind_direction_text"] == "靜風"
+
+    # 4. 阿里山 Station: 'X' precipitation instrument error
+    as_st = next(s for s in stations if s["station_id"] == "467530")
+    assert as_st["precipitation"] is None
+    assert as_st["precipitation_status"] == "instrument_error"
+    assert as_st["temperature"] == 14.2
+    assert as_st["altitude"] == 2213.0
+
+    # 5. 無經緯測站: Only TWD67 -> coordinates become None
+    no_wgs = next(s for s in stations if s["station_id"] == "C0X001")
+    assert no_wgs["latitude"] is None
+    assert no_wgs["longitude"] is None
+
+    # 6. 超界經緯測站: Latitude 95.0 -> becomes None
+    out_of_bounds = next(s for s in stations if s["station_id"] == "C0X002")
+    assert out_of_bounds["latitude"] is None
+
+
+def test_parse_observation_stations_file_style():
+    """Verify cwaopendata -> dataset -> Station[] shape is supported."""
+    file_style_data = {
+        "cwaopendata": {
+            "dataset": {
+                "Station": [
+                    {
+                        "StationName": "基隆",
+                        "StationId": "466940",
+                        "ObsTime": {"DateTime": "2026-10-07T18:00:00+08:00"},
+                        "GeoInfo": {
+                            "Coordinates": [
+                                {"CoordinateName": "WGS84", "StationLatitude": 25.133, "StationLongitude": 121.74}
+                            ],
+                            "CountyName": "基隆市",
+                            "TownName": "仁愛區",
+                        },
+                        "WeatherElement": {
+                            "AirTemperature": 26.5,
+                            "RelativeHumidity": 80,
+                        },
+                    }
+                ]
+            }
+        }
+    }
+    stations = parse_observation_stations(file_style_data)
+    assert len(stations) == 1
+    assert stations[0]["station_name"] == "基隆"
+    assert stations[0]["latitude"] == 25.133
+    assert stations[0]["temperature"] == 26.5
+
+
+def test_parse_observation_stations_malformed_input():
+    """Verify malformed stations or empty structures fail safely."""
+    assert parse_observation_stations({}) == []
+    assert parse_observation_stations(None) == []
+    assert parse_observation_stations({"records": {"Station": "invalid"}}) == []
+    assert parse_observation_stations({"records": {"Station": [None, {}, {"StationName": "無ID"}]}}) == []
+
+

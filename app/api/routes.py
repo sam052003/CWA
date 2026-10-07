@@ -11,6 +11,7 @@ from app.api.schemas import (
     RegionsResponse,
     ShortTermForecastResponse,
     ShortTermMapDataResponse,
+    ObservationResponse,
 )
 from app.clients.cwa_client import CWAClientError
 from app.core.config import get_settings
@@ -186,6 +187,42 @@ def get_short_term_map_data_endpoint():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving short-term map data",
+        )
+
+
+# ==============================================================================
+# Phase 8C: Current Weather Observations Endpoint (O-A0001)
+# ==============================================================================
+
+@router.get(
+    "/observations",
+    response_model=ObservationResponse,
+    summary="Get current weather station observations for Taiwan",
+    responses={
+        404: {"model": ErrorResponse, "description": "No active weather observation records found"},
+        502: {"model": ErrorResponse, "description": "Upstream weather data service unavailable"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+def get_observations_endpoint():
+    """Retrieve current weather station observations (O-A0001) across all stations."""
+    try:
+        data = weather_service.get_observations()
+        return ObservationResponse(**data)
+    except ForecastNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active weather observation records found",
+        )
+    except CWAClientError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Upstream weather data service unavailable",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving weather observations",
         )
 
 

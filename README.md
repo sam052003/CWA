@@ -25,7 +25,13 @@
 - Phase 7C ✅ Complete Taiwan Weather Dashboard
 - Phase 8A ✅ App Experience & Map Workspace (已完成並通過生產環境驗收)
 - Phase 8B ✅ Rich County Forecast 今明 36 小時生活預報 (已完成並通過生產環境驗收)
-- Phase 8B2 📋 Rainfall Probability Map Mode 降雨機率地圖模式 (實作完成，待正式環境手動驗收)
+- Phase 8B2 ✅ Rainfall Probability Map Mode 降雨機率地圖模式 (已完成並通過生產環境驗收)
+- Phase 8C 📋 Current Weather Observations 目前氣象觀測 (實作完成，待正式環境手動驗收)
+
+> **資料語義說明**：
+> - `O-A0001`：氣象測站即時觀測資料（真實物理測量值，非預報值）
+> - `F-C0032-001`：今明 36 小時生活天氣預報（預測值）
+> - `F-C0032-005`：一週天氣預報（預測值）
 
 ---
 
@@ -337,9 +343,9 @@ Supabase PostgreSQL
   - [x] responsive desktop/mobile（桌面／平板／手機跨裝置響應式排版）
 - [ ] **Phase 8: Advanced Weather Platform**
   - [x] **8A**: App Experience & Map Workspace（已完成並通過生產環境驗收 — 深淺模式、OSM 濾鏡適配、地圖擴展為 600–680px 主工作台、桌面浮動面板、重設視角、全螢幕地圖）
-  - [ ] **8B**: Rich County Forecast（實作完成，待正式環境手動驗收 — 串接 `F-C0032-001` 今明 36 小時預報，新增降雨機率 `PoP` 與舒適度指數 `CI`，獨立卡片與即時過濾快取）
-  - [ ] **8B2**: Rainfall Map Mode（選項目標 — `GET /api/map-data?type=short-term` 與降雨機率面量圖切換模式，待 36 小時卡片生產驗收後進行評估）
-  - [ ] **8C**: Current Weather Observations（串接 `O-A0001` 全臺自動氣象站即時觀測，UI 嚴格區隔「目前觀測」與「未來預報」）
+  - [x] **8B**: Rich County Forecast（已完成並通過生產環境驗收 — 串接 `F-C0032-001` 今明 36 小時預報，新增降雨機率 `PoP` 與舒適度指數 `CI`，獨立卡片與即時過濾快取）
+  - [x] **8B2**: Rainfall Map Mode（已完成並通過生產環境驗收 — `GET /api/map-data/short-term` 專屬端點與單一 Leaflet 地圖降雨機率面量圖切換模式）
+  - [ ] **8C**: Current Weather Observations（實作完成，待正式環境手動驗收 — 串接 `O-A0001` 全臺氣象測站即時觀測，獨立測站 Canvas CircleMarker 圖層、嚴格區隔「目前觀測 (測量值)」與「未來預報 (預測值)」）
   - [ ] **8D**: Radar Layer（串接 `O-A0058-002` 雷達回波合成圖，支援 ImageOverlay、透明度調整與時間戳記，零二進位寫庫）
   - [ ] **8E**: Typhoon Center（串接 `W-C0034-005` 颱風分析與預報、路徑線段、暴風圈半徑多邊形、西北太平洋廣域視角與正常空狀態）
   - [ ] **8F**: Township Detailed Forecast（串接 `F-D0047-093` 鄉鎮市區細緻預報，伺服器端過濾分級查詢，防禦巨量資料傳輸）

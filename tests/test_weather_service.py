@@ -814,4 +814,91 @@ def test_get_short_term_map_data_exception_not_cached():
     assert len(data["forecasts"]) == 6
 
 
+# ==============================================================================
+# Phase 8C: Observation Service & In-Memory TTL Cache Tests
+# ==============================================================================
+
+import json
+from app.services.weather_service import (
+    get_observations,
+    clear_observation_cache,
+    OBSERVATION_CACHE_TTL_SECONDS,
+)
+from tests.test_parser import OBS_FIXTURE_PATH
+
+
+def _load_obs_fixture():
+    with open(OBS_FIXTURE_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_get_observations_cache_hit_and_expiry():
+    """Verify get_observations uses process cache with 10-minute TTL."""
+    clear_observation_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_observations.return_value = _load_obs_fixture()
+
+    t0 = 1760000000.0
+
+    # 1. First call: cache miss, invokes client once
+    res1 = get_observations(client=mock_client, current_time=t0)
+    assert mock_client.fetch_observations.call_count == 1
+    assert res1["dataset_id"] == "O-A0001"
+    assert len(res1["stations"]) == 6
+
+    # 2. Second call at t0 + 300s (5 min, within 10 min TTL): cache hit, no upstream call
+    res2 = get_observations(client=mock_client, current_time=t0 + 300.0)
+    assert mock_client.fetch_observations.call_count == 1
+    assert res2 == res1
+
+    # 3. Third call at t0 + 650s (>600s TTL): cache expired, re-fetches
+    res3 = get_observations(client=mock_client, current_time=t0 + 650.0)
+    assert mock_client.fetch_observations.call_count == 2
+    assert res3["dataset_id"] == "O-A0001"
+
+
+def test_get_observations_deterministic_sorting():
+    """Verify stations are sorted deterministically by county_name, station_name, station_id."""
+    clear_observation_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_observations.return_value = _load_obs_fixture()
+
+    data = get_observations(client=mock_client)
+    stations = data["stations"]
+    assert len(stations) == 6
+
+    # Verify order
+    counties = [s["county_name"] for s in stations]
+    assert counties == sorted(counties)
+
+
+def test_get_observations_no_stations_raises_forecast_not_found():
+    """Verify empty/unusable records raises ForecastNotFoundError."""
+    clear_observation_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_observations.return_value = {"records": {"Station": []}}
+
+    with pytest.raises(ForecastNotFoundError, match="No active weather observation records found"):
+        get_observations(client=mock_client)
+
+
+def test_get_observations_exception_not_cached():
+    """Verify upstream exceptions are not cached so subsequent requests can recover."""
+    clear_observation_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_observations.side_effect = CWATimeoutError("CWA connection timeout")
+
+    with pytest.raises(CWATimeoutError):
+        get_observations(client=mock_client)
+
+    # Next call succeeds
+    mock_client.fetch_observations.side_effect = None
+    mock_client.fetch_observations.return_value = _load_obs_fixture()
+
+    res = get_observations(client=mock_client)
+    assert res["dataset_id"] == "O-A0001"
+    assert len(res["stations"]) == 6
+
+
+
 

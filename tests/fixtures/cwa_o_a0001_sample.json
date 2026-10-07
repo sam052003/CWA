@@ -1,0 +1,193 @@
+{
+  "success": "true",
+  "result": {
+    "resource_id": "O-A0001-001",
+    "fields": []
+  },
+  "records": {
+    "Station": [
+      {
+        "StationName": "臺中",
+        "StationId": "467490",
+        "ObsTime": {
+          "DateTime": "2026-10-07T18:00:00+08:00"
+        },
+        "GeoInfo": {
+          "Coordinates": [
+            {
+              "CoordinateName": "TWD67",
+              "CoordinateFormat": "decimal degrees",
+              "StationLatitude": 24.145,
+              "StationLongitude": 120.683
+            },
+            {
+              "CoordinateName": "WGS84",
+              "CoordinateFormat": "decimal degrees",
+              "StationLatitude": 24.1453,
+              "StationLongitude": 120.6841
+            }
+          ],
+          "StationAltitude": "84.0",
+          "CountyName": "臺中市",
+          "TownName": "北區"
+        },
+        "WeatherElement": {
+          "Weather": "多雲",
+          "Now": {
+            "Precipitation": 0.0
+          },
+          "WindDirection": 220,
+          "WindSpeed": 2.1,
+          "AirTemperature": 27.4,
+          "RelativeHumidity": 76,
+          "AirPressure": 1008.4,
+          "GustInfo": {
+            "PeakGustSpeed": 5.4
+          }
+        }
+      },
+      {
+        "StationName": "陽明山",
+        "StationId": "466910",
+        "ObsTime": {
+          "DateTime": "2026-10-07T18:00:00+08:00"
+        },
+        "GeoInfo": {
+          "Coordinates": [
+            {
+              "CoordinateName": "WGS84",
+              "StationLatitude": 25.1633,
+              "StationLongitude": 121.5297
+            }
+          ],
+          "StationAltitude": "607.0",
+          "CountyName": "臺北市",
+          "TownName": "北投區"
+        },
+        "WeatherElement": {
+          "Weather": "陰短暫雨",
+          "Now": {
+            "Precipitation": "T"
+          },
+          "WindDirection": 990,
+          "WindSpeed": 1.5,
+          "AirTemperature": 21.0,
+          "RelativeHumidity": 85,
+          "AirPressure": 952.1,
+          "GustInfo": {
+            "PeakGustSpeed": 4.2
+          }
+        }
+      },
+      {
+        "StationName": "高雄",
+        "StationId": "467440",
+        "ObsTime": {
+          "DateTime": "2026-10-07T18:00:00+08:00"
+        },
+        "GeoInfo": {
+          "Coordinates": [
+            {
+              "CoordinateName": "WGS84",
+              "StationLatitude": 22.566,
+              "StationLongitude": 120.316
+            }
+          ],
+          "StationAltitude": "2.3",
+          "CountyName": "高雄市",
+          "TownName": "前鎮區"
+        },
+        "WeatherElement": {
+          "Weather": "晴",
+          "Now": {
+            "Precipitation": -98
+          },
+          "WindDirection": 0,
+          "WindSpeed": 0.0,
+          "AirTemperature": -99,
+          "RelativeHumidity": -99,
+          "AirPressure": 1010.5,
+          "GustInfo": {
+            "PeakGustSpeed": -99
+          }
+        }
+      },
+      {
+        "StationName": "阿里山",
+        "StationId": "467530",
+        "ObsTime": {
+          "DateTime": "2026-10-07T18:00:00+08:00"
+        },
+        "GeoInfo": {
+          "Coordinates": [
+            {
+              "CoordinateName": "WGS84",
+              "StationLatitude": 23.508,
+              "StationLongitude": 120.813
+            }
+          ],
+          "StationAltitude": "2213.0",
+          "CountyName": "嘉義縣",
+          "TownName": "阿里山鄉"
+        },
+        "WeatherElement": {
+          "Weather": "濃霧",
+          "Now": {
+            "Precipitation": "X"
+          },
+          "WindDirection": 90,
+          "WindSpeed": 3.2,
+          "AirTemperature": 14.2,
+          "RelativeHumidity": 98,
+          "AirPressure": 782.3,
+          "GustInfo": {
+            "PeakGustSpeed": 6.8
+          }
+        }
+      },
+      {
+        "StationName": "無經緯測站",
+        "StationId": "C0X001",
+        "ObsTime": {
+          "DateTime": "2026-10-07T18:00:00+08:00"
+        },
+        "GeoInfo": {
+          "Coordinates": [
+            {
+              "CoordinateName": "TWD67",
+              "StationLatitude": 24.0,
+              "StationLongitude": 120.0
+            }
+          ],
+          "CountyName": "花蓮縣",
+          "TownName": "吉安鄉"
+        },
+        "WeatherElement": {
+          "Weather": "陰",
+          "AirTemperature": 25.0
+        }
+      },
+      {
+        "StationName": "超界經緯測站",
+        "StationId": "C0X002",
+        "ObsTime": {
+          "DateTime": "2026-10-07T18:00:00+08:00"
+        },
+        "GeoInfo": {
+          "Coordinates": [
+            {
+              "CoordinateName": "WGS84",
+              "StationLatitude": 95.0,
+              "StationLongitude": 120.0
+            }
+          ],
+          "CountyName": "臺東縣",
+          "TownName": "成功鎮"
+        },
+        "WeatherElement": {
+          "AirTemperature": 26.0
+        }
+      }
+    ]
+  }
+}

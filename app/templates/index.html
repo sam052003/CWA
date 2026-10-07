@@ -99,6 +99,14 @@
                                 >
                                     🌧️ 降雨機率
                                 </button>
+                                <button
+                                    id="map-mode-observations"
+                                    class="map-mode-btn"
+                                    type="button"
+                                    aria-pressed="false"
+                                >
+                                    📍 即時觀測
+                                </button>
                             </div>
                             <div class="map-period-control">
                                 <label for="map-period-select" class="map-period-label">預報時段</label>
@@ -159,6 +167,19 @@
                             <span class="legend-chip"><i style="background:#cbd5e1"></i>無資料</span>
                         </div>
                     </div>
+                    <!-- Observation Legend (Phase 8C) -->
+                    <div class="map-legend observation-legend hidden" id="observation-legend" aria-label="目前氣溫圖例">
+                        <span class="legend-title">目前氣溫 °C</span>
+                        <div class="legend-items">
+                            <span class="legend-chip"><i style="background:#60a5fa"></i>&lt; 20</span>
+                            <span class="legend-chip"><i style="background:#34d399"></i>20–23</span>
+                            <span class="legend-chip"><i style="background:#facc15"></i>24–27</span>
+                            <span class="legend-chip"><i style="background:#fb923c"></i>28–31</span>
+                            <span class="legend-chip"><i style="background:#f87171"></i>32–35</span>
+                            <span class="legend-chip"><i style="background:#dc2626"></i>&ge; 36</span>
+                            <span class="legend-chip"><i style="background:#cbd5e1"></i>無資料</span>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Detail Panel: Region Selector & Summary Cards (Floating/Collapsible on Desktop, Static below map on Mobile) -->
@@ -193,6 +214,7 @@
                                 </div>
                                 <span id="summary-period" class="summary-period-badge">--</span>
                                 <span id="rainfall-summary-period" class="summary-period-badge rainfall-summary-period hidden">--</span>
+                                <span id="observation-summary-period" class="summary-period-badge observation-summary-period hidden">--</span>
                             </div>
 
                             <!-- Temperature Summary Group (One-Week F-C0032-005) -->
@@ -254,6 +276,72 @@
                                 <div class="detail-updated-bar">
                                     <span class="detail-updated-label">資料更新</span>
                                     <span id="rainfall-detail-last-updated" class="detail-updated-time">--</span>
+                                </div>
+                            </div>
+
+                            <!-- Observation Summary Group (Phase 8C Current Weather O-A0001) -->
+                            <div id="observation-summary-group" class="observation-summary-group hidden">
+                                <div class="observation-station-header">
+                                    <span class="obs-badge">目前觀測</span>
+                                    <strong id="observation-station-name" class="observation-station-name">-- 測站</strong>
+                                </div>
+                                <div class="cards-grid vertical-cards-grid observation-cards-grid">
+                                    <div class="card obs-weather-card">
+                                        <div class="card-icon" aria-hidden="true">🌤️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">天氣現象</span>
+                                            <strong id="observation-card-weather" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card obs-temp-card">
+                                        <div class="card-icon" aria-hidden="true">🌡️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">測得氣溫</span>
+                                            <strong id="observation-card-temp" class="card-value temp-warm">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card obs-humidity-card">
+                                        <div class="card-icon" aria-hidden="true">💧</div>
+                                        <div class="card-info">
+                                            <span class="card-label">相對濕度</span>
+                                            <strong id="observation-card-humidity" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card obs-wind-card">
+                                        <div class="card-icon" aria-hidden="true">💨</div>
+                                        <div class="card-info">
+                                            <span class="card-label">風向風速</span>
+                                            <strong id="observation-card-wind" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card obs-pressure-card">
+                                        <div class="card-icon" aria-hidden="true">🧭</div>
+                                        <div class="card-info">
+                                            <span class="card-label">大氣氣壓</span>
+                                            <strong id="observation-card-pressure" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card obs-precip-card">
+                                        <div class="card-icon" aria-hidden="true">🌧️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">累積雨量</span>
+                                            <strong id="observation-card-precipitation" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card obs-gust-card">
+                                        <div class="card-icon" aria-hidden="true">🚩</div>
+                                        <div class="card-info">
+                                            <span class="card-label">最大陣風</span>
+                                            <strong id="observation-card-gust" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="observation-panel-note">
+                                    <small class="text-muted">※ 測站資料不代表全縣市平均</small>
+                                </div>
+                                <div class="detail-updated-bar">
+                                    <span class="detail-updated-label">觀測時間</span>
+                                    <span id="observation-detail-last-updated" class="detail-updated-time">--</span>
                                 </div>
                             </div>
                         </div>

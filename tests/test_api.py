@@ -780,4 +780,91 @@ def test_get_short_term_map_data_api_unexpected_internal_error():
         assert "postgresql://" not in response.text
 
 
+# ==============================================================================
+# Phase 8C: GET /api/observations Endpoint Tests
+# ==============================================================================
+
+def test_get_observations_api_success():
+    """Verify GET /api/observations returns 200 with ObservationResponse."""
+    mock_data = {
+        "dataset_id": "O-A0001",
+        "updated_at": "2026-10-07T18:00:00+08:00",
+        "stations": [
+            {
+                "station_id": "467490",
+                "station_name": "臺中",
+                "observation_time": "2026-10-07T18:00:00+08:00",
+                "county_name": "臺中市",
+                "town_name": "北區",
+                "latitude": 24.1453,
+                "longitude": 120.6841,
+                "altitude": 84.0,
+                "weather": "多雲",
+                "temperature": 27.4,
+                "relative_humidity": 76,
+                "wind_direction": 220,
+                "wind_direction_text": "西南風",
+                "wind_speed": 2.1,
+                "air_pressure": 1008.4,
+                "precipitation": 0.0,
+                "precipitation_status": None,
+                "peak_gust_speed": 5.4,
+            }
+        ],
+    }
+
+    with patch("app.api.routes.weather_service.get_observations", return_value=mock_data) as mock_service:
+        response = client.get("/api/observations")
+        assert response.status_code == 200
+        mock_service.assert_called_once()
+
+        body = response.json()
+        assert body["dataset_id"] == "O-A0001"
+        assert body["updated_at"] == "2026-10-07T18:00:00+08:00"
+        assert len(body["stations"]) == 1
+        st = body["stations"][0]
+        assert st["station_id"] == "467490"
+        assert st["station_name"] == "臺中"
+        assert st["temperature"] == 27.4
+        assert st["precipitation"] == 0.0
+        assert st["wind_direction_text"] == "西南風"
+
+
+def test_get_observations_api_not_found():
+    """Verify 404 when no observations are available."""
+    with patch(
+        "app.api.routes.weather_service.get_observations",
+        side_effect=ForecastNotFoundError("No active weather observation records found"),
+    ):
+        response = client.get("/api/observations")
+        assert response.status_code == 404
+        assert "No active weather observation records found" in response.json()["detail"]
+
+
+def test_get_observations_api_upstream_cwa_failure():
+    """Verify 502 Bad Gateway when upstream CWA fails without leaking secrets."""
+    with patch(
+        "app.api.routes.weather_service.get_observations",
+        side_effect=CWAClientError("CWA timeout with secret key CWA-SECRET-88888"),
+    ):
+        response = client.get("/api/observations")
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Upstream weather data service unavailable"
+        assert "CWA-SECRET-88888" not in response.text
+
+
+def test_get_observations_api_unexpected_internal_error():
+    """Verify 500 when unexpected error occurs without leaking traces or credentials."""
+    with patch(
+        "app.api.routes.weather_service.get_observations",
+        side_effect=Exception("Database crash with postgresql://admin:secretpass@db:5432/cwa"),
+    ):
+        response = client.get("/api/observations")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error occurred while retrieving weather observations"
+        assert "secretpass" not in response.text
+        assert "postgresql://" not in response.text
+
+
+
 

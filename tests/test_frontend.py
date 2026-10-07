@@ -787,6 +787,94 @@ def test_phase_8b2_rainfall_map_mode_js():
     assert "countyLayersByName" in js
 
 
+# ==============================================================================
+# Phase 8C: Observation Mode Frontend Tests
+# ==============================================================================
+
+def test_phase_8c_observation_html():
+    """Verify HTML markup contains all Phase 8C observation mode buttons, legends, and summary cards."""
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    # 1. Mode Button
+    assert 'id="map-mode-observations"' in html
+    assert "即時觀測" in html
+    assert 'aria-pressed="false"' in html
+
+    # 2. Observation Legend
+    assert 'id="observation-legend"' in html
+    assert "目前氣溫 °C" in html
+
+    # 3. Floating Detail Panel Observation Group
+    assert 'id="observation-summary-group"' in html
+    assert 'id="observation-summary-period"' in html
+    assert 'id="observation-station-name"' in html
+    assert 'id="observation-card-weather"' in html
+    assert 'id="observation-card-temp"' in html
+    assert 'id="observation-card-humidity"' in html
+    assert 'id="observation-card-wind"' in html
+    assert 'id="observation-card-pressure"' in html
+    assert 'id="observation-card-precipitation"' in html
+    assert 'id="observation-card-gust"' in html
+    assert 'id="observation-detail-last-updated"' in html
+    assert "目前觀測" in html
+    assert "測站資料不代表全縣市平均" in html
+
+
+def test_phase_8c_observation_js():
+    """Verify JS contains observation state, safe DOM rendering, layer lifecycle, and explicit 3-way mode switching."""
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. Observation State variables
+    assert "observationDataCache = null" in js
+    assert "selectedObservationStationId = null" in js
+    assert "stationObservationLayer = null" in js
+    assert "observationCanvasRenderer = null" in js
+
+    # 2. Key observation functions
+    assert "function getObservationTemperatureColor(" in js
+    assert "function loadObservationData(" in js
+    assert "function getOrCreateStationLayer(" in js
+    assert "function renderStationMarkers(" in js
+    assert "function createStationTooltip(" in js
+    assert "function createStationPopup(" in js
+    assert "function getDefaultStationForCounty(" in js
+    assert "function updateObservationDetailPanel(" in js
+    assert "function updateStationMarkerEmphasis(" in js
+    assert "function selectObservationStation(" in js
+
+    # 3. Lazy-fetch from dedicated API endpoint
+    assert '"/api/observations"' in js
+
+    # 4. Safe DOM popup construction (no innerHTML with untrusted data)
+    popup_idx = js.find("function createStationPopup(")
+    assert popup_idx != -1
+    popup_end = js.find("function getDefaultStationForCounty(", popup_idx)
+    popup_body = js[popup_idx:popup_end]
+    assert "document.createElement(" in popup_body
+    assert "textContent" in popup_body
+    assert "innerHTML" not in popup_body
+
+    # 5. Explicit 3-way branching in setMapMode
+    set_mode_idx = js.find("async function setMapMode(mode)")
+    assert set_mode_idx != -1
+    set_mode_end = js.find("function updateSummary(", set_mode_idx)
+    set_mode_body = js[set_mode_idx:set_mode_end]
+
+    assert 'mode === "observations"' in set_mode_body
+    assert 'mode === "rainfall"' in set_mode_body
+    assert 'mode === "temperature"' in set_mode_body
+    assert 'Unknown map mode requested' in set_mode_body
+
+    # 6. Preserved Phase 7 pointer bridge
+    assert "function handleCountyPointerDown(event)" in js
+    assert "countyLayersByName" in js
+
+
+
 
 
 

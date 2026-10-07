@@ -1408,8 +1408,8 @@ Supabase PostgreSQL
   - 卡片渲染全面採用安全 DOM 操作（`createElement`, `textContent`, `appendChild`, `replaceChildren`），嚴禁將 API 字串內插至 `innerHTML`。
   - 時段標題依據實際 `start_time` 與 `end_time` 之時間戳記解析判定（如 `10/07 白天`、`10/07 晚上 ～ 10/08 清晨`），不以陣列索引猜測日曆真相。既有精確時段時間戳記維持清晰顯示。
   - 降雨機率條寬度經 0~100 數值驗證與限制後以 `style.width` 安全賦值。
-- **Phase 8B2 — Rainfall Map Mode (選項目標)**：
-  - 降雨機率地圖面量圖切換（`GET /api/map-data?type=short-term`）移至 Phase 8B2，待 36 小時生活預報卡片於生產環境驗收後再行評估。既有地圖維持氣溫面量圖不變。
+- **Phase 8B2 — Rainfall Map Mode (已完成並通過生產環境驗收)**：
+  - 降雨機率地圖面量圖切換使用專屬端點 `GET /api/map-data/short-term`，不破壞既有 `/api/map-data` 契約。單一 Leaflet 地圖實例支援 [🌡️ 溫度] 與 [🌧️ 降雨機率] 雙模式切換。既有溫度地圖維持氣溫面量圖不變。
 
 ---
 
@@ -1685,7 +1685,7 @@ CWA Open Data API
   - [x] 行程內最佳努力（best-effort）TTL 快取（10~30 分鐘，冷啟動自癒容錯，零 DB 結構變更）
   - [x] `GET /api/forecast/short-term` 專屬 API 端點與錯誤遮罩
   - [x] 前端今明 36 小時生活預報卡片（3 時段卡片、PoP 機率條、CI 舒適度文字標籤、獨立載入/錯誤狀態、防競態 AbortController）
-- [ ] **Phase 8B2 — Rainfall Probability Map Mode** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+- [x] **Phase 8B2 — Rainfall Probability Map Mode** (已完成並通過生產環境驗收 / Completed and Production Verified)：
   - [x] 獨立端點 `GET /api/map-data/short-term`（不破壞既有 `/api/map-data` 契約）
   - [x] 後端單次請求獲取全臺 22 縣市 F-C0032-001 完整資料（無 N+1 請求）
   - [x] 獨立全縣市地圖行程內快取（TTL: 15 分鐘，不與單一縣市快取共用）
@@ -1695,7 +1695,17 @@ CWA Open Data API
   - [x] 浮動面板模式連動（降雨模式切換為短時預報摘要卡片群與獨立更新時間）
   - [x] 降雨資料延遲載入（首次點擊才抓取，後續切換時段無額外網路請求）
   - [x] 完整保留縣市選取、外框高亮、重設視角、全螢幕與深淺色主題
-- [ ] **Phase 8C — Current Weather Observations**：`O-A0001` 即時氣象觀測串接（測站標記圖層、目前觀測 vs 未來預報嚴格區隔 UI、選取縣市即時氣候摘要）。
+- [ ] **Phase 8C — Current Weather Observations** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+  - [x] CWA `O-A0001` 全臺氣象測站即時觀測客戶端與連線重試 (`DATASET_OBSERVATION = "O-A0001"`)
+  - [x] 專屬觀測資料解析器（嚴格選用 WGS84 座標系統，濾除 -99/X 等缺值，正規化雨跡 T 與 -98 無降雨狀態）
+  - [x] 獨立行程內最佳努力 TTL 快取（10 分鐘，冷啟動自癒容錯，零 DB 結構變更）
+  - [x] 專屬 API 端點 `GET /api/observations` 與安全錯誤遮罩
+  - [x] 單一 Leaflet 地圖三模式控制項 `[🌡️ 溫度] [🌧️ 降雨機率] [📍 即時觀測]`
+  - [x] 測站 Canvas CircleMarker 標記圖層（依據實測氣溫顏色漸層渲染，零第三方程式庫依賴）
+  - [x] 縣市多邊形維持中性底色並保留實體點擊橋接器，支援選定縣市自動對焦代表測站
+  - [x] 浮動面板切換至測站即時觀測摘要群組（明確標示「目前觀測 某某測站」與實際觀測時間，註明測站不代表全縣市平均）
+  - [x] 測站 Hover 安全 Tooltip 與 Click 詳情 Popup（DOM 安全構建，無 innerHTML 插值）
+  - [x] 觀測資料延遲載入（首次切換才抓取），切換縣市或測站重用客戶端快取
 - [ ] **Phase 8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
 - [ ] **Phase 8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
 - [ ] **Phase 8F — Township Detailed Forecast**：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。

@@ -10,9 +10,13 @@ let leafletMap = null;
 let geojsonLayer = null;
 let mapDataCache = null;
 let currentMapPeriod = null;
-let currentMapMode = "temperature"; // "temperature" | "rainfall"
+let currentMapMode = "temperature"; // "temperature" | "rainfall" | "observations"
 let shortTermMapDataCache = null;
 let currentRainfallMapPeriod = null;
+let observationDataCache = null;
+let selectedObservationStationId = null;
+let stationObservationLayer = null;
+let observationCanvasRenderer = null;
 let selectedCountyName = null;
 let activeTooltipLayer = null;
 let hoveredCountyLayer = null;
@@ -42,10 +46,23 @@ const elements = {
     mapLegend: document.getElementById("map-legend"),
     mapModeTemperature: document.getElementById("map-mode-temperature"),
     mapModeRainfall: document.getElementById("map-mode-rainfall"),
+    mapModeObservations: document.getElementById("map-mode-observations"),
     rainfallLegend: document.getElementById("rainfall-legend"),
+    observationLegend: document.getElementById("observation-legend"),
     rainfallSummaryGroup: document.getElementById("rainfall-summary-group"),
     temperatureSummaryGroup: document.getElementById("temperature-summary-group"),
+    observationSummaryGroup: document.getElementById("observation-summary-group"),
     rainfallSummaryPeriod: document.getElementById("rainfall-summary-period"),
+    observationSummaryPeriod: document.getElementById("observation-summary-period"),
+    observationStationName: document.getElementById("observation-station-name"),
+    observationCardWeather: document.getElementById("observation-card-weather"),
+    observationCardTemp: document.getElementById("observation-card-temp"),
+    observationCardHumidity: document.getElementById("observation-card-humidity"),
+    observationCardWind: document.getElementById("observation-card-wind"),
+    observationCardPressure: document.getElementById("observation-card-pressure"),
+    observationCardPrecipitation: document.getElementById("observation-card-precipitation"),
+    observationCardGust: document.getElementById("observation-card-gust"),
+    observationDetailLastUpdated: document.getElementById("observation-detail-last-updated"),
     rainfallCardWeather: document.getElementById("rainfall-card-weather"),
     rainfallCardPoP: document.getElementById("rainfall-card-pop"),
     rainfallCardCI: document.getElementById("rainfall-card-ci"),
@@ -84,6 +101,30 @@ function formatShortDateTime(isoString) {
     const m = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     if (!m) return isoString;
     return `${m[2]}/${m[3]} ${m[4]}:${m[5]}`;
+}
+
+/**
+ * Format observation timestamp to 'HH:mm'.
+ * @param {string} isoString e.g. "2026-10-07T18:00:00+08:00"
+ * @returns {string} e.g. "18:00"
+ */
+function formatObservationTime(isoString) {
+    if (!isoString || typeof isoString !== "string") return "--";
+    const m = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return isoString;
+    return `${m[4]}:${m[5]}`;
+}
+
+/**
+ * Format observation timestamp to 'YYYY/MM/DD HH:mm'.
+ * @param {string} isoString e.g. "2026-10-07T18:00:00+08:00"
+ * @returns {string} e.g. "2026/10/07 18:00"
+ */
+function formatFullObservationTime(isoString) {
+    if (!isoString || typeof isoString !== "string") return "--";
+    const m = isoString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return isoString;
+    return `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}`;
 }
 
 /**
@@ -191,6 +232,9 @@ function setTheme(theme) {
     } catch (_) {}
     updateThemeToggleUI(theme);
     applyChartTheme();
+    if (currentMapMode === "observations" && geojsonLayer) {
+        geojsonLayer.setStyle(getCountyStyle);
+    }
 }
 
 /**
@@ -304,6 +348,25 @@ function getTemperatureColor(temp) {
 }
 
 /**
+ * Map observed temperature to discrete palette colors (Phase 8C).
+ * Dedicated observation temperature scale.
+ * Discrete ranges: <20, 20-23, 24-27, 28-31, 32-35, >=36.
+ * Missing / invalid: neutral slate gray.
+ */
+function getObservationTemperatureColor(temp) {
+    if (temp === null || temp === undefined || isNaN(temp)) {
+        return "#cbd5e1";
+    }
+    const val = Number(temp);
+    if (val < 20) return "#60a5fa";
+    if (val <= 23) return "#34d399";
+    if (val <= 27) return "#facc15";
+    if (val <= 31) return "#fb923c";
+    if (val <= 35) return "#f87171";
+    return "#dc2626";
+}
+
+/**
  * Retrieve forecast item for a given county in the active map period.
  * If currentMapPeriod exists, only returns an exact start/end time match (no fallback to wrong period).
  */
@@ -362,11 +425,22 @@ function getRainfallForecastForCounty(countyName) {
 }
 
 /**
- * Leaflet style function: Returns styling object based on county temperature or rainfall (Phase 8B2).
+ * Leaflet style function: Returns styling object based on county temperature, rainfall, or observation mode (Phase 8C).
  */
 function getCountyStyle(feature) {
     const countyName = feature.properties.COUNTYNAME || feature.properties.name;
     const isSelected = selectedCountyName && selectedCountyName === countyName;
+
+    if (currentMapMode === "observations") {
+        const isDark = document.documentElement.dataset.theme === "dark";
+        return {
+            fillColor: isDark ? "#334155" : "#f1f5f9",
+            weight: isSelected ? 3.5 : 1.2,
+            opacity: 1,
+            color: isSelected ? "#1e3a8a" : (isDark ? "#475569" : "#cbd5e1"),
+            fillOpacity: isSelected ? 0.65 : 0.35,
+        };
+    }
 
     if (currentMapMode === "rainfall") {
         const forecast = getRainfallForecastForCounty(countyName);
@@ -403,6 +477,30 @@ function createTooltipElement(countyName) {
     titleEl.className = "tooltip-county";
     titleEl.textContent = countyName;
     container.appendChild(titleEl);
+
+    if (currentMapMode === "observations") {
+        const defaultStation = getDefaultStationForCounty(countyName);
+        if (defaultStation) {
+            const stationEl = document.createElement("div");
+            stationEl.className = "tooltip-weather";
+            const tempStr = defaultStation.temperature !== null ? `${defaultStation.temperature} °C` : "無氣溫資料";
+            stationEl.textContent = `${defaultStation.station_name}測站 ${tempStr}`;
+            container.appendChild(stationEl);
+
+            if (defaultStation.observation_time) {
+                const timeEl = document.createElement("div");
+                timeEl.className = "tooltip-period";
+                timeEl.textContent = `觀測時間 ${formatObservationTime(defaultStation.observation_time)}`;
+                container.appendChild(timeEl);
+            }
+        } else {
+            const noDataEl = document.createElement("div");
+            noDataEl.className = "tooltip-weather";
+            noDataEl.textContent = "目前無可用測站觀測資料";
+            container.appendChild(noDataEl);
+        }
+        return container;
+    }
 
     if (currentMapMode === "rainfall") {
         const rfForecast = getRainfallForecastForCounty(countyName);
@@ -719,7 +817,16 @@ function selectCounty(countyName, options = {}) {
     }
 
     // 6. Immediately update nearest-period summary for currently displayed period
-    if (currentMapMode === "rainfall" && shortTermMapDataCache) {
+    if (currentMapMode === "observations" && observationDataCache) {
+        const defaultSt = getDefaultStationForCounty(countyName);
+        if (defaultSt) {
+            selectedObservationStationId = defaultSt.station_id;
+        }
+        updateObservationDetailPanel(defaultSt);
+        if (stationObservationLayer) {
+            updateStationMarkerEmphasis();
+        }
+    } else if (currentMapMode === "rainfall" && shortTermMapDataCache) {
         updateRainfallSummary(getRainfallForecastForCounty(countyName));
     } else {
         const cachedForecast = getForecastForCounty(countyName);
@@ -1039,28 +1146,545 @@ async function loadShortTermMapData() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 8C: Current Weather Observations (O-A0001)
+// ---------------------------------------------------------------------------
+
 /**
- * Switch map mode between "temperature" and "rainfall" (Phase 8B2).
- * Lazy-loads F-C0032-001 all-county map data on first rainfall mode selection.
- * Preserves separate selected periods and does not reload on period changes.
+ * Lazy-load O-A0001 observation dataset once per session.
+ */
+async function loadObservationData() {
+    if (observationDataCache) return observationDataCache;
+
+    if (elements.mapPeriodBadge) {
+        elements.mapPeriodBadge.textContent = "正在載入目前觀測資料...";
+    }
+
+    try {
+        const response = await fetch("/api/observations");
+        if (!response.ok) {
+            throw new Error(`Observation data fetch failed: ${response.status}`);
+        }
+        const data = await response.json();
+        observationDataCache = data;
+        return data;
+    } catch (err) {
+        console.error("Failed to load observation data:", err);
+        return null;
+    }
+}
+
+/**
+ * Get or initialize station observation layer and canvas renderer.
+ */
+function getOrCreateStationLayer() {
+    if (!stationObservationLayer) {
+        stationObservationLayer = L.layerGroup();
+    }
+    if (!observationCanvasRenderer && typeof L !== "undefined" && L.canvas) {
+        observationCanvasRenderer = L.canvas({ padding: 0.5 });
+    }
+    return stationObservationLayer;
+}
+
+/**
+ * Build rich HTML DOM element for station hover tooltip (Safe DOM manipulation).
+ */
+function createStationTooltip(st) {
+    const container = document.createElement("div");
+    container.className = "station-tooltip";
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "tooltip-station-name";
+    nameEl.textContent = `${st.station_name || "未知"}測站`;
+    container.appendChild(nameEl);
+
+    const dataEl = document.createElement("div");
+    dataEl.className = "tooltip-station-data";
+
+    const tempSpan = document.createElement("span");
+    tempSpan.textContent = st.temperature !== null && st.temperature !== undefined ? `${st.temperature} °C` : "--";
+    dataEl.appendChild(tempSpan);
+
+    if (st.relative_humidity !== null && st.relative_humidity !== undefined) {
+        const rhSpan = document.createElement("span");
+        rhSpan.textContent = `濕度 ${st.relative_humidity}%`;
+        dataEl.appendChild(rhSpan);
+    }
+    container.appendChild(dataEl);
+
+    if (st.observation_time) {
+        const timeEl = document.createElement("div");
+        timeEl.className = "tooltip-station-time";
+        timeEl.textContent = `觀測 ${formatObservationTime(st.observation_time)}`;
+        container.appendChild(timeEl);
+    }
+
+    return container;
+}
+
+/**
+ * Build rich HTML DOM element for station click popup (Safe DOM manipulation, no innerHTML).
+ */
+function createStationPopup(st) {
+    const container = document.createElement("div");
+    container.className = "station-popup";
+
+    const header = document.createElement("div");
+    header.className = "station-popup-header";
+
+    const title = document.createElement("div");
+    title.className = "station-popup-title";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = `${st.station_name || "未知"}測站`;
+    const badgeSpan = document.createElement("span");
+    badgeSpan.className = "obs-badge";
+    badgeSpan.textContent = "目前觀測";
+    title.appendChild(nameSpan);
+    title.appendChild(badgeSpan);
+    header.appendChild(title);
+
+    const loc = document.createElement("div");
+    loc.className = "station-popup-location";
+    const locParts = [];
+    if (st.county_name) locParts.push(st.county_name);
+    if (st.town_name) locParts.push(st.town_name);
+    loc.textContent = locParts.length > 0 ? locParts.join(" · ") : `測站編號 ${st.station_id}`;
+    header.appendChild(loc);
+    container.appendChild(header);
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "station-popup-time";
+    timeEl.textContent = `觀測時間：${formatFullObservationTime(st.observation_time)}`;
+    container.appendChild(timeEl);
+
+    const grid = document.createElement("div");
+    grid.className = "station-popup-grid";
+
+    function addItem(lbl, val) {
+        const item = document.createElement("div");
+        item.className = "station-popup-item";
+        const l = document.createElement("span");
+        l.className = "popup-lbl";
+        l.textContent = lbl;
+        const v = document.createElement("span");
+        v.className = "popup-val";
+        v.textContent = val;
+        item.appendChild(l);
+        item.appendChild(v);
+        grid.appendChild(item);
+    }
+
+    addItem("天氣", st.weather || "--");
+    addItem("氣溫", st.temperature !== null && st.temperature !== undefined ? `${st.temperature} °C` : "--");
+    addItem("濕度", st.relative_humidity !== null && st.relative_humidity !== undefined ? `${st.relative_humidity}%` : "--");
+
+    let windStr = "--";
+    if (st.wind_direction_text) {
+        windStr = st.wind_direction !== null && st.wind_direction >= 0 && st.wind_direction <= 360
+            ? `${st.wind_direction_text} (${st.wind_direction}°)`
+            : st.wind_direction_text;
+    }
+    addItem("風向", windStr);
+
+    addItem("風速", st.wind_speed !== null && st.wind_speed !== undefined ? `${st.wind_speed} m/s` : "--");
+    addItem("氣壓", st.air_pressure !== null && st.air_pressure !== undefined ? `${st.air_pressure} hPa` : "--");
+
+    let precipStr = "--";
+    if (st.precipitation_status === "trace") {
+        precipStr = "雨跡";
+    } else if (st.precipitation_status === "no_precipitation_6h") {
+        precipStr = "無降雨 (6h)";
+    } else if (st.precipitation_status === "instrument_error") {
+        precipStr = "儀器異常";
+    } else if (st.precipitation_status === "missing") {
+        precipStr = "資料缺值";
+    } else if (st.precipitation !== null && st.precipitation !== undefined) {
+        precipStr = `${st.precipitation} mm`;
+    }
+    addItem("降水", precipStr);
+
+    addItem("最大陣風", st.peak_gust_speed !== null && st.peak_gust_speed !== undefined ? `${st.peak_gust_speed} m/s` : "--");
+
+    container.appendChild(grid);
+    return container;
+}
+
+/**
+ * Deterministically select a default representative station for a county.
+ * Hierarchy:
+ * 1. Station name matches county base name (e.g. 臺中市 -> 臺中)
+ * 2. Station with the most complete observation fields
+ * 3. Deterministic tie-break by station_id
+ */
+function getDefaultStationForCounty(countyName) {
+    if (!observationDataCache || !observationDataCache.stations || !countyName) {
+        return null;
+    }
+    const countyStations = observationDataCache.stations.filter(
+        (st) => st.county_name === countyName
+    );
+    if (countyStations.length === 0) return null;
+
+    const baseName = countyName.replace(/[市縣]$/, "");
+
+    // 1. Exact match to base name or county name
+    const exactNameMatch = countyStations.find(
+        (st) => st.station_name === baseName || st.station_name === countyName
+    );
+    if (exactNameMatch) return exactNameMatch;
+
+    // 2. Station with most complete fields
+    const scoreStation = (st) => {
+        let score = 0;
+        if (st.temperature !== null) score += 2;
+        if (st.weather !== null) score += 1;
+        if (st.relative_humidity !== null) score += 1;
+        if (st.wind_speed !== null) score += 1;
+        if (st.air_pressure !== null) score += 1;
+        if (st.precipitation !== null) score += 1;
+        return score;
+    };
+
+    const sorted = [...countyStations].sort((a, b) => {
+        const diff = scoreStation(b) - scoreStation(a);
+        if (diff !== 0) return diff;
+        return a.station_id.localeCompare(b.station_id);
+    });
+
+    return sorted[0];
+}
+
+/**
+ * Update Observation summary group in the floating detail panel (Phase 8C).
+ * Safe DOM manipulation with textContent.
+ */
+function updateObservationDetailPanel(station) {
+    if (!elements.observationSummaryGroup) return;
+
+    if (!station) {
+        if (elements.observationStationName) {
+            elements.observationStationName.textContent = "目前沒有可用的測站觀測資料";
+        }
+        if (elements.observationSummaryPeriod) {
+            elements.observationSummaryPeriod.textContent = "--";
+        }
+        if (elements.observationCardWeather) elements.observationCardWeather.textContent = "--";
+        if (elements.observationCardTemp) elements.observationCardTemp.textContent = "--";
+        if (elements.observationCardHumidity) elements.observationCardHumidity.textContent = "--";
+        if (elements.observationCardWind) elements.observationCardWind.textContent = "--";
+        if (elements.observationCardPressure) elements.observationCardPressure.textContent = "--";
+        if (elements.observationCardPrecipitation) elements.observationCardPrecipitation.textContent = "--";
+        if (elements.observationCardGust) elements.observationCardGust.textContent = "--";
+        if (elements.observationDetailLastUpdated) {
+            elements.observationDetailLastUpdated.textContent = formatUpdatedTimestamp(
+                observationDataCache?.updated_at
+            );
+        }
+        return;
+    }
+
+    if (elements.observationStationName) {
+        elements.observationStationName.textContent = `${station.station_name || "未知"}測站 (${station.station_id})`;
+    }
+
+    if (elements.observationSummaryPeriod) {
+        elements.observationSummaryPeriod.textContent = `觀測時間 ${formatObservationTime(station.observation_time)}`;
+    }
+
+    if (elements.observationCardWeather) {
+        elements.observationCardWeather.textContent = station.weather || "--";
+    }
+
+    if (elements.observationCardTemp) {
+        elements.observationCardTemp.textContent =
+            station.temperature !== null && station.temperature !== undefined
+                ? `${station.temperature} °C`
+                : "--";
+    }
+
+    if (elements.observationCardHumidity) {
+        elements.observationCardHumidity.textContent =
+            station.relative_humidity !== null && station.relative_humidity !== undefined
+                ? `${station.relative_humidity}%`
+                : "--";
+    }
+
+    if (elements.observationCardWind) {
+        let windStr = "--";
+        if (station.wind_direction_text) {
+            windStr = station.wind_speed !== null && station.wind_speed !== undefined
+                ? `${station.wind_direction_text} ${station.wind_speed} m/s`
+                : station.wind_direction_text;
+        } else if (station.wind_speed !== null && station.wind_speed !== undefined) {
+            windStr = `${station.wind_speed} m/s`;
+        }
+        elements.observationCardWind.textContent = windStr;
+    }
+
+    if (elements.observationCardPressure) {
+        elements.observationCardPressure.textContent =
+            station.air_pressure !== null && station.air_pressure !== undefined
+                ? `${station.air_pressure} hPa`
+                : "--";
+    }
+
+    if (elements.observationCardPrecipitation) {
+        let precipStr = "--";
+        if (station.precipitation_status === "trace") {
+            precipStr = "雨跡";
+        } else if (station.precipitation_status === "no_precipitation_6h") {
+            precipStr = "無降雨 (6h)";
+        } else if (station.precipitation_status === "instrument_error") {
+            precipStr = "儀器異常";
+        } else if (station.precipitation_status === "missing") {
+            precipStr = "資料缺值";
+        } else if (station.precipitation !== null && station.precipitation !== undefined) {
+            precipStr = `${station.precipitation} mm`;
+        }
+        elements.observationCardPrecipitation.textContent = precipStr;
+    }
+
+    if (elements.observationCardGust) {
+        elements.observationCardGust.textContent =
+            station.peak_gust_speed !== null && station.peak_gust_speed !== undefined
+                ? `${station.peak_gust_speed} m/s`
+                : "--";
+    }
+
+    if (elements.observationDetailLastUpdated) {
+        elements.observationDetailLastUpdated.textContent = formatUpdatedTimestamp(
+            observationDataCache?.updated_at
+        );
+    }
+}
+
+/**
+ * Update visual emphasis of station circle markers based on selected station & county.
+ */
+function updateStationMarkerEmphasis() {
+    if (!stationObservationLayer) return;
+    stationObservationLayer.eachLayer((marker) => {
+        if (!marker.stationData) return;
+        const st = marker.stationData;
+        const isSelected = selectedObservationStationId === st.station_id;
+        const isCountyStation = selectedCountyName && st.county_name === selectedCountyName;
+
+        marker.setStyle({
+            radius: isSelected ? 8 : (isCountyStation ? 6 : 5),
+            color: isSelected ? "#1e3a8a" : "#ffffff",
+            weight: isSelected ? 3 : (isCountyStation ? 1.8 : 1.2),
+            opacity: 1,
+            fillOpacity: isSelected ? 1 : (isCountyStation ? 0.95 : 0.75),
+        });
+
+        if (isSelected && marker.bringToFront) {
+            marker.bringToFront();
+        }
+    });
+}
+
+/**
+ * Handle user clicking a station marker.
+ * Synchronizes county and observation detail panel without refetching data.
+ */
+function selectObservationStation(st) {
+    if (!st) return;
+    selectedObservationStationId = st.station_id;
+
+    // 1. Update observation detail panel
+    updateObservationDetailPanel(st);
+
+    // 2. Synchronize selected county if different
+    if (st.county_name && st.county_name !== selectedCountyName) {
+        selectedCountyName = st.county_name;
+        if (elements.regionSelect && elements.regionSelect.value !== st.county_name) {
+            elements.regionSelect.value = st.county_name;
+        }
+        if (elements.selectedRegionName) {
+            elements.selectedRegionName.textContent = st.county_name;
+        }
+        if (elements.detailPanelSummaryLabel) {
+            elements.detailPanelSummaryLabel.textContent = `📍 ${st.county_name}`;
+        }
+        if (geojsonLayer) {
+            geojsonLayer.setStyle(getCountyStyle);
+        }
+        loadForecast(st.county_name);
+        loadShortTermForecast(st.county_name);
+    }
+
+    // 3. Update marker visual highlights
+    updateStationMarkerEmphasis();
+}
+
+/**
+ * Render station circle markers onto Leaflet map using shared canvas renderer (Phase 8C).
+ */
+function renderStationMarkers(stations) {
+    const layer = getOrCreateStationLayer();
+    layer.clearLayers();
+
+    if (!stations || !Array.isArray(stations)) return;
+
+    stations.forEach((st) => {
+        // Coordinate validation: latitude -90..90, longitude -180..180
+        if (
+            st.latitude === null ||
+            st.longitude === null ||
+            st.latitude === undefined ||
+            st.longitude === undefined ||
+            isNaN(st.latitude) ||
+            isNaN(st.longitude) ||
+            st.latitude < -90 ||
+            st.latitude > 90 ||
+            st.longitude < -180 ||
+            st.longitude > 180
+        ) {
+            return; // Skip station with invalid or missing coordinates
+        }
+
+        const fillColor = getObservationTemperatureColor(st.temperature);
+        const isSelected = selectedObservationStationId === st.station_id;
+        const isCountyStation = selectedCountyName && st.county_name === selectedCountyName;
+
+        const marker = L.circleMarker([st.latitude, st.longitude], {
+            renderer: observationCanvasRenderer,
+            radius: isSelected ? 8 : (isCountyStation ? 6 : 5),
+            fillColor: fillColor,
+            color: isSelected ? "#1e3a8a" : "#ffffff",
+            weight: isSelected ? 3 : (isCountyStation ? 1.8 : 1.2),
+            opacity: 1,
+            fillOpacity: isSelected ? 1 : (isCountyStation ? 0.95 : 0.75),
+        });
+
+        marker.stationData = st;
+
+        // Tooltip
+        marker.bindTooltip(() => createStationTooltip(st), {
+            sticky: true,
+            direction: "top",
+            className: "custom-leaflet-tooltip",
+        });
+
+        // Popup
+        marker.bindPopup(() => createStationPopup(st), {
+            className: "station-popup-wrapper",
+            closeButton: true,
+        });
+
+        // Click interaction
+        marker.on("click", () => {
+            selectObservationStation(st);
+        });
+
+        layer.addLayer(marker);
+    });
+}
+
+/**
+ * Switch map mode between "temperature", "rainfall", and "observations" (Phase 8C).
+ * Explicit 3-way branching, rejects unknown modes.
  *
- * @param {"temperature" | "rainfall"} mode Desired map mode
+ * @param {"temperature" | "rainfall" | "observations"} mode Desired map mode
  */
 async function setMapMode(mode) {
+    if (mode !== "temperature" && mode !== "rainfall" && mode !== "observations") {
+        console.warn(`Unknown map mode requested: ${mode}`);
+        return;
+    }
     if (mode === currentMapMode) return;
 
-    if (mode === "rainfall") {
+    if (mode === "observations") {
+        // Lazy-load observation dataset if not yet loaded
+        if (!observationDataCache) {
+            const data = await loadObservationData();
+            if (!data || !data.stations || data.stations.length === 0) {
+                if (elements.mapError) {
+                    elements.mapError.textContent = "目前觀測資料暫時無法載入";
+                    elements.mapError.classList.remove("hidden");
+                    setTimeout(() => {
+                        elements.mapError.classList.add("hidden");
+                        elements.mapError.textContent = "地圖資料暫時無法載入";
+                    }, 4000);
+                }
+                return;
+            }
+        }
+
+        currentMapMode = "observations";
+
+        // 1. Update mode toggle button attributes
+        if (elements.mapModeTemperature) {
+            elements.mapModeTemperature.classList.remove("active");
+            elements.mapModeTemperature.setAttribute("aria-pressed", "false");
+        }
+        if (elements.mapModeRainfall) {
+            elements.mapModeRainfall.classList.remove("active");
+            elements.mapModeRainfall.setAttribute("aria-pressed", "false");
+        }
+        if (elements.mapModeObservations) {
+            elements.mapModeObservations.classList.add("active");
+            elements.mapModeObservations.setAttribute("aria-pressed", "true");
+        }
+
+        // 2. Toggle legends
+        if (elements.mapLegend) elements.mapLegend.classList.add("hidden");
+        if (elements.rainfallLegend) elements.rainfallLegend.classList.add("hidden");
+        if (elements.observationLegend) elements.observationLegend.classList.remove("hidden");
+
+        // 3. Toggle detail panel summary groups
+        if (elements.temperatureSummaryGroup) elements.temperatureSummaryGroup.classList.add("hidden");
+        if (elements.rainfallSummaryGroup) elements.rainfallSummaryGroup.classList.add("hidden");
+        if (elements.observationSummaryGroup) elements.observationSummaryGroup.classList.remove("hidden");
+        if (elements.summaryPeriod) elements.summaryPeriod.classList.add("hidden");
+        if (elements.rainfallSummaryPeriod) elements.rainfallSummaryPeriod.classList.add("hidden");
+        if (elements.observationSummaryPeriod) elements.observationSummaryPeriod.classList.remove("hidden");
+
+        // 4. Hide / disable forecast period select in observation mode
+        if (elements.mapPeriodSelect) {
+            elements.mapPeriodSelect.classList.add("hidden");
+            elements.mapPeriodSelect.disabled = true;
+        }
+
+        // 5. Update map period badge to observation time
+        if (elements.mapPeriodBadge) {
+            elements.mapPeriodBadge.textContent = `最新觀測 ${formatUpdatedTimestamp(observationDataCache?.updated_at)}`;
+        }
+
+        // 6. Redraw county polygons with neutral styling
+        if (geojsonLayer) {
+            geojsonLayer.setStyle(getCountyStyle);
+        }
+
+        // 7. Add station observation layer to map & render markers
+        const layer = getOrCreateStationLayer();
+        if (leafletMap && !leafletMap.hasLayer(layer)) {
+            layer.addTo(leafletMap);
+        }
+        renderStationMarkers(observationDataCache.stations);
+
+        // 8. Update detail panel with default county station or selected station
+        if (selectedObservationStationId) {
+            const st = observationDataCache.stations.find((s) => s.station_id === selectedObservationStationId);
+            if (st) {
+                updateObservationDetailPanel(st);
+            } else if (selectedCountyName) {
+                const defaultSt = getDefaultStationForCounty(selectedCountyName);
+                if (defaultSt) selectedObservationStationId = defaultSt.station_id;
+                updateObservationDetailPanel(defaultSt);
+            }
+        } else if (selectedCountyName) {
+            const defaultSt = getDefaultStationForCounty(selectedCountyName);
+            if (defaultSt) selectedObservationStationId = defaultSt.station_id;
+            updateObservationDetailPanel(defaultSt);
+        }
+
+    } else if (mode === "rainfall") {
         // Lazy-load short-term all-county map data if not yet loaded
         if (!shortTermMapDataCache) {
             const data = await loadShortTermMapData();
             if (!data || !data.periods || data.periods.length === 0) {
-                // Non-blocking fallback: remain in temperature mode
-                if (elements.mapPeriodBadge && currentMapPeriod) {
-                    elements.mapPeriodBadge.textContent = formatForecastPeriod(
-                        currentMapPeriod.start_time,
-                        currentMapPeriod.end_time
-                    );
-                }
                 if (elements.mapError) {
                     elements.mapError.textContent = "降雨機率地圖暫時無法載入";
                     elements.mapError.classList.remove("hidden");
@@ -1075,6 +1699,11 @@ async function setMapMode(mode) {
 
         currentMapMode = "rainfall";
 
+        // Remove station observation layer if present
+        if (stationObservationLayer && leafletMap && leafletMap.hasLayer(stationObservationLayer)) {
+            leafletMap.removeLayer(stationObservationLayer);
+        }
+
         // 1. Update mode toggle button attributes
         if (elements.mapModeTemperature) {
             elements.mapModeTemperature.classList.remove("active");
@@ -1084,32 +1713,50 @@ async function setMapMode(mode) {
             elements.mapModeRainfall.classList.add("active");
             elements.mapModeRainfall.setAttribute("aria-pressed", "true");
         }
+        if (elements.mapModeObservations) {
+            elements.mapModeObservations.classList.remove("active");
+            elements.mapModeObservations.setAttribute("aria-pressed", "false");
+        }
 
         // 2. Toggle legends
         if (elements.mapLegend) elements.mapLegend.classList.add("hidden");
         if (elements.rainfallLegend) elements.rainfallLegend.classList.remove("hidden");
+        if (elements.observationLegend) elements.observationLegend.classList.add("hidden");
 
         // 3. Toggle detail panel summary groups
         if (elements.temperatureSummaryGroup) elements.temperatureSummaryGroup.classList.add("hidden");
         if (elements.rainfallSummaryGroup) elements.rainfallSummaryGroup.classList.remove("hidden");
+        if (elements.observationSummaryGroup) elements.observationSummaryGroup.classList.add("hidden");
         if (elements.summaryPeriod) elements.summaryPeriod.classList.add("hidden");
         if (elements.rainfallSummaryPeriod) elements.rainfallSummaryPeriod.classList.remove("hidden");
+        if (elements.observationSummaryPeriod) elements.observationSummaryPeriod.classList.add("hidden");
 
-        // 4. Set or restore currentRainfallMapPeriod
+        // 4. Restore forecast period select
+        if (elements.mapPeriodSelect) {
+            elements.mapPeriodSelect.classList.remove("hidden");
+            elements.mapPeriodSelect.disabled = false;
+        }
+
+        // 5. Set or restore currentRainfallMapPeriod
         if (!currentRainfallMapPeriod && shortTermMapDataCache.periods.length > 0) {
             currentRainfallMapPeriod = shortTermMapDataCache.periods[0];
         }
 
-        // 5. Populate period selector options from shortTermMapDataCache.periods
+        // 6. Populate period selector options from shortTermMapDataCache.periods
         populatePeriodSelector(shortTermMapDataCache.periods);
 
-        // 6. Apply active rainfall period
+        // 7. Apply active rainfall period
         if (currentRainfallMapPeriod) {
             setRainfallMapPeriod(currentRainfallMapPeriod);
         }
-    } else {
-        // Temperature mode
+
+    } else if (mode === "temperature") {
         currentMapMode = "temperature";
+
+        // Remove station observation layer if present
+        if (stationObservationLayer && leafletMap && leafletMap.hasLayer(stationObservationLayer)) {
+            leafletMap.removeLayer(stationObservationLayer);
+        }
 
         // 1. Update mode toggle button attributes
         if (elements.mapModeTemperature) {
@@ -1120,18 +1767,31 @@ async function setMapMode(mode) {
             elements.mapModeRainfall.classList.remove("active");
             elements.mapModeRainfall.setAttribute("aria-pressed", "false");
         }
+        if (elements.mapModeObservations) {
+            elements.mapModeObservations.classList.remove("active");
+            elements.mapModeObservations.setAttribute("aria-pressed", "false");
+        }
 
         // 2. Toggle legends
         if (elements.mapLegend) elements.mapLegend.classList.remove("hidden");
         if (elements.rainfallLegend) elements.rainfallLegend.classList.add("hidden");
+        if (elements.observationLegend) elements.observationLegend.classList.add("hidden");
 
         // 3. Toggle detail panel summary groups
         if (elements.temperatureSummaryGroup) elements.temperatureSummaryGroup.classList.remove("hidden");
         if (elements.rainfallSummaryGroup) elements.rainfallSummaryGroup.classList.add("hidden");
+        if (elements.observationSummaryGroup) elements.observationSummaryGroup.classList.add("hidden");
         if (elements.summaryPeriod) elements.summaryPeriod.classList.remove("hidden");
         if (elements.rainfallSummaryPeriod) elements.rainfallSummaryPeriod.classList.add("hidden");
+        if (elements.observationSummaryPeriod) elements.observationSummaryPeriod.classList.add("hidden");
 
-        // 4. Restore period selector options from mapDataCache.periods
+        // 4. Restore forecast period select
+        if (elements.mapPeriodSelect) {
+            elements.mapPeriodSelect.classList.remove("hidden");
+            elements.mapPeriodSelect.disabled = false;
+        }
+
+        // 5. Restore period selector options from mapDataCache.periods
         if (mapDataCache && mapDataCache.periods) {
             populatePeriodSelector(mapDataCache.periods);
             if (currentMapPeriod) {
@@ -1890,7 +2550,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // 5c. Attach click listeners to map mode buttons (Phase 8B2)
+    // 5c. Attach click listeners to map mode buttons (Phase 8B2, Phase 8C)
     if (elements.mapModeTemperature) {
         elements.mapModeTemperature.addEventListener("click", () => {
             setMapMode("temperature");
@@ -1899,6 +2559,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (elements.mapModeRainfall) {
         elements.mapModeRainfall.addEventListener("click", () => {
             setMapMode("rainfall");
+        });
+    }
+    if (elements.mapModeObservations) {
+        elements.mapModeObservations.addEventListener("click", () => {
+            setMapMode("observations");
         });
     }
 

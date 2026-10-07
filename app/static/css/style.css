@@ -866,6 +866,182 @@ body {
     font-size: 1.05rem;
 }
 
+/* Phase 8C Observation Mode Styles */
+.observation-summary-period {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+}
+
+[data-theme="dark"] .observation-summary-period {
+    background: rgba(52, 211, 153, 0.18);
+    color: #34d399;
+}
+
+.obs-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+[data-theme="dark"] .obs-badge {
+    background: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+}
+
+.observation-station-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--control-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.75rem;
+}
+
+.observation-station-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.observation-station-id {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.observation-station-note {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+    line-height: 1.4;
+}
+
+.observation-empty-note {
+    padding: 1.25rem 0.85rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+/* Observation Marker Tooltip & Popup */
+.station-tooltip {
+    background: rgba(15, 23, 42, 0.92) !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    border-radius: 6px !important;
+    padding: 6px 10px !important;
+    font-family: var(--font-sans) !important;
+    font-size: 0.85rem !important;
+    line-height: 1.4 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2) !important;
+    pointer-events: none;
+}
+
+.station-tooltip .tooltip-station-name {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.station-tooltip .tooltip-station-data {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+}
+
+.station-tooltip .tooltip-station-time {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.leaflet-popup-content-wrapper {
+    background: var(--bg-card) !important;
+    color: var(--text-main) !important;
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: var(--shadow-float) !important;
+}
+
+.leaflet-popup-tip {
+    background: var(--bg-card) !important;
+}
+
+.station-popup {
+    font-family: var(--font-sans);
+    padding: 0.25rem 0.15rem;
+    min-width: 200px;
+    max-width: 260px;
+}
+
+.station-popup-header {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.45rem;
+    margin-bottom: 0.5rem;
+}
+
+.station-popup-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.station-popup-location {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+}
+
+.station-popup-time {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    margin-bottom: 0.45rem;
+    padding: 0.2rem 0.4rem;
+    background: var(--control-bg);
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.station-popup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+}
+
+.station-popup-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.station-popup-item .popup-lbl {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.station-popup-item .popup-val {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
 /* Leaflet control dark theme tweaks */
 .leaflet-control-attribution {
     font-size: 11px !important;
@@ -1459,6 +1635,17 @@ body {
     .map-controls-group {
         width: 100%;
         justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .map-mode-control {
+        flex-wrap: wrap;
+    }
+
+    .map-mode-btn {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.78rem;
     }
 
     .map-period-control {

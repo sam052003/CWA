@@ -51,6 +51,7 @@ class CWAClient:
     FILE_API_BASE_URL = "https://opendata.cwa.gov.tw/fileapi/v1/opendataapi"
     DATASET_FORECAST_1WEEK = "F-C0032-005"
     DATASET_FORECAST_36H = "F-C0032-001"
+    DATASET_OBSERVATION = "O-A0001"
     DEFAULT_TIMEOUT = 15.0
 
     def __init__(
@@ -79,6 +80,10 @@ class CWAClient:
         if region_name and region_name.strip():
             params = {"locationName": region_name.strip()}
         return self.fetch_dataset(self.DATASET_FORECAST_36H, params=params)
+
+    def fetch_observations(self) -> Dict[str, Any]:
+        """Fetch current weather observations dataset (O-A0001)."""
+        return self.fetch_dataset(self.DATASET_OBSERVATION)
 
     def fetch_dataset(
         self,
@@ -162,6 +167,33 @@ class CWAClient:
             except requests.exceptions.RequestException as exc:
                 raise CWAClientError(
                     f"HTTP request to CWA File API dataset '{dataset_id}' failed: {exc.__class__.__name__}"
+                ) from exc
+
+        # Handle CWA platform difference: O-A0001 in Datastore REST API is published under resource ID O-A0001-001
+        if response.status_code == 404 and dataset_id in (self.DATASET_OBSERVATION, "O-A0001"):
+            alt_url = f"{self.base_url}/O-A0001-001"
+            try:
+                response = requests.get(
+                    alt_url,
+                    headers=headers,
+                    params=params,
+                    timeout=self.timeout,
+                )
+            except requests.exceptions.Timeout as exc:
+                raise CWATimeoutError(
+                    f"Request to CWA Datastore dataset 'O-A0001-001' timed out after {self.timeout}s."
+                ) from exc
+            except requests.exceptions.SSLError as exc:
+                raise CWAConnectionError(
+                    f"TLS verification failed for CWA dataset 'O-A0001-001'."
+                ) from exc
+            except requests.exceptions.ConnectionError as exc:
+                raise CWAConnectionError(
+                    f"Failed to connect to CWA API endpoint for dataset 'O-A0001-001'."
+                ) from exc
+            except requests.exceptions.RequestException as exc:
+                raise CWAClientError(
+                    f"HTTP request to CWA API dataset 'O-A0001-001' failed: {exc.__class__.__name__}"
                 ) from exc
 
         if not (200 <= response.status_code < 300):
