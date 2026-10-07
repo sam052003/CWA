@@ -555,11 +555,23 @@ def get_observations(
         cwa_sent = raw_data.get("cwaopendata", {}).get("sent") if isinstance(raw_data.get("cwaopendata"), dict) else None
         if cwa_sent and isinstance(cwa_sent, str):
             updated_at_str = _to_taipei_iso(cwa_sent)
+
     if not updated_at_str:
+        # Fall back to the LATEST valid station observation_time across all stations
+        valid_times = []
         for s in stations:
-            if s.get("observation_time"):
-                updated_at_str = s["observation_time"]
-                break
+            obs_time = s.get("observation_time")
+            if obs_time and isinstance(obs_time, str):
+                try:
+                    dt = datetime.fromisoformat(obs_time)
+                    valid_times.append((dt, obs_time))
+                except Exception:
+                    pass
+        if valid_times:
+            # Sort by datetime ascending; last element is the latest observation
+            valid_times.sort(key=lambda item: item[0])
+            updated_at_str = valid_times[-1][1]
+
     if not updated_at_str:
         updated_at_str = to_taipei_isoformat(datetime.now(timezone.utc))
 

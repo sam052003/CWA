@@ -900,5 +900,70 @@ def test_get_observations_exception_not_cached():
     assert len(res["stations"]) == 6
 
 
+def test_get_observations_updated_at_uses_latest_station_timestamp():
+    """Verify updated_at derives from the LATEST valid station timestamp when sent is unavailable.
+
+    Ensures that an alphabetically earlier station with an older timestamp does NOT win.
+    """
+    clear_observation_cache()
+    mock_client = MagicMock()
+
+    # Raw payload without cwaopendata.sent
+    # Station A (alphabetically first after sorting) has older timestamp 16:00
+    # Station B (alphabetically second) has latest timestamp 18:00
+    # Station C has intermediate timestamp 17:00
+    mock_payload = {
+        "records": {
+            "Station": [
+                {
+                    "StationName": "日月潭",
+                    "StationId": "C0H990",
+                    "ObsTime": {"DateTime": "2026-10-07T16:00:00+08:00"},
+                    "GeoInfo": {
+                        "Coordinates": [{"CoordinateName": "WGS84", "StationLatitude": 23.88, "StationLongitude": 120.91}],
+                        "CountyName": "南投縣",
+                        "TownName": "魚池鄉",
+                    },
+                    "WeatherElement": {"AirTemperature": 22.0},
+                },
+                {
+                    "StationName": "臺北",
+                    "StationId": "466920",
+                    "ObsTime": {"DateTime": "2026-10-07T18:00:00+08:00"},
+                    "GeoInfo": {
+                        "Coordinates": [{"CoordinateName": "WGS84", "StationLatitude": 25.03, "StationLongitude": 121.51}],
+                        "CountyName": "臺北市",
+                        "TownName": "中正區",
+                    },
+                    "WeatherElement": {"AirTemperature": 27.0},
+                },
+                {
+                    "StationName": "高雄",
+                    "StationId": "467440",
+                    "ObsTime": {"DateTime": "2026-10-07T17:00:00+08:00"},
+                    "GeoInfo": {
+                        "Coordinates": [{"CoordinateName": "WGS84", "StationLatitude": 22.56, "StationLongitude": 120.31}],
+                        "CountyName": "高雄市",
+                        "TownName": "前鎮區",
+                    },
+                    "WeatherElement": {"AirTemperature": 28.0},
+                },
+            ]
+        }
+    }
+    mock_client.fetch_observations.return_value = mock_payload
+
+    res = get_observations(client=mock_client)
+
+    # First station in sorted list is 南投縣 日月潭 (16:00)
+    assert res["stations"][0]["county_name"] == "南投縣"
+    assert res["stations"][0]["observation_time"] == "2026-10-07T16:00:00+08:00"
+
+    # updated_at MUST be the latest observation timestamp (18:00 from 臺北市 臺北), not the first station
+    assert res["updated_at"] == "2026-10-07T18:00:00+08:00"
+    assert res["updated_at"] != res["stations"][0]["observation_time"]
+
+
+
 
 

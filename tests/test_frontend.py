@@ -873,6 +873,31 @@ def test_phase_8c_observation_js():
     assert "function handleCountyPointerDown(event)" in js
     assert "countyLayersByName" in js
 
+    # 7. Clearing stale selected station when county has no station (Phase 8C correctness)
+    assert "selectedObservationStationId = defaultSt ? defaultSt.station_id : null;" in js
+    select_county_idx = js.find("function selectCounty(countyName, options = {})")
+    assert select_county_idx != -1
+    select_county_end = js.find("function resetCountyStyle(", select_county_idx)
+    select_county_body = js[select_county_idx:select_county_end]
+
+    assert "const defaultSt = getDefaultStationForCounty(countyName);" in select_county_body
+    assert "selectedObservationStationId = defaultSt ? defaultSt.station_id : null;" in select_county_body
+    assert "updateObservationDetailPanel(defaultSt);" in select_county_body
+    assert "updateStationMarkerEmphasis();" in select_county_body
+
+
+def test_phase_8c_stale_station_selection_clearing():
+    """Verify that when a county has no station, selectedObservationStationId is explicitly set to null and markers update."""
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # Verify both in selectCounty and in setMapMode that null fallback is explicit
+    assert "selectedObservationStationId = defaultSt ? defaultSt.station_id : null;" in js
+    assert "selectedObservationStationId = null;" in js
+    assert "updateStationMarkerEmphasis();" in js
+
+
 
 
 

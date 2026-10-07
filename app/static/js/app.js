@@ -819,13 +819,9 @@ function selectCounty(countyName, options = {}) {
     // 6. Immediately update nearest-period summary for currently displayed period
     if (currentMapMode === "observations" && observationDataCache) {
         const defaultSt = getDefaultStationForCounty(countyName);
-        if (defaultSt) {
-            selectedObservationStationId = defaultSt.station_id;
-        }
+        selectedObservationStationId = defaultSt ? defaultSt.station_id : null;
         updateObservationDetailPanel(defaultSt);
-        if (stationObservationLayer) {
-            updateStationMarkerEmphasis();
-        }
+        updateStationMarkerEmphasis();
     } else if (currentMapMode === "rainfall" && shortTermMapDataCache) {
         updateRainfallSummary(getRainfallForecastForCounty(countyName));
     } else {
@@ -1671,14 +1667,21 @@ async function setMapMode(mode) {
                 updateObservationDetailPanel(st);
             } else if (selectedCountyName) {
                 const defaultSt = getDefaultStationForCounty(selectedCountyName);
-                if (defaultSt) selectedObservationStationId = defaultSt.station_id;
+                selectedObservationStationId = defaultSt ? defaultSt.station_id : null;
                 updateObservationDetailPanel(defaultSt);
+            } else {
+                selectedObservationStationId = null;
+                updateObservationDetailPanel(null);
             }
         } else if (selectedCountyName) {
             const defaultSt = getDefaultStationForCounty(selectedCountyName);
-            if (defaultSt) selectedObservationStationId = defaultSt.station_id;
+            selectedObservationStationId = defaultSt ? defaultSt.station_id : null;
             updateObservationDetailPanel(defaultSt);
+        } else {
+            selectedObservationStationId = null;
+            updateObservationDetailPanel(null);
         }
+        updateStationMarkerEmphasis();
 
     } else if (mode === "rainfall") {
         // Lazy-load short-term all-county map data if not yet loaded
