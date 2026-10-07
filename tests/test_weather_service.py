@@ -964,6 +964,153 @@ def test_get_observations_updated_at_uses_latest_station_timestamp():
     assert res["updated_at"] != res["stations"][0]["observation_time"]
 
 
+# ==============================================================================
+# Phase 8D: Radar Service & Fallback & Cache Tests
+# ==============================================================================
+
+from app.services.weather_service import (
+    RADAR_BOUNDS,
+    RADAR_DATASET_ID,
+    RADAR_IMAGE_HEIGHT,
+    RADAR_IMAGE_WIDTH,
+    RADAR_PRODUCT_URL,
+    clear_radar_cache,
+    get_radar_metadata,
+)
+
+
+def test_radar_constants():
+    """Verify centralized radar constants."""
+    assert RADAR_DATASET_ID == "O-A0058-002"
+    assert RADAR_PRODUCT_URL == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+    assert RADAR_BOUNDS == {
+        "south": 17.75,
+        "west": 115.00,
+        "north": 29.25,
+        "east": 126.50,
+    }
+    assert RADAR_IMAGE_WIDTH == 3600
+    assert RADAR_IMAGE_HEIGHT == 3600
+
+
+@patch("requests.head")
+def test_get_radar_metadata_xml_strategy(mock_head):
+    """Verify get_radar_metadata parses XML when available, sets time_source to radar_datetime."""
+    clear_radar_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_radar_metadata.return_value = """<?xml version='1.0' encoding='UTF-8'?>
+    <cwaopendata xmlns="urn:cwa:gov:tw:cwacommon:0.1">
+       <sent>2026-10-07T20:36:26+08:00</sent>
+       <dataset>
+          <datasetInfo>
+             <parameterSet>
+                <LongitudeRange>115.00-126.50</LongitudeRange>
+                <LatitudeRange>17.75-29.25</LatitudeRange>
+                <ImageDimension>3600x3600</ImageDimension>
+             </parameterSet>
+          </datasetInfo>
+          <resource>
+             <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png</ProductURL>
+          </resource>
+          <DateTime>2026-10-07T20:30:00+08:00</DateTime>
+       </dataset>
+    </cwaopendata>"""
+
+    res = get_radar_metadata(client=mock_client)
+    assert res["dataset_id"] == "O-A0058-002"
+    assert res["radar_time"] == "2026-10-07T20:30:00+08:00"
+    assert res["time_source"] == "radar_datetime"
+    assert res["bounds"]["south"] == 17.75
+    assert res["bounds"]["north"] == 29.25
+    assert res["bounds"]["west"] == 115.00
+    assert res["bounds"]["east"] == 126.50
+    assert res["image_width"] == 3600
+    assert res["image_height"] == 3600
+    mock_head.assert_not_called()
+
+
+@patch("requests.head")
+def test_get_radar_metadata_fallback_with_last_modified(mock_head):
+    """Verify safe fallback to constants and HEAD Last-Modified when XML fails."""
+    clear_radar_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_radar_metadata.side_effect = Exception("CWA File API 500 error")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"Last-Modified": "Wed, 07 Oct 2026 12:46:15 GMT"}
+    mock_head.return_value = mock_resp
+
+    res = get_radar_metadata(client=mock_client)
+    assert res["dataset_id"] == "O-A0058-002"
+    assert res["image_url"] == RADAR_PRODUCT_URL
+    assert res["radar_time"] is None  # Crucial: never invent radar observation time
+    assert res["time_source"] == "last_modified"
+    assert res["updated_at"] == "2026-10-07T20:46:15+08:00"
+    assert res["bounds"] == RADAR_BOUNDS
+    assert res["image_width"] == 3600
+    assert res["image_height"] == 3600
+
+
+@patch("requests.head")
+def test_get_radar_metadata_fallback_without_last_modified(mock_head):
+    """Verify safe fallback when both XML and HEAD fail."""
+    clear_radar_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_radar_metadata.side_effect = Exception("Network down")
+    mock_head.side_effect = Exception("S3 timeout")
+
+    res = get_radar_metadata(client=mock_client)
+    assert res["dataset_id"] == "O-A0058-002"
+    assert res["image_url"] == RADAR_PRODUCT_URL
+    assert res["radar_time"] is None
+    assert res["time_source"] == "fallback"
+    assert res["bounds"] == RADAR_BOUNDS
+
+
+@patch("requests.head")
+def test_radar_cache_hit_and_expiry(mock_head):
+    """Verify radar metadata in-memory cache hit and TTL expiration."""
+    clear_radar_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_radar_metadata.return_value = """<cwaopendata>
+       <dataset><DateTime>2026-10-07T20:30:00+08:00</DateTime></dataset>
+    </cwaopendata>"""
+
+    # Call 1 at t=1000: Cache miss
+    res1 = get_radar_metadata(client=mock_client, current_time=1000.0)
+    assert mock_client.fetch_radar_metadata.call_count == 1
+
+    # Call 2 at t=1200: Cache hit (<300s TTL)
+    res2 = get_radar_metadata(client=mock_client, current_time=1200.0)
+    assert mock_client.fetch_radar_metadata.call_count == 1
+    assert res1 == res2
+
+    # Call 3 at t=1301: Cache expired (>300s TTL)
+    get_radar_metadata(client=mock_client, current_time=1301.0)
+    assert mock_client.fetch_radar_metadata.call_count == 2
+
+
+def test_radar_failed_request_not_cached():
+    """Verify that unhandled exceptions do not pollute in-memory radar metadata cache."""
+    from app.services.weather_service import _radar_metadata_cache
+    clear_radar_cache()
+
+    with patch("app.services.weather_service.RADAR_DATASET_ID", new=None):
+        # Trigger an error during response dict construction
+        with patch("app.services.weather_service._fetch_product_last_modified", side_effect=RuntimeError("Fatal")):
+            mock_client = MagicMock()
+            mock_client.fetch_radar_metadata.side_effect = RuntimeError("Fatal")
+            with patch("app.services.weather_service.to_taipei_isoformat", side_effect=RuntimeError("Crash")):
+                try:
+                    get_radar_metadata(client=mock_client)
+                except Exception:
+                    pass
+                assert "latest" not in _radar_metadata_cache
+
+
+
+
 
 
 

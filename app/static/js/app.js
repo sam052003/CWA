@@ -17,6 +17,14 @@ let observationDataCache = null;
 let selectedObservationStationId = null;
 let stationObservationLayer = null;
 let observationCanvasRenderer = null;
+
+// Phase 8D: Radar Reflectivity Overlay (O-A0058-002)
+let radarEnabled = false;
+let radarOverlayLayer = null;
+let radarMetadataCache = null;
+let radarOpacity = 0.65;
+let radarAutoRefreshTimer = null;
+
 let selectedCountyName = null;
 let activeTooltipLayer = null;
 let hoveredCountyLayer = null;
@@ -71,6 +79,11 @@ const elements = {
     themeToggle: document.getElementById("theme-toggle"),
     mapResetView: document.getElementById("map-reset-view"),
     mapFullscreenToggle: document.getElementById("map-fullscreen-toggle"),
+    radarToggle: document.getElementById("radar-toggle"),
+    radarOpacity: document.getElementById("radar-opacity"),
+    radarRefresh: document.getElementById("radar-refresh"),
+    radarStatus: document.getElementById("radar-status"),
+    radarControlsWrapper: document.getElementById("radar-controls-wrapper"),
     detailPanel: document.getElementById("detail-panel"),
     detailPanelToggle: document.getElementById("detail-panel-toggle"),
     detailPanelSummaryLabel: document.getElementById("detail-panel-summary-label"),
@@ -994,6 +1007,14 @@ function initMap() {
         maxZoom: 18,
     }).addTo(leafletMap);
 
+    // Dedicated Leaflet radar pane (Phase 8D)
+    if (!leafletMap.getPane("radarPane")) {
+        leafletMap.createPane("radarPane");
+        const rPane = leafletMap.getPane("radarPane");
+        rPane.style.zIndex = 350;
+        rPane.style.pointerEvents = "none";
+    }
+
     // Apply wheel zoom synchronization
     syncMapWheelZoom();
 
@@ -1112,6 +1133,9 @@ function initMapControls() {
 
     // 4. Scroll-wheel zoom sync
     syncMapWheelZoom();
+
+    // 5. Initialize Radar Overlay controls (Phase 8D)
+    initRadarControls();
 }
 
 // ---------------------------------------------------------------------------
@@ -2513,6 +2537,242 @@ async function loadRegions() {
         console.error("Regions load error:", err);
         elements.regionSelect.disabled = true;
         showError("無法載入縣市清單，請確認網路連線或稍後再試。");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8D: Radar Reflectivity Overlay (O-A0058-002)
+// ---------------------------------------------------------------------------
+
+/**
+ * Format timestamp into MM/DD HH:mm for radar status badge.
+ */
+function formatRadarTimestamp(timeStr) {
+    if (!timeStr) return "";
+    try {
+        const d = new Date(timeStr);
+        if (isNaN(d.getTime())) return timeStr;
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const hours = String(d.getHours()).padStart(2, "0");
+        const minutes = String(d.getMinutes()).padStart(2, "0");
+        return `${month}/${day} ${hours}:${minutes}`;
+    } catch (e) {
+        return timeStr;
+    }
+}
+
+/**
+ * Update radar status badge with truthful timestamp labeling.
+ */
+function updateRadarStatusBadge(metadata) {
+    if (!elements.radarStatus) return;
+    if (!metadata) {
+        elements.radarStatus.textContent = "最新雷達影像";
+        return;
+    }
+    if (metadata.time_source === "radar_datetime" && metadata.radar_time) {
+        const formatted = formatRadarTimestamp(metadata.radar_time);
+        elements.radarStatus.textContent = `雷達時間：${formatted}`;
+    } else if (metadata.time_source === "last_modified" && metadata.updated_at) {
+        const formatted = formatRadarTimestamp(metadata.updated_at);
+        elements.radarStatus.textContent = `影像更新：${formatted}`;
+    } else {
+        elements.radarStatus.textContent = "最新雷達影像";
+    }
+}
+
+/**
+ * Append harmless cache-busting version parameter to official ProductURL without modifying base URL.
+ */
+function getRadarImageUrlWithVersion(metadata) {
+    if (!metadata || !metadata.image_url) return "";
+    const versionVal = metadata.radar_time || metadata.updated_at || Date.now().toString();
+    const sep = metadata.image_url.includes("?") ? "&" : "?";
+    return `${metadata.image_url}${sep}v=${encodeURIComponent(versionVal)}`;
+}
+
+/**
+ * Lazy-load radar metadata from /api/radar.
+ */
+async function loadRadarMetadata(forceRefresh = false) {
+    if (radarMetadataCache && !forceRefresh) {
+        return radarMetadataCache;
+    }
+    const url = forceRefresh ? `/api/radar?_t=${Date.now()}` : "/api/radar";
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`Radar API returned status ${res.status}`);
+        }
+        const data = await res.json();
+        radarMetadataCache = data;
+        return data;
+    } catch (err) {
+        console.error("Failed to load radar metadata:", err);
+        return null;
+    }
+}
+
+/**
+ * Apply or refresh Leaflet image overlay for radar reflectivity.
+ */
+async function applyRadarOverlay(forceRefresh = false) {
+    if (!elements.radarStatus) return;
+    elements.radarStatus.textContent = "正在載入雷達回波...";
+    elements.radarStatus.classList.remove("hidden");
+
+    const metadata = await loadRadarMetadata(forceRefresh);
+    if (!metadata || !metadata.image_url) {
+        if (elements.radarStatus) {
+            elements.radarStatus.textContent = "雷達影像暫時無法載入";
+        }
+        if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
+            leafletMap.removeLayer(radarOverlayLayer);
+        }
+        return;
+    }
+
+    const bounds = metadata.bounds
+        ? [[metadata.bounds.south, metadata.bounds.west], [metadata.bounds.north, metadata.bounds.east]]
+        : [[17.75, 115.00], [29.25, 126.50]];
+
+    const versionedUrl = getRadarImageUrlWithVersion(metadata);
+
+    // If overlay already exists on map, remove to recreate safely without recreating whole map
+    if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
+        leafletMap.removeLayer(radarOverlayLayer);
+    }
+
+    radarOverlayLayer = L.imageOverlay(versionedUrl, bounds, {
+        opacity: radarOpacity,
+        interactive: false,
+        pane: "radarPane",
+    });
+
+    radarOverlayLayer.on("load", () => {
+        updateRadarStatusBadge(metadata);
+    });
+
+    radarOverlayLayer.on("error", () => {
+        if (leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
+            leafletMap.removeLayer(radarOverlayLayer);
+        }
+        if (elements.radarStatus) {
+            elements.radarStatus.textContent = "雷達影像暫時無法載入";
+        }
+    });
+
+    if (radarEnabled && leafletMap) {
+        radarOverlayLayer.addTo(leafletMap);
+    }
+}
+
+/**
+ * Start 10-minute non-blocking auto-refresh timer while radar is active.
+ */
+function startRadarAutoRefresh() {
+    stopRadarAutoRefresh();
+    radarAutoRefreshTimer = setInterval(async () => {
+        if (radarEnabled) {
+            try {
+                await applyRadarOverlay(true);
+            } catch (e) {
+                console.warn("Non-blocking radar auto-refresh failed:", e);
+            }
+        }
+    }, 600000); // 10 minutes (600,000 ms)
+}
+
+/**
+ * Stop auto-refresh timer.
+ */
+function stopRadarAutoRefresh() {
+    if (radarAutoRefreshTimer) {
+        clearInterval(radarAutoRefreshTimer);
+        radarAutoRefreshTimer = null;
+    }
+}
+
+/**
+ * Toggle radar reflectivity overlay on/off.
+ */
+async function toggleRadar() {
+    if (radarEnabled) {
+        radarEnabled = false;
+        if (elements.radarToggle) {
+            elements.radarToggle.setAttribute("aria-pressed", "false");
+            elements.radarToggle.classList.remove("active");
+        }
+        if (elements.radarOpacity) {
+            elements.radarOpacity.disabled = true;
+        }
+        if (elements.radarRefresh) {
+            elements.radarRefresh.disabled = true;
+        }
+        if (elements.radarStatus) {
+            elements.radarStatus.classList.add("hidden");
+        }
+        if (elements.radarControlsWrapper) {
+            elements.radarControlsWrapper.classList.add("disabled");
+        }
+        if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
+            leafletMap.removeLayer(radarOverlayLayer);
+        }
+        stopRadarAutoRefresh();
+    } else {
+        radarEnabled = true;
+        if (elements.radarToggle) {
+            elements.radarToggle.setAttribute("aria-pressed", "true");
+            elements.radarToggle.classList.add("active");
+        }
+        if (elements.radarOpacity) {
+            elements.radarOpacity.disabled = false;
+        }
+        if (elements.radarRefresh) {
+            elements.radarRefresh.disabled = false;
+        }
+        if (elements.radarControlsWrapper) {
+            elements.radarControlsWrapper.classList.remove("disabled");
+        }
+        await applyRadarOverlay(false);
+        startRadarAutoRefresh();
+    }
+}
+
+/**
+ * Initialize event listeners for radar overlay controls.
+ */
+function initRadarControls() {
+    if (elements.radarToggle) {
+        elements.radarToggle.addEventListener("click", () => {
+            toggleRadar();
+        });
+    }
+
+    if (elements.radarOpacity) {
+        elements.radarOpacity.addEventListener("input", (e) => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val)) {
+                radarOpacity = val;
+                elements.radarOpacity.setAttribute("aria-valuenow", val.toString());
+                const percentEl = document.getElementById("radar-opacity-val");
+                if (percentEl) {
+                    percentEl.textContent = `${Math.round(val * 100)}%`;
+                }
+                if (radarOverlayLayer) {
+                    radarOverlayLayer.setOpacity(radarOpacity);
+                }
+            }
+        });
+    }
+
+    if (elements.radarRefresh) {
+        elements.radarRefresh.addEventListener("click", async () => {
+            if (radarEnabled) {
+                await applyRadarOverlay(true);
+            }
+        });
     }
 }
 

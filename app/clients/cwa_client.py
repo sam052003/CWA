@@ -53,6 +53,7 @@ class CWAClient:
     DATASET_FORECAST_36H = "F-C0032-001"
     DATASET_OBSERVATION = "O-A0001"
     DATASET_OBSERVATION_RESOURCE = "O-A0001-001"
+    DATASET_RADAR = "O-A0058-002"
     DEFAULT_TIMEOUT = 15.0
 
     def __init__(
@@ -85,6 +86,63 @@ class CWAClient:
     def fetch_observations(self) -> Dict[str, Any]:
         """Fetch current weather observations dataset directly using official resource ID (O-A0001-001)."""
         return self.fetch_dataset(self.DATASET_OBSERVATION_RESOURCE)
+
+    def fetch_radar_metadata(self) -> str:
+        """Fetch radar reflectivity metadata XML for O-A0058-002 via File API.
+
+        Uses Authorization header without placing API key into URL parameters or logs.
+
+        Returns:
+            Raw XML response string.
+
+        Raises:
+            CWAMissingAPIKeyError: If API key is missing.
+            CWATimeoutError: If HTTP request times out.
+            CWAConnectionError: If network connection fails.
+            CWAHTTPError: If HTTP status code is non-2xx.
+            CWAClientError: For any other request failure.
+        """
+        if not self._api_key:
+            raise CWAMissingAPIKeyError(
+                "CWA_API_KEY is not configured. Please set it in .env or environment variables."
+            )
+
+        url = f"{self.FILE_API_BASE_URL}/{self.DATASET_RADAR}"
+        headers = {
+            "Authorization": self._api_key,
+            "Accept": "application/xml, text/xml, */*",
+        }
+
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=self.timeout,
+            )
+        except requests.exceptions.Timeout as exc:
+            raise CWATimeoutError(
+                f"Request to CWA File API dataset '{self.DATASET_RADAR}' timed out after {self.timeout}s."
+            ) from exc
+        except requests.exceptions.SSLError as exc:
+            raise CWAConnectionError(
+                f"TLS verification failed for CWA dataset '{self.DATASET_RADAR}'."
+            ) from exc
+        except requests.exceptions.ConnectionError as exc:
+            raise CWAConnectionError(
+                f"Failed to connect to CWA File API endpoint for dataset '{self.DATASET_RADAR}'."
+            ) from exc
+        except requests.exceptions.RequestException as exc:
+            raise CWAClientError(
+                f"HTTP request to CWA File API dataset '{self.DATASET_RADAR}' failed: {exc.__class__.__name__}"
+            ) from exc
+
+        if not (200 <= response.status_code < 300):
+            raise CWAHTTPError(
+                status_code=response.status_code,
+                message=f"Dataset '{self.DATASET_RADAR}' request failed with status {response.status_code}.",
+            )
+
+        return response.text
 
     def fetch_dataset(
         self,

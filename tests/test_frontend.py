@@ -898,6 +898,92 @@ def test_phase_8c_stale_station_selection_clearing():
     assert "updateStationMarkerEmphasis();" in js
 
 
+# ==============================================================================
+# Phase 8D: Radar Reflectivity Overlay Frontend Tests
+# ==============================================================================
+
+def test_phase_8d_radar_html_elements():
+    """Verify HTML contains all required Phase 8D radar controls and status badges."""
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    assert 'id="radar-toggle"' in html
+    assert "雷達回波" in html
+    assert 'id="radar-opacity"' in html
+    assert 'id="radar-refresh"' in html
+    assert 'id="radar-status"' in html
+    assert 'aria-live="polite"' in html
+
+
+def test_phase_8d_radar_js_architecture_and_lifecycle():
+    """Verify JS contains radar state, Leaflet pane, lazy loading, L.imageOverlay, and mode independence."""
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. Required radar state variables
+    assert "radarEnabled = false" in js
+    assert "radarOverlayLayer = null" in js
+    assert "radarMetadataCache = null" in js
+    assert "radarOpacity = 0.65" in js
+
+    # 2. Dedicated Leaflet radarPane with pointer events disabled
+    assert '"radarPane"' in js
+    assert 'createPane("radarPane")' in js
+    assert 'rPane.style.pointerEvents = "none"' in js
+
+    # 3. L.imageOverlay with interactive: false and radarPane
+    assert "L.imageOverlay(" in js
+    assert "interactive: false" in js
+    assert 'pane: "radarPane"' in js
+
+    # 4. Lazy-fetch from dedicated API endpoint
+    assert '"/api/radar"' in js
+
+    # 5. Cache-busting version URL exists
+    assert "getRadarImageUrlWithVersion" in js
+    assert "encodeURIComponent(" in js
+
+    # 6. Opacity change calls setOpacity with NO fetch
+    opacity_idx = js.find("elements.radarOpacity.addEventListener")
+    assert opacity_idx != -1
+    opacity_end = js.find("if (elements.radarRefresh)", opacity_idx)
+    opacity_body = js[opacity_idx:opacity_end]
+    assert "setOpacity(" in opacity_body
+    assert "fetch(" not in opacity_body
+
+    # 7. Non-blocking error handling
+    assert "雷達影像暫時無法載入" in js
+    assert "正在載入雷達回波..." in js
+
+    # 8. Unchanged handleCountyPointerDown bridge
+    assert "function handleCountyPointerDown(event)" in js
+    assert "countyLayersByName" in js
+
+    # 9. Three existing map modes remain exactly supported
+    set_mode_idx = js.find("async function setMapMode(mode)")
+    assert set_mode_idx != -1
+    set_mode_end = js.find("function updateSummary(", set_mode_idx)
+    set_mode_body = js[set_mode_idx:set_mode_end]
+
+    assert 'mode === "observations"' in set_mode_body
+    assert 'mode === "rainfall"' in set_mode_body
+    assert 'mode === "temperature"' in set_mode_body
+    # Radar is NOT removed during mode switches
+    assert "removeLayer(radarOverlayLayer)" not in set_mode_body
+
+    # 10. Radar refresh does not recreate whole Leaflet map
+    apply_overlay_idx = js.find("async function applyRadarOverlay(")
+    assert apply_overlay_idx != -1
+    apply_overlay_end = js.find("function startRadarAutoRefresh(", apply_overlay_idx)
+    apply_overlay_body = js[apply_overlay_idx:apply_overlay_end]
+    assert "L.map(" not in apply_overlay_body
+    assert "L.imageOverlay(" in apply_overlay_body
+
+
+
+
 
 
 

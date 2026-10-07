@@ -1,6 +1,7 @@
 """CWA JSON Parser - parses and normalizes raw CWA JSON payload into structured forecast records."""
 
 import math
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -614,4 +615,108 @@ def parse_observation_stations(data: Any) -> List[Dict[str, Any]]:
         key=lambda s: (s["county_name"] or "", s["station_name"] or "", s["station_id"] or "")
     )
     return normalized_stations
+
+
+# ==============================================================================
+# Phase 8D: O-A0058-002 Radar Reflectivity Metadata XML Parser
+# ==============================================================================
+
+def parse_radar_metadata_xml(xml_content: str) -> Dict[str, Any]:
+    """Parse CWA O-A0058-002 radar metadata XML.
+
+    Extracts:
+        - product_url (str): Image ProductURL
+        - radar_time (str): Official meteorological DateTime
+        - sent_time (str): Feed sent timestamp
+        - west, east (float): Longitude range
+        - south, north (float): Latitude range
+        - image_width, image_height (int): Pixel dimensions
+
+    Handles XML namespaces robustly by inspecting local tag names.
+    Returns empty dict on parse error or invalid payload.
+    """
+    if not xml_content or not isinstance(xml_content, str):
+        return {}
+
+    try:
+        root = ET.fromstring(xml_content.strip())
+    except ET.ParseError:
+        return {}
+
+    def find_local(parent: ET.Element, tag_name: str) -> Optional[ET.Element]:
+        for elem in parent.iter():
+            local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+            if local == tag_name:
+                return elem
+        return None
+
+    def find_text(parent: ET.Element, tag_name: str) -> Optional[str]:
+        elem = find_local(parent, tag_name)
+        if elem is not None and elem.text:
+            val = elem.text.strip()
+            return val if val else None
+        return None
+
+    product_url = find_text(root, "ProductURL")
+    date_time = find_text(root, "DateTime")
+    sent_time = find_text(root, "sent")
+    lon_range_str = find_text(root, "LongitudeRange")
+    lat_range_str = find_text(root, "LatitudeRange")
+    dim_str = find_text(root, "ImageDimension")
+
+    west = None
+    east = None
+    if lon_range_str:
+        # Expected format: "115.00-126.50" or "115.00 - 126.50"
+        parts = [p.strip() for p in lon_range_str.split("-") if p.strip()]
+        if len(parts) == 2:
+            try:
+                west = float(parts[0])
+                east = float(parts[1])
+            except ValueError:
+                pass
+
+    south = None
+    north = None
+    if lat_range_str:
+        # Expected format: "17.75-29.25" or "17.75 - 29.25"
+        parts = [p.strip() for p in lat_range_str.split("-") if p.strip()]
+        if len(parts) == 2:
+            try:
+                south = float(parts[0])
+                north = float(parts[1])
+            except ValueError:
+                pass
+
+    width = None
+    height = None
+    if dim_str:
+        # Expected format: "3600x3600" or "3600X3600"
+        parts = [p.strip() for p in dim_str.lower().split("x") if p.strip()]
+        if len(parts) == 2:
+            try:
+                width = int(parts[0])
+                height = int(parts[1])
+            except ValueError:
+                pass
+
+    result: Dict[str, Any] = {}
+    if product_url:
+        result["product_url"] = product_url
+    if date_time:
+        result["radar_time"] = date_time
+    if sent_time:
+        result["sent_time"] = sent_time
+    if west is not None and east is not None:
+        result["west"] = west
+        result["east"] = east
+    if south is not None and north is not None:
+        result["south"] = south
+        result["north"] = north
+    if width is not None and height is not None:
+        result["image_width"] = width
+        result["image_height"] = height
+
+    return result
+
 

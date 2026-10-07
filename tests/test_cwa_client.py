@@ -345,4 +345,49 @@ def test_fetch_observations_direct_resource(mock_get, mock_client):
     assert called_url.endswith("/O-A0001-001")
 
 
+# ==============================================================================
+# Phase 8D: Radar Client Tests (O-A0058-002)
+# ==============================================================================
+
+def test_dataset_radar_constant(mock_client):
+    """Verify DATASET_RADAR is 'O-A0058-002'."""
+    assert mock_client.DATASET_RADAR == "O-A0058-002"
+
+
+@patch("requests.get")
+def test_fetch_radar_metadata_success(mock_get, mock_client):
+    """Verify fetch_radar_metadata requests File API with Authorization header and returns XML text."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "<cwaopendata><DateTime>2026-10-07T20:30:00+08:00</DateTime></cwaopendata>"
+    mock_get.return_value = mock_resp
+
+    xml_text = mock_client.fetch_radar_metadata()
+    assert "<cwaopendata>" in xml_text
+    assert mock_get.call_count == 1
+    call_args = mock_get.call_args
+    assert "O-A0058-002" in call_args[0][0]
+    assert call_args[1]["headers"]["Authorization"] == "CWA-TEST-DUMMY-KEY-12345"
+
+
+@patch("requests.get")
+def test_fetch_radar_metadata_cwa_error(mock_get, mock_client):
+    """Verify fetch_radar_metadata raises CWAHTTPError on non-200."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 502
+    mock_get.return_value = mock_resp
+
+    with pytest.raises(CWAHTTPError) as exc_info:
+        mock_client.fetch_radar_metadata()
+    assert exc_info.value.status_code == 502
+
+
+def test_fetch_radar_metadata_missing_key():
+    """Verify fetch_radar_metadata raises CWAMissingAPIKeyError if key is None."""
+    client_no_key = CWAClient(api_key="")
+    with pytest.raises(CWAMissingAPIKeyError):
+        client_no_key.fetch_radar_metadata()
+
+
+
 

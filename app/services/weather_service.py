@@ -1,6 +1,6 @@
-"""Weather service layer - coordinates CWA API fetching, parsing, validation, and repository persistence."""
-
+import email.utils
 import re
+import requests
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 from zoneinfo import ZoneInfo
@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.parsers.cwa_parser import (
     parse_cwa_forecast,
     parse_observation_stations,
+    parse_radar_metadata_xml,
     parse_short_term_forecast,
 )
 from app.repositories.weather_repository import (
@@ -278,6 +279,9 @@ SHORT_TERM_MAP_CACHE_TTL_SECONDS = 900  # 15 minutes TTL
 _observation_cache: Dict[str, Dict[str, Any]] = {}
 OBSERVATION_CACHE_TTL_SECONDS = 600  # 10 minutes TTL
 
+_radar_metadata_cache: Dict[str, Dict[str, Any]] = {}
+RADAR_CACHE_TTL_SECONDS = 300  # 5 minutes TTL
+
 
 def clear_short_term_cache() -> None:
     """Clear in-memory short-term forecast cache (used for test isolation)."""
@@ -292,6 +296,11 @@ def clear_short_term_map_cache() -> None:
 def clear_observation_cache() -> None:
     """Clear in-memory weather station observation cache (used for test isolation)."""
     _observation_cache.clear()
+
+
+def clear_radar_cache() -> None:
+    """Clear in-memory radar metadata cache (used for test isolation)."""
+    _radar_metadata_cache.clear()
 
 
 def _to_taipei_iso(time_str: str) -> str:
@@ -717,6 +726,172 @@ def refresh_forecasts(
     }
 
 
+# ==============================================================================
+# Phase 8D: Radar Reflectivity Overlay Service (O-A0058-002)
+# ==============================================================================
+
+RADAR_DATASET_ID = "O-A0058-002"
+RADAR_PRODUCT_URL = "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+RADAR_BOUNDS = {
+    "south": 17.75,
+    "west": 115.00,
+    "north": 29.25,
+    "east": 126.50,
+}
+RADAR_IMAGE_WIDTH = 3600
+RADAR_IMAGE_HEIGHT = 3600
+
+
+def _fetch_product_last_modified(url: str, timeout: float = 5.0) -> Optional[str]:
+    """Perform server-side HTTP HEAD request against official ProductURL to read Last-Modified.
+
+    Converts HTTP Date format to ISO 8601 string in Asia/Taipei timezone (+08:00).
+    Returns None if header is missing, non-200 status, or request fails.
+    """
+    try:
+        response = requests.head(url, timeout=timeout)
+        if response.status_code == 200:
+            last_mod = response.headers.get("Last-Modified")
+            if last_mod:
+                dt = email.utils.parsedate_to_datetime(last_mod)
+                return to_taipei_isoformat(dt)
+    except Exception:
+        pass
+    return None
+
+
+def get_radar_metadata(
+    client: Optional[CWAClient] = None,
+    current_time: Optional[float] = None,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """Retrieve radar reflectivity metadata (O-A0058-002) for map overlay.
+
+    First attempts to obtain official XML metadata via CWA File API.
+    If unavailable or on failure, falls back safely to official documented constants
+    and reads Last-Modified via server-side HTTP HEAD for freshness.
+
+    Uses an in-memory process-local best-effort TTL cache (5 min).
+    Does NOT require a database session.
+    Never caches failed requests.
+
+    Args:
+        client: Optional CWAClient instance for dependency injection / testing.
+        current_time: Optional unix timestamp float for deterministic cache testing.
+        force_refresh: If True, bypasses cache and performs live acquisition.
+
+    Returns:
+        Dictionary formatted for RadarMetadataResponse.
+
+    Raises:
+        WeatherServiceError: If complete inability to produce usable metadata occurs.
+    """
+    now = current_time if current_time is not None else time.time()
+
+    # 1. Check in-memory process-local cache unless force_refresh
+    if not force_refresh:
+        cached_entry = _radar_metadata_cache.get("latest")
+        if cached_entry and cached_entry.get("expires_at", 0) > now:
+            cached_data = cached_entry.get("data")
+            if cached_data:
+                return cached_data
+
+    # 2. Strategy A: Attempt to fetch and parse official XML metadata
+    if client is None:
+        client = CWAClient()
+
+    xml_content: Optional[str] = None
+    try:
+        xml_content = client.fetch_radar_metadata()
+    except Exception:
+        xml_content = None
+
+    if xml_content:
+        try:
+            parsed = parse_radar_metadata_xml(xml_content)
+        except Exception:
+            parsed = {}
+
+        if parsed:
+            image_url = parsed.get("product_url") or RADAR_PRODUCT_URL
+            radar_time = parsed.get("radar_time")
+
+            if all(k in parsed for k in ("south", "west", "north", "east")):
+                bounds = {
+                    "south": parsed["south"],
+                    "west": parsed["west"],
+                    "north": parsed["north"],
+                    "east": parsed["east"],
+                }
+            else:
+                bounds = dict(RADAR_BOUNDS)
+
+            image_width = parsed.get("image_width", RADAR_IMAGE_WIDTH)
+            image_height = parsed.get("image_height", RADAR_IMAGE_HEIGHT)
+
+            if radar_time:
+                time_source = "radar_datetime"
+                updated_at = parsed.get("sent_time") or radar_time
+            else:
+                last_mod = _fetch_product_last_modified(image_url)
+                if last_mod:
+                    time_source = "last_modified"
+                    updated_at = last_mod
+                else:
+                    time_source = "fallback"
+                    updated_at = parsed.get("sent_time") or to_taipei_isoformat(datetime.now(timezone.utc))
+
+            response_data = {
+                "dataset_id": RADAR_DATASET_ID,
+                "image_url": image_url,
+                "radar_time": radar_time,
+                "time_source": time_source,
+                "bounds": bounds,
+                "image_width": image_width,
+                "image_height": image_height,
+                "updated_at": updated_at,
+            }
+
+            _radar_metadata_cache["latest"] = {
+                "data": response_data,
+                "expires_at": now + RADAR_CACHE_TTL_SECONDS,
+            }
+            return response_data
+
+    # 3. Strategy B: Safe fallback to official documented constants
+    image_url = RADAR_PRODUCT_URL
+    bounds = dict(RADAR_BOUNDS)
+    image_width = RADAR_IMAGE_WIDTH
+    image_height = RADAR_IMAGE_HEIGHT
+
+    last_mod = _fetch_product_last_modified(RADAR_PRODUCT_URL)
+    if last_mod:
+        radar_time = None
+        time_source = "last_modified"
+        updated_at = last_mod
+    else:
+        radar_time = None
+        time_source = "fallback"
+        updated_at = to_taipei_isoformat(datetime.now(timezone.utc))
+
+    response_data = {
+        "dataset_id": RADAR_DATASET_ID,
+        "image_url": image_url,
+        "radar_time": radar_time,
+        "time_source": time_source,
+        "bounds": bounds,
+        "image_width": image_width,
+        "image_height": image_height,
+        "updated_at": updated_at,
+    }
+
+    _radar_metadata_cache["latest"] = {
+        "data": response_data,
+        "expires_at": now + RADAR_CACHE_TTL_SECONDS,
+    }
+    return response_data
+
+
 class WeatherService:
     """Service class grouping weather domain operations."""
 
@@ -725,6 +900,10 @@ class WeatherService:
     get_map_data = staticmethod(get_map_data)
     get_short_term_forecast = staticmethod(get_short_term_forecast)
     clear_short_term_cache = staticmethod(clear_short_term_cache)
+    get_observations = staticmethod(get_observations)
+    clear_observation_cache = staticmethod(clear_observation_cache)
+    get_radar_metadata = staticmethod(get_radar_metadata)
+    clear_radar_cache = staticmethod(clear_radar_cache)
     refresh_forecasts = staticmethod(refresh_forecasts)
     to_taipei_isoformat = staticmethod(to_taipei_isoformat)
     sanitize_error = staticmethod(sanitize_error)

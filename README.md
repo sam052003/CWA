@@ -26,9 +26,11 @@
 - Phase 8A ✅ App Experience & Map Workspace (已完成並通過生產環境驗收)
 - Phase 8B ✅ Rich County Forecast 今明 36 小時生活預報 (已完成並通過生產環境驗收)
 - Phase 8B2 ✅ Rainfall Probability Map Mode 降雨機率地圖模式 (已完成並通過生產環境驗收)
-- Phase 8C 📋 Current Weather Observations 目前氣象觀測 (實作完成，待正式環境手動驗收)
+- Phase 8C ✅ Current Weather Observations 目前氣象觀測 (已完成並通過生產環境驗收)
+- Phase 8D 📋 Radar Reflectivity Overlay 雷達整合回波圖層 (實作完成，待正式環境手動驗收)
 
 > **資料語義說明**：
+> - `O-A0058-002`：雷達整合回波圖－臺灣（較大範圍）_有地形（觀測圖資，約每 10 分鐘更新一次，經度 115.00–126.50，緯度 17.75–29.25，解析度 3600×3600）
 > - `O-A0001`：氣象測站即時觀測資料（真實物理測量值，非預報值）
 > - `F-C0032-001`：今明 36 小時生活天氣預報（預測值）
 > - `F-C0032-005`：一週天氣預報（預測值）
@@ -345,8 +347,8 @@ Supabase PostgreSQL
   - [x] **8A**: App Experience & Map Workspace（已完成並通過生產環境驗收 — 深淺模式、OSM 濾鏡適配、地圖擴展為 600–680px 主工作台、桌面浮動面板、重設視角、全螢幕地圖）
   - [x] **8B**: Rich County Forecast（已完成並通過生產環境驗收 — 串接 `F-C0032-001` 今明 36 小時預報，新增降雨機率 `PoP` 與舒適度指數 `CI`，獨立卡片與即時過濾快取）
   - [x] **8B2**: Rainfall Map Mode（已完成並通過生產環境驗收 — `GET /api/map-data/short-term` 專屬端點與單一 Leaflet 地圖降雨機率面量圖切換模式）
-  - [ ] **8C**: Current Weather Observations（實作完成，待正式環境手動驗收 — 串接 `O-A0001` 全臺氣象測站即時觀測，獨立測站 Canvas CircleMarker 圖層、嚴格區隔「目前觀測 (測量值)」與「未來預報 (預測值)」）
-  - [ ] **8D**: Radar Layer（串接 `O-A0058-002` 雷達回波合成圖，支援 ImageOverlay、透明度調整與時間戳記，零二進位寫庫）
+  - [x] **8C**: Current Weather Observations（已完成並通過生產環境驗收 — 串接 `O-A0001` 全臺氣象測站即時觀測，獨立測站 Canvas CircleMarker 圖層、嚴格區隔「目前觀測 (測量值)」與「未來預報 (預測值)」）
+  - [ ] **8D**: Radar Layer（實作完成，待正式環境手動驗收 — 串接 `O-A0058-002` 雷達整合回波圖－臺灣（較大範圍）_有地形；雷達為獨立 Leaflet ImageOverlay 圖層而非第 4 種地圖模式，支援透明度滑桿、時間戳記、自動/手動重新整理與無阻塞錯誤防禦，零二進位寫庫）
   - [ ] **8E**: Typhoon Center（串接 `W-C0034-005` 颱風分析與預報、路徑線段、暴風圈半徑多邊形、西北太平洋廣域視角與正常空狀態）
   - [ ] **8F**: Township Detailed Forecast（串接 `F-D0047-093` 鄉鎮市區細緻預報，伺服器端過濾分級查詢，防禦巨量資料傳輸）
   - [ ] **8G**: Application Polish / Future Features（最愛縣市、分享網址狀態、PWA 支援、警特報橫幅與全方位無障礙適配）

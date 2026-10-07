@@ -115,6 +115,51 @@
                                 </select>
                             </div>
                             <div class="map-toolbar" id="map-toolbar" role="toolbar" aria-label="地圖工具列">
+                                <!-- Radar Reflectivity Overlay Controls (Phase 8D) -->
+                                <button
+                                    id="radar-toggle"
+                                    class="map-tool-btn radar-toggle-btn"
+                                    type="button"
+                                    aria-pressed="false"
+                                    aria-label="切換雷達回波圖層"
+                                    title="開啟/關閉雷達回波圖層（O-A0058-002）"
+                                >
+                                    <span class="tool-icon" aria-hidden="true">☁️</span>
+                                    <span class="tool-label">雷達回波</span>
+                                </button>
+                                <div class="radar-controls-wrapper disabled" id="radar-controls-wrapper">
+                                    <label for="radar-opacity" class="radar-opacity-label" id="radar-opacity-label">
+                                        <span class="opacity-title">雷達透明度</span>
+                                        <span id="radar-opacity-val" class="opacity-val">65%</span>
+                                    </label>
+                                    <input
+                                        type="range"
+                                        id="radar-opacity"
+                                        class="radar-opacity-slider"
+                                        min="0.1"
+                                        max="1.0"
+                                        step="0.05"
+                                        value="0.65"
+                                        aria-labelledby="radar-opacity-label"
+                                        aria-valuemin="0.1"
+                                        aria-valuemax="1.0"
+                                        aria-valuenow="0.65"
+                                        disabled
+                                    />
+                                    <button
+                                        id="radar-refresh"
+                                        class="map-tool-btn radar-refresh-btn"
+                                        type="button"
+                                        aria-label="重新整理雷達"
+                                        title="重新整理雷達"
+                                        disabled
+                                    >
+                                        <span class="tool-icon" aria-hidden="true">🔄</span>
+                                        <span class="tool-label">重新整理</span>
+                                    </button>
+                                    <span id="radar-status" class="radar-status-badge hidden" aria-live="polite">最新雷達影像</span>
+                                </div>
+                                <div class="toolbar-divider" aria-hidden="true"></div>
                                 <button
                                     id="map-reset-view"
                                     class="map-tool-btn"

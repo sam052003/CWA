@@ -12,6 +12,7 @@ from app.api.schemas import (
     ShortTermForecastResponse,
     ShortTermMapDataResponse,
     ObservationResponse,
+    RadarMetadataResponse,
 )
 from app.clients.cwa_client import CWAClientError
 from app.core.config import get_settings
@@ -22,6 +23,7 @@ from app.services.weather_service import (
     RegionNotFoundError,
     WeatherDatabaseError,
     WeatherRefreshError,
+    WeatherServiceError,
 )
 
 router = APIRouter(prefix="/api", tags=["Weather"])
@@ -223,6 +225,36 @@ def get_observations_endpoint():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving weather observations",
+        )
+
+
+# ==============================================================================
+# Phase 8D: Radar Reflectivity Overlay Endpoint (O-A0058-002)
+# ==============================================================================
+
+@router.get(
+    "/radar",
+    response_model=RadarMetadataResponse,
+    summary="Get radar reflectivity overlay metadata (O-A0058-002)",
+    responses={
+        502: {"model": ErrorResponse, "description": "Upstream radar data service unavailable"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+def get_radar_endpoint():
+    """Retrieve radar reflectivity metadata (O-A0058-002) for map overlay."""
+    try:
+        data = weather_service.get_radar_metadata()
+        return RadarMetadataResponse(**data)
+    except WeatherServiceError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Upstream radar data service unavailable",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving radar metadata",
         )
 
 

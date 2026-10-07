@@ -1448,30 +1448,43 @@ Supabase PostgreSQL
 
 ---
 
-### 5. 8D — Radar Layer (氣象雷達回波合成圖疊加)
+### 5. 8D — Radar Layer (雷達整合回波圖層疊加)
 
 #### 5.1 資料來源與地理空間幾何
-- **資料集代號**：`O-A0058-002` (雷達回波合成圖－臺灣鄰近區域無地形)
+- **資料集代號**：`O-A0058-002` (雷達整合回波圖－臺灣（較大範圍）_有地形)
+- **官方中繼規格 (Official Metadata)**：
+  - **更新頻率**：約每 10 分鐘產製一次
+  - **經度涵蓋範圍 (Longitude Range)**：`115.00 – 126.50`（西界 115.00, 東界 126.50）
+  - **緯度涵蓋範圍 (Latitude Range)**：`17.75 – 29.25`（南界 17.75, 北界 29.25）
+  - **影像解析度尺寸 (Image Dimension)**：`3600 × 3600` 像素
+  - **官方最新圖檔 ProductURL**：`https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png`
 - **地理範圍邊界 (Geographic Bounding Box)**：
-  - 依氣象署官方圖資標準，臺灣鄰近區域無地形雷達回波合成圖涵蓋範圍約為：
-    - 南界 (South): `20.0° N`，北界 (North): `27.0° N`
-    - 西界 (West): `117.0° E`，東界 (East): `124.0° E`
-  - 使用 Leaflet `L.latLngBounds([20.0, 117.0], [27.0, 124.0])` 精準對齊底圖。
+  - 使用 Leaflet `L.latLngBounds([[17.75, 115.00], [29.25, 126.50]])` 精準對齊底圖。
+  - 邊界資訊由 `/api/radar` 集中回傳，前端避免分散硬編碼重複定義。
 
-#### 5.2 Leaflet ImageOverlay 圖層控制與互動
+#### 5.2 Leaflet 架構定位與 ImageOverlay 圖層控制
+- **關鍵架構原則：獨立圖層疊加 (Overlay)，絕非第 4 種地圖模式 (Map Mode)**：
+  - 既有 `currentMapMode` 保持 3 種模式（`temperature` 溫度、`rainfall` 降雨機率、`observations` 即時觀測）不變。
+  - 雷達狀態由獨立變數管控（`radarEnabled`, `radarOverlayLayer`, `radarMetadataCache`, `radarOpacity`），可與三種模式任意疊加共存。
+- **專屬 Leaflet Pane (`radarPane`) 與層次堆疊**：
+  - 建立專屬 pane：`leafletMap.createPane("radarPane")`。
+  - z-index 設定為 `350`（高於底圖 OSM tilePane 200，但低於縣市多邊形與測站標記 overlayPane 400）。
+  - 設定 `pointer-events: none`：確保雷達圖層完全透通所有指標事件，絕不干擾縣市多邊形點擊橋接器 (`handleCountyPointerDown`)、測站 hover/click、以及地圖拖曳縮放。
 - **`radarOverlayLayer` 實作**：
-  - 使用 `L.imageOverlay(radarImageUrl, bounds, { opacity: 0.65, interactive: false })`。
+  - 使用 `L.imageOverlay(radarImageUrl, bounds, { opacity: radarOpacity, interactive: false, pane: "radarPane" })`。
+  - 圖檔載入時附帶防快取版本參數（`?v=<encoded timestamp>`），避免瀏覽器長快取導致圖資過期。
 - **圖層控制與工具條**：
-  - **雷達開關按鈕 (Radar Toggle)**：一鍵開啟／隱藏雷達回波。
-  - **透明度滑桿 (Opacity Slider)**：支援 0%–100% 動態微調（預設值 65%，讓底圖縣市邊界與道路名稱清晰透出）。
-  - **觀測時間戳記展示**：地圖角落顯著標記最新雷達掃描時間（如 `雷達回波觀測時間：2026-10-05 14:15 CST`）。
-  - **載入與錯誤狀態 (Loading & Error States)**：圖片載入中顯示微型 Spinner；若連線逾時或官方影像未產製，則顯示非阻塞性提示標籤，不影響底圖操作。
+  - **雷達開關按鈕 (Radar Toggle)**：`#radar-toggle`，一鍵開啟／隱藏雷達回波，aria-pressed 支援無障礙。
+  - **透明度滑桿 (Opacity Slider)**：`#radar-opacity`，支援 0.1–1.0（step 0.05，預設 0.65），本地 `setOpacity()` 即時調整，零額外網路請求。
+  - **觀測時間戳記展示**：`#radar-status`（aria-live="polite"），若為官方觀測時間標示「雷達時間：MM/DD HH:mm」，若為 HEAD Last-Modified 標示「影像更新：MM/DD HH:mm」，嚴格不偽造氣象觀測時間。
+  - **手動重新整理與自動更新**：`#radar-refresh` 按鈕手動重取中繼並更新圖層；雷達開啟時每 10 分鐘自動進行單一非阻塞計時更新，雷達關閉時自動清除計時器。
+  - **載入與非阻塞錯誤狀態**：載入中顯示「正在載入雷達回波...」；若圖檔載入失敗顯示「雷達影像暫時無法載入」並安全卸載圖層，維持既有底圖與天氣功能正常可用。
 
-#### 5.3 儲存與架構關鍵禁令
+#### 5.3 儲存與快取架構
 - **二進位儲存禁令 (NO Large Binary in PostgreSQL)**：
-  - **嚴格禁止將數 MB 的雷達 PNG 圖片二進位資料（BLOB/bytea）存入 PostgreSQL 資料庫**！
-  - 資料庫或快取層僅記錄中繼資料（Metadata）：`observation_time`, `image_url`, `bounds`, `fetched_at`。
-  - 前端地圖圖磚直接由 CWA CDN 靜態圖片位址載入，或經由伺服器無狀態 Proxy 代理轉發，保持後端資料庫精簡輕巧。
+  - 嚴格禁止將數 MB 的雷達 PNG 圖片二進位資料存入 PostgreSQL 資料庫。
+  - 後端僅提供專屬輕量中繼端點 `GET /api/radar`，具備 5 分鐘伺服器行程內快取。
+  - 支援 CWA File API XML 第一優先解析，並在 XML 不可用時安全平降至官方標準常數與 S3 HEAD `Last-Modified` 檢查，絕不洩漏 API Key。
 
 ---
 
@@ -1696,7 +1709,7 @@ CWA Open Data API
   - [x] 浮動面板模式連動（降雨模式切換為短時預報摘要卡片群與獨立更新時間）
   - [x] 降雨資料延遲載入（首次點擊才抓取，後續切換時段無額外網路請求）
   - [x] 完整保留縣市選取、外框高亮、重設視角、全螢幕與深淺色主題
-- [ ] **Phase 8C — Current Weather Observations** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+- [x] **Phase 8C — Current Weather Observations** (已完成並通過生產環境驗收 / Completed and production verified)：
   - [x] CWA `O-A0001` 全臺氣象測站即時觀測客戶端與連線重試 (`DATASET_OBSERVATION = "O-A0001"`)
   - [x] 專屬觀測資料解析器（嚴格選用 WGS84 座標系統，濾除 -99/X 等缺值，正規化雨跡 T 與 -98 無降雨狀態）
   - [x] 獨立行程內最佳努力 TTL 快取（10 分鐘，冷啟動自癒容錯，零 DB 結構變更）
@@ -1707,7 +1720,16 @@ CWA Open Data API
   - [x] 浮動面板切換至測站即時觀測摘要群組（明確標示「目前觀測 某某測站」與實際觀測時間，註明測站不代表全縣市平均）
   - [x] 測站 Hover 安全 Tooltip 與 Click 詳情 Popup（DOM 安全構建，無 innerHTML 插值）
   - [x] 觀測資料延遲載入（首次切換才抓取），切換縣市或測站重用客戶端快取
-- [ ] **Phase 8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
+- [ ] **Phase 8D — Radar Layer** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+  - [x] 修正雷達圖資標準規格為 `O-A0058-002`（雷達整合回波圖－臺灣（較大範圍）_有地形，經度 115.00–126.50、緯度 17.75–29.25、解析度 3600×3600、更新頻率約 10 分鐘）
+  - [x] CWA File API XML 伺服器端中繼資料解析（`ProductURL`, `DateTime`, `LongitudeRange`, `LatitudeRange`, `ImageDimension`）與 XML 命名空間韌性解析
+  - [x] S3 HEAD `Last-Modified` 安全平降備援機制與語義明確時間來源標註（`radar_datetime` vs `last_modified`）
+  - [x] 獨立行程內最佳努力 5 分鐘 TTL 快取（零 PNG 二進位寫入資料庫、零 DB 變更）
+  - [x] 專屬 API 端點 `GET /api/radar` 與安全金鑰防護（零機密洩漏）
+  - [x] Leaflet 獨立圖層架構（雷達為 Overlay 疊加層，絕非第 4 種地圖模式；與溫度、降雨、即時觀測三模式無縫共存）
+  - [x] 專屬 Leaflet Pane (`radarPane`，z-index: 350，`pointer-events: none`)，保證絕不干擾縣市多邊形點擊橋接器、測站標記與地圖拖曳
+  - [x] 地圖工具列雷達控制群組（開關 `#radar-toggle`、透明度滑桿 `#radar-opacity` 0.1–1.0、時間戳記 `#radar-status` 與重新整理 `#radar-refresh`）
+  - [x] 圖片延遲載入（首次開啟才獲取）、防快取版本參數 (`?v=...`)、非阻塞錯誤處理與開啟時 10 分鐘自動背景更新
 - [ ] **Phase 8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
 - [ ] **Phase 8F — Township Detailed Forecast**：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
 - [ ] **Phase 8G — Application Polish / Future Features**：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。

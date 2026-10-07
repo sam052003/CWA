@@ -866,5 +866,102 @@ def test_get_observations_api_unexpected_internal_error():
         assert "postgresql://" not in response.text
 
 
+# ==============================================================================
+# Phase 8D: GET /api/radar Endpoint Tests
+# ==============================================================================
+
+from app.services.weather_service import WeatherServiceError
+
+
+def test_get_radar_api_success():
+    """Verify GET /api/radar returns 200 with valid RadarMetadataResponse."""
+    mock_data = {
+        "dataset_id": "O-A0058-002",
+        "image_url": "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png",
+        "radar_time": "2026-10-07T20:30:00+08:00",
+        "time_source": "radar_datetime",
+        "bounds": {
+            "south": 17.75,
+            "west": 115.00,
+            "north": 29.25,
+            "east": 126.50,
+        },
+        "image_width": 3600,
+        "image_height": 3600,
+        "updated_at": "2026-10-07T20:36:26+08:00",
+    }
+
+    with patch("app.api.routes.weather_service.get_radar_metadata", return_value=mock_data) as mock_service:
+        response = client.get("/api/radar")
+        assert response.status_code == 200
+        mock_service.assert_called_once()
+
+        body = response.json()
+        assert body["dataset_id"] == "O-A0058-002"
+        assert body["image_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+        assert body["radar_time"] == "2026-10-07T20:30:00+08:00"
+        assert body["time_source"] == "radar_datetime"
+        assert body["bounds"]["south"] == 17.75
+        assert body["bounds"]["west"] == 115.00
+        assert body["bounds"]["north"] == 29.25
+        assert body["bounds"]["east"] == 126.50
+        assert body["image_width"] == 3600
+        assert body["image_height"] == 3600
+
+
+def test_get_radar_api_fallback_with_last_modified():
+    """Verify GET /api/radar returns safe fallback metadata when XML is unavailable."""
+    mock_fallback_data = {
+        "dataset_id": "O-A0058-002",
+        "image_url": "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png",
+        "radar_time": None,
+        "time_source": "last_modified",
+        "bounds": {
+            "south": 17.75,
+            "west": 115.00,
+            "north": 29.25,
+            "east": 126.50,
+        },
+        "image_width": 3600,
+        "image_height": 3600,
+        "updated_at": "2026-10-07T20:46:15+08:00",
+    }
+
+    with patch("app.api.routes.weather_service.get_radar_metadata", return_value=mock_fallback_data):
+        response = client.get("/api/radar")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["dataset_id"] == "O-A0058-002"
+        assert body["radar_time"] is None
+        assert body["time_source"] == "last_modified"
+        assert body["updated_at"] == "2026-10-07T20:46:15+08:00"
+
+
+def test_get_radar_api_upstream_service_error():
+    """Verify 502 Bad Gateway when weather_service raises WeatherServiceError."""
+    with patch(
+        "app.api.routes.weather_service.get_radar_metadata",
+        side_effect=WeatherServiceError("Complete failure with CWA-API-KEY-SECRET"),
+    ):
+        response = client.get("/api/radar")
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Upstream radar data service unavailable"
+        assert "CWA-API-KEY-SECRET" not in response.text
+
+
+def test_get_radar_api_unexpected_internal_error():
+    """Verify 500 when unexpected error occurs without leaking credentials."""
+    with patch(
+        "app.api.routes.weather_service.get_radar_metadata",
+        side_effect=Exception("Database crash postgresql://user:pass@host/cwa"),
+    ):
+        response = client.get("/api/radar")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error occurred while retrieving radar metadata"
+        assert "postgresql://" not in response.text
+        assert "pass" not in response.text
+
+
+
 
 

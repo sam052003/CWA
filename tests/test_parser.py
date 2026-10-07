@@ -699,3 +699,84 @@ def test_parse_observation_stations_malformed_input():
     assert parse_observation_stations({"records": {"Station": [None, {}, {"StationName": "無ID"}]}}) == []
 
 
+# ==============================================================================
+# Phase 8D: Radar XML Parser Tests (O-A0058-002)
+# ==============================================================================
+
+from app.parsers.cwa_parser import parse_radar_metadata_xml
+
+SAMPLE_RADAR_XML_WITH_NS = """<?xml version='1.0' encoding='UTF-8'?>
+<cwaopendata xmlns="urn:cwa:gov:tw:cwacommon:0.1">
+   <identifier>d93dd916-2e68-4e0c-82c6-e95791e952b8</identifier>
+   <sender>od@cwa.gov.tw</sender>
+   <sent>2026-10-07T20:36:26+08:00</sent>
+   <status>Actual</status>
+   <dataid>O-A0058-002</dataid>
+   <dataset>
+      <datasetInfo>
+         <parameterSet>
+            <LongitudeRange>115.00-126.50</LongitudeRange>
+            <LatitudeRange>17.75-29.25</LatitudeRange>
+            <ImageDimension>3600x3600</ImageDimension>
+         </parameterSet>
+      </datasetInfo>
+      <resource>
+         <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png</ProductURL>
+      </resource>
+      <DateTime>2026-10-07T20:30:00+08:00</DateTime>
+   </dataset>
+</cwaopendata>"""
+
+SAMPLE_RADAR_XML_NO_NS = """<?xml version='1.0' encoding='UTF-8'?>
+<cwaopendata>
+   <sent>2026-10-07T20:36:26+08:00</sent>
+   <dataset>
+      <datasetInfo>
+         <parameterSet>
+            <LongitudeRange>115.00-126.50</LongitudeRange>
+            <LatitudeRange>17.75-29.25</LatitudeRange>
+            <ImageDimension>3600x3600</ImageDimension>
+         </parameterSet>
+      </datasetInfo>
+      <resource>
+         <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png</ProductURL>
+      </resource>
+      <DateTime>2026-10-07T20:30:00+08:00</DateTime>
+   </dataset>
+</cwaopendata>"""
+
+
+def test_parse_radar_metadata_xml_with_namespace():
+    """Verify parse_radar_metadata_xml handles XML namespaces robustly."""
+    res = parse_radar_metadata_xml(SAMPLE_RADAR_XML_WITH_NS)
+    assert res["product_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+    assert res["radar_time"] == "2026-10-07T20:30:00+08:00"
+    assert res["sent_time"] == "2026-10-07T20:36:26+08:00"
+    assert res["west"] == 115.00
+    assert res["east"] == 126.50
+    assert res["south"] == 17.75
+    assert res["north"] == 29.25
+    assert res["image_width"] == 3600
+    assert res["image_height"] == 3600
+
+
+def test_parse_radar_metadata_xml_no_namespace():
+    """Verify parse_radar_metadata_xml succeeds with non-namespaced XML."""
+    res = parse_radar_metadata_xml(SAMPLE_RADAR_XML_NO_NS)
+    assert res["product_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+    assert res["radar_time"] == "2026-10-07T20:30:00+08:00"
+    assert res["west"] == 115.00
+    assert res["east"] == 126.50
+    assert res["south"] == 17.75
+    assert res["north"] == 29.25
+
+
+def test_parse_radar_metadata_xml_malformed_and_empty():
+    """Verify parse_radar_metadata_xml returns empty dict on malformed or empty inputs."""
+    assert parse_radar_metadata_xml("") == {}
+    assert parse_radar_metadata_xml(None) == {}
+    assert parse_radar_metadata_xml("<<<invalid xml>>>") == {}
+    assert parse_radar_metadata_xml("<empty></empty>") == {}
+
+
+

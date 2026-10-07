@@ -1,7 +1,7 @@
 """Pydantic schemas for API request and response models."""
 
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RegionsResponse(BaseModel):
@@ -144,6 +144,40 @@ class ObservationResponse(BaseModel):
     dataset_id: str = Field("O-A0001", description="CWA Dataset ID")
     updated_at: str = Field(..., description="Observation snapshot update timestamp in ISO 8601 (Asia/Taipei)")
     stations: List[ObservationStationItem] = Field(..., description="Sorted list of weather station observations")
+
+
+# ==============================================================================
+# Phase 8D: Radar Reflectivity Overlay Schemas (O-A0058-002)
+# ==============================================================================
+
+class RadarBounds(BaseModel):
+    """Geographical bounding box for Leaflet radar image overlay."""
+
+    south: float = Field(..., description="Southern latitude boundary (WGS84)")
+    west: float = Field(..., description="Western longitude boundary (WGS84)")
+    north: float = Field(..., description="Northern latitude boundary (WGS84)")
+    east: float = Field(..., description="Eastern longitude boundary (WGS84)")
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "RadarBounds":
+        if self.south >= self.north:
+            raise ValueError(f"south ({self.south}) must be less than north ({self.north})")
+        if self.west >= self.east:
+            raise ValueError(f"west ({self.west}) must be less than east ({self.east})")
+        return self
+
+
+class RadarMetadataResponse(BaseModel):
+    """Response model for GET /api/radar endpoint."""
+
+    dataset_id: str = Field("O-A0058-002", description="CWA Dataset ID")
+    image_url: str = Field(..., description="Direct URL of the latest radar reflectivity PNG image")
+    radar_time: Optional[str] = Field(None, description="Official radar observation timestamp in ISO 8601 (Asia/Taipei)")
+    time_source: str = Field(..., description="Source of timestamp: radar_datetime, last_modified, or fallback")
+    bounds: RadarBounds = Field(..., description="Geographical bounding box for Leaflet overlay")
+    image_width: int = Field(3600, description="Image pixel width")
+    image_height: int = Field(3600, description="Image pixel height")
+    updated_at: Optional[str] = Field(None, description="Metadata or file update timestamp in ISO 8601 (Asia/Taipei)")
 
 
 
