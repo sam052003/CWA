@@ -348,10 +348,10 @@ Supabase PostgreSQL
   - [x] **8B**: Rich County Forecast（已完成並通過生產環境驗收 — 串接 `F-C0032-001` 今明 36 小時預報，新增降雨機率 `PoP` 與舒適度指數 `CI`，獨立卡片與即時過濾快取）
   - [x] **8B2**: Rainfall Map Mode（已完成並通過生產環境驗收 — `GET /api/map-data/short-term` 專屬端點與單一 Leaflet 地圖降雨機率面量圖切換模式）
   - [x] **8C**: Current Weather Observations（已完成並通過生產環境驗收 — 串接 `O-A0001` 全臺氣象測站即時觀測，獨立測站 Canvas CircleMarker 圖層、嚴格區隔「目前觀測 (測量值)」與「未來預報 (預測值)」）
-  - [ ] **8D**: Radar Layer（實作完成，待正式環境手動驗收 — 串接 `O-A0058-001` 雷達整合回波圖－臺灣（較大範圍）_無地形；雷達為獨立 Leaflet ImageOverlay 圖層而非第 4 種地圖模式，支援透明度滑桿、時間戳記、自動/手動重新整理與無阻塞錯誤防禦，零二進位寫庫）
-  - [ ] **8E**: Typhoon Center（串接 `W-C0034-005` 颱風分析與預報、路徑線段、暴風圈半徑多邊形、西北太平洋廣域視角與正常空狀態）
-  - [ ] **8F**: Township Detailed Forecast（串接 `F-D0047-093` 鄉鎮市區細緻預報，伺服器端過濾分級查詢，防禦巨量資料傳輸）
-  - [ ] **8G**: Application Polish / Future Features（最愛縣市、分享網址狀態、PWA 支援、警特報橫幅與全方位無障礙適配）
+  - [ ] **8D**: Radar Layer（實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance — 串接 `O-A0058-001` 雷達整合回波圖－臺灣（較大範圍）_無地形；雷達為獨立 Leaflet ImageOverlay 圖層而非第 4 種地圖模式。支援聚焦渲染：雷達開啟時 CWA O-A0058-001 成為主視覺焦點並自動淡化 OSM 底圖以消除雙重底圖干擾，雷達關閉時 OSM 立即恢復正常；支援透明度滑桿、時間戳記、自動/手動重新整理與無阻塞錯誤防禦，零二進位寫庫）
+  - [ ] **8E**: Typhoon Center（最後規劃功能 / FINAL planned feature — 串接 `W-C0034-005` 颱風分析與預報、路徑線段、暴風圈半徑多邊形、西北太平洋廣域視角與正常空狀態）
+  - [ ] **8F**: Township Detailed Forecast（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope — 串接 `F-D0047-093` 鄉鎮市區細緻預報，伺服器端過濾分級查詢，防禦巨量資料傳輸）
+  - [ ] **8G**: Application Polish / Future Features（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope — 最愛縣市、分享網址狀態、PWA 支援、警特報橫幅與全方位無障礙適配）
 
 > **完整系統設計規格**：請參閱 [`MyPlan/design.md#phase-8--advanced-weather-platform`](MyPlan/design.md#phase-8--advanced-weather-platform)。
 

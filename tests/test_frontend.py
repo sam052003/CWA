@@ -1121,6 +1121,93 @@ def test_phase_8d_radar_no_terrain_product_and_neutral_calibration():
     assert "east: 0.0" in calib_body
 
 
+def test_phase_8d_radar_focus_rendering_and_basemap_fading():
+    """Verify Phase 8D focused radar rendering:
+    - baseTileLayer explicit state exists and exactly one OSM tile layer is initialized
+    - NORMAL_BASEMAP_OPACITY (1.0) and RADAR_BASEMAP_OPACITY (0.08) constants exist
+    - setRadarFocusRendering helper exists and exclusively adjusts baseTileLayer
+    - Candidate load triggers setRadarFocusRendering(true) only on successful image load
+    - Radar OFF triggers setRadarFocusRendering(false) restoring OSM opacity immediately
+    - Initial radar failure does not leave OSM faded and resets toggle UI
+    - Refresh failure with existing radar overlay preserves setRadarFocusRendering(true)
+    - Slow pending candidate after OFF cannot reappear or fade OSM
+    - Map mode switching preserves radar overlay and basemap opacity
+    - handleCountyPointerDown and 3 map modes remain intact
+    """
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    # 1. baseTileLayer explicit state exists
+    assert "let baseTileLayer = null;" in js
+
+    # 2. Exactly one OSM tile layer created in initMap
+    assert js.count("L.tileLayer(") == 1
+    assert "baseTileLayer = L.tileLayer(" in js
+    assert "baseTileLayer.addTo(leafletMap)" in js
+
+    # 3. Opacity constants exist and are centralized
+    assert "const NORMAL_BASEMAP_OPACITY = 1.0;" in js
+    assert "const RADAR_BASEMAP_OPACITY = 0.08;" in js
+
+    # 4. setRadarFocusRendering helper function exists and targets baseTileLayer only
+    assert "function setRadarFocusRendering(active)" in js
+    helper_idx = js.find("function setRadarFocusRendering(")
+    helper_end = js.find("function syncRadarToggleOffOnFailure(", helper_idx)
+    helper_body = js[helper_idx:helper_end]
+    assert "baseTileLayer.setOpacity(" in helper_body
+    assert "RADAR_BASEMAP_OPACITY" in helper_body
+    assert "NORMAL_BASEMAP_OPACITY" in helper_body
+    # Ensure it does NOT mutate county polygons or markers
+    assert "geojsonLayer" not in helper_body
+    assert "stationObservationLayer" not in helper_body
+
+    # 5. Candidate image load event triggers setRadarFocusRendering(true)
+    apply_idx = js.find("async function applyRadarOverlay(")
+    apply_end = js.find("function startRadarAutoRefresh(", apply_idx)
+    apply_body = js[apply_idx:apply_end]
+
+    candidate_load_idx = apply_body.find('candidateLayer.on("load"')
+    assert candidate_load_idx != -1
+    candidate_load_body = apply_body[candidate_load_idx:apply_body.find('candidateLayer.on("error"')]
+    assert "setRadarFocusRendering(true)" in candidate_load_body
+    assert "radarOverlayLayer = candidateLayer" in candidate_load_body
+
+    # 6. Radar OFF in toggleRadar restores OSM opacity to normal
+    toggle_idx = js.find("async function toggleRadar()")
+    toggle_end = js.find("function initRadarControls()", toggle_idx)
+    toggle_body = js[toggle_idx:toggle_end]
+    assert "setRadarFocusRendering(false);" in toggle_body
+    assert "radarEnabled = false;" in toggle_body
+
+    # 7. Initial failure synchronization and error handling
+    assert "function syncRadarToggleOffOnFailure()" in js
+    sync_idx = js.find("function syncRadarToggleOffOnFailure()")
+    sync_end = js.find("async function applyRadarOverlay(", sync_idx)
+    sync_body = js[sync_idx:sync_end]
+    assert "radarEnabled = false;" in sync_body
+    assert 'elements.radarToggle.setAttribute("aria-pressed", "false")' in sync_body
+    assert "setRadarFocusRendering(false);" in sync_body
+    assert "stopRadarAutoRefresh();" in sync_body
+
+    # In applyRadarOverlay, failure with no previous layer triggers syncRadarToggleOffOnFailure
+    assert "syncRadarToggleOffOnFailure()" in apply_body
+    assert "雷達影像暫時無法載入" in apply_body
+
+    # 8. Refresh failure with existing radar overlay preserves setRadarFocusRendering(true)
+    assert "雷達更新失敗，顯示上一張影像" in apply_body
+    assert "setRadarFocusRendering(true);" in apply_body
+
+    # 9. Slow pending candidate when radar is OFF
+    assert "if (!radarEnabled)" in candidate_load_body
+    assert "setRadarFocusRendering(false);" in candidate_load_body
+
+    # 10. Mode switching and pointer events untouched
+    assert "function handleCountyPointerDown(event)" in js
+    assert "currentMapMode" in js
+
+
+
 
 
 

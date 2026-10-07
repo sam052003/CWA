@@ -7,6 +7,7 @@
 let temperatureChartInstance = null;
 let forecastAbortController = null;
 let leafletMap = null;
+let baseTileLayer = null;
 let geojsonLayer = null;
 let mapDataCache = null;
 let currentMapPeriod = null;
@@ -1003,10 +1004,11 @@ function initMap() {
     });
 
     // Basemap: OpenStreetMap tiles with required attribution
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    baseTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
         maxZoom: 18,
-    }).addTo(leafletMap);
+    });
+    baseTileLayer.addTo(leafletMap);
 
     // Dedicated Leaflet radar pane (Phase 8D)
     if (!leafletMap.getPane("radarPane")) {
@@ -2657,6 +2659,42 @@ function getRadarDisplayBounds(metadataBounds) {
     };
 }
 
+const NORMAL_BASEMAP_OPACITY = 1.0;
+const RADAR_BASEMAP_OPACITY = 0.08;
+
+/**
+ * Adjust OpenStreetMap basemap opacity when radar is active to eliminate visual clash.
+ * Only fades baseTileLayer; does not alter geojsonLayer, stationObservationLayer, or radar overlay.
+ * @param {boolean} active - True if a valid radar overlay is actively displayed, false otherwise.
+ */
+function setRadarFocusRendering(active) {
+    if (baseTileLayer && typeof baseTileLayer.setOpacity === "function") {
+        baseTileLayer.setOpacity(active ? RADAR_BASEMAP_OPACITY : NORMAL_BASEMAP_OPACITY);
+    }
+}
+
+/**
+ * Synchronize Radar toggle controls back to OFF on initial load failure.
+ */
+function syncRadarToggleOffOnFailure() {
+    radarEnabled = false;
+    if (elements.radarToggle) {
+        elements.radarToggle.setAttribute("aria-pressed", "false");
+        elements.radarToggle.classList.remove("active");
+    }
+    if (elements.radarOpacity) {
+        elements.radarOpacity.disabled = true;
+    }
+    if (elements.radarRefresh) {
+        elements.radarRefresh.disabled = true;
+    }
+    if (elements.radarControlsWrapper) {
+        elements.radarControlsWrapper.classList.add("disabled");
+    }
+    stopRadarAutoRefresh();
+    setRadarFocusRendering(false);
+}
+
 /**
  * Apply or refresh Leaflet image overlay for radar reflectivity.
  * Preserves the previous valid overlay on refresh failure.
@@ -2671,8 +2709,10 @@ async function applyRadarOverlay(forceRefresh = false) {
         if (elements.radarStatus) {
             if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
                 elements.radarStatus.textContent = "雷達更新失敗，顯示上一張影像";
+                setRadarFocusRendering(true);
             } else {
                 elements.radarStatus.textContent = "雷達影像暫時無法載入";
+                syncRadarToggleOffOnFailure();
             }
         }
         if (radarPendingOverlayLayer && leafletMap && leafletMap.hasLayer(radarPendingOverlayLayer)) {
@@ -2719,6 +2759,7 @@ async function applyRadarOverlay(forceRefresh = false) {
                 leafletMap.removeLayer(candidateLayer);
             }
             radarPendingOverlayLayer = null;
+            setRadarFocusRendering(false);
             return;
         }
 
@@ -2730,6 +2771,7 @@ async function applyRadarOverlay(forceRefresh = false) {
         radarOverlayLayer = candidateLayer;
         radarPendingOverlayLayer = null;
         updateRadarStatusBadge(metadata);
+        setRadarFocusRendering(true);
     });
 
     candidateLayer.on("error", () => {
@@ -2744,8 +2786,10 @@ async function applyRadarOverlay(forceRefresh = false) {
         if (elements.radarStatus) {
             if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
                 elements.radarStatus.textContent = "雷達更新失敗，顯示上一張影像";
+                setRadarFocusRendering(true);
             } else {
                 elements.radarStatus.textContent = "雷達影像暫時無法載入";
+                syncRadarToggleOffOnFailure();
             }
         }
     });
@@ -2814,6 +2858,7 @@ async function toggleRadar() {
         radarOverlayLayer = null;
         radarPendingOverlayLayer = null;
         stopRadarAutoRefresh();
+        setRadarFocusRendering(false);
     } else {
         radarEnabled = true;
         if (elements.radarToggle) {

@@ -1475,6 +1475,11 @@ Supabase PostgreSQL
   - 使用 `L.imageOverlay(radarImageUrl, calibratedBounds, { opacity: radarOpacity, interactive: false, pane: "radarPane" })`。
   - 圖片載入附帶防快取版本參數（`?v=<encoded timestamp>`，強制重整時使用 `Date.now()` 直接向圖檔 CDN 請求最新圖檔）。
   - 生命週期防護：採用 `radarPendingOverlayLayer` 候選圖層追蹤，重整失敗或圖檔載入失敗時保留前一張有效圖層；雷達關閉時同步卸載候選與啟用中圖層，杜絕延遲載入圖檔在關閉後竄出。
+- **聚焦渲染與底圖自動淡化 (Focused Radar Rendering & Basemap Fading)**：
+  - **Radar ON**：當有效雷達圖層成功載入後，`O-A0058-001` 成為主視覺氣象渲染核心，OpenStreetMap 底圖自動淡化至 `0.08`（`baseTileLayer.setOpacity(0.08)`），徹底消除底圖細節與雷達圖資之間的相互干擾與雙重底圖視覺衝突。
+  - **Radar OFF**：雷達關閉時，OpenStreetMap 底圖立即恢復正常清晰度（`baseTileLayer.setOpacity(1.0)`）。
+  - **非干擾性與模式獨立保證**：底圖淡化僅作用於 `baseTileLayer`，縣市邊界 GeoJSON（`geojsonLayer`）、測站標記（`stationObservationLayer`）與選定縣市邊框維持 100% 原始清晰可見；於不同地圖模式（溫度、降雨、觀測）切換時底圖淡化狀態維持不變。
+  - **生命週期與錯誤防護**：初次載入失敗時底圖不淡化並自動同步重設按鈕狀態；更新失敗且有既有雷達圖層時維持淡化與上一張影像；延遲圖檔在關閉後不竄出且不淡化底圖。
 - **圖層控制與工具條**：
   - **雷達開關按鈕 (Radar Toggle)**：`#radar-toggle`，一鍵開啟／隱藏雷達回波，aria-pressed 支援無障礙。
   - **透明度滑桿 (Opacity Slider)**：`#radar-opacity`，支援 0.1–1.0（step 0.05，預設 0.65），本地 `setOpacity()` 即時調整，零額外網路請求。
@@ -1490,7 +1495,7 @@ Supabase PostgreSQL
 
 ---
 
-### 6. 8E — Typhoon Center (颱風動態中心與路徑預報)
+### 6. 8E — Typhoon Center (颱風動態中心與路徑預報 — 最後規劃功能 / FINAL Planned Feature)
 
 #### 6.1 資料來源與氣象要素
 - **資料集代號**：`W-C0034-005` (熱帶氣旋分析與預報－警報與路徑預報資料)
@@ -1524,7 +1529,7 @@ Supabase PostgreSQL
 
 ---
 
-### 7. 8F — Township Detailed Forecast (鄉鎮市區細緻預報)
+### 7. 8F — Township Detailed Forecast (鄉鎮市區細緻預報 — 延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of Scope)
 
 #### 7.1 資料來源與氣象要素
 - **資料集代號**：`F-D0047-093` (臺灣各鄉鎮市區未來 1 週天氣預報) 或分縣市鄉鎮資料集
@@ -1554,7 +1559,7 @@ Supabase PostgreSQL
 
 ---
 
-### 8. 8G — Application Polish / Future Features (平台精緻化與延伸特性)
+### 8. 8G — Application Polish / Future Features (平台精緻化與延伸特性 — 延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of Scope)
 
 以下功能已完成架構規劃，保留為後續延伸實作項目：
 1. **喜愛縣市/鄉鎮收藏 (Saved Favorites)**：
@@ -1744,10 +1749,11 @@ CWA Open Data API
   - [x] 專屬 API 端點 `GET /api/radar` 與安全金鑰防護（零機密洩漏）
   - [x] Leaflet 獨立圖層架構（雷達為 Overlay 疊加層，絕非第 4 種地圖模式；與溫度、降雨、即時觀測三模式無縫共存）
   - [x] 專屬 Leaflet Pane (`radarPane`，z-index: 350，`pointer-events: none`)，保證絕不干擾縣市多邊形點擊橋接器、測站標記與地圖拖曳
+  - [x] 聚焦渲染與底圖自動淡化（雷達開啟時 O-A0058-001 成為主視覺焦點並自動淡化 OSM 底圖至 0.08，關閉時立即恢復 1.0，縣市邊界與測站標記維持清晰）
   - [x] 地圖工具列雷達控制群組（開關 `#radar-toggle`、透明度滑桿 `#radar-opacity` 0.1–1.0、時間戳記 `#radar-status` 與重新整理 `#radar-refresh`）
   - [x] 圖片延遲載入（首次開啟才獲取）、防快取版本參數 (`?v=...`)、非阻塞錯誤處理與開啟時 10 分鐘自動背景更新
-- [ ] **Phase 8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
-- [ ] **Phase 8F — Township Detailed Forecast**：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
-- [ ] **Phase 8G — Application Polish / Future Features**：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。
+- [ ] **Phase 8E — Typhoon Center**（最後規劃功能 / FINAL planned feature）：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
+- [ ] **Phase 8F — Township Detailed Forecast**（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope）：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
+- [ ] **Phase 8G — Application Polish / Future Features**（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope）：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。
 
 
