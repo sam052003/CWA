@@ -346,12 +346,12 @@ def test_fetch_observations_direct_resource(mock_get, mock_client):
 
 
 # ==============================================================================
-# Phase 8D: Radar Client Tests (O-A0058-002)
+# Phase 8D: Radar Client Tests (O-A0058-001)
 # ==============================================================================
 
 def test_dataset_radar_constant(mock_client):
-    """Verify DATASET_RADAR is 'O-A0058-002'."""
-    assert mock_client.DATASET_RADAR == "O-A0058-002"
+    """Verify DATASET_RADAR is 'O-A0058-001'."""
+    assert mock_client.DATASET_RADAR == "O-A0058-001"
 
 
 @patch("requests.get")
@@ -366,7 +366,7 @@ def test_fetch_radar_metadata_success(mock_get, mock_client):
     assert "<cwaopendata>" in xml_text
     assert mock_get.call_count == 1
     call_args = mock_get.call_args
-    assert "O-A0058-002" in call_args[0][0]
+    assert "O-A0058-001" in call_args[0][0]
     assert call_args[1]["headers"]["Authorization"] == "CWA-TEST-DUMMY-KEY-12345"
 
 

@@ -700,7 +700,7 @@ def test_parse_observation_stations_malformed_input():
 
 
 # ==============================================================================
-# Phase 8D: Radar XML Parser Tests (O-A0058-002)
+# Phase 8D: Radar XML Parser Tests (O-A0058-001)
 # ==============================================================================
 
 from app.parsers.cwa_parser import parse_radar_metadata_xml
@@ -711,7 +711,7 @@ SAMPLE_RADAR_XML_WITH_NS = """<?xml version='1.0' encoding='UTF-8'?>
    <sender>od@cwa.gov.tw</sender>
    <sent>2026-10-07T20:36:26+08:00</sent>
    <status>Actual</status>
-   <dataid>O-A0058-002</dataid>
+   <dataid>O-A0058-001</dataid>
    <dataset>
       <datasetInfo>
          <parameterSet>
@@ -721,7 +721,7 @@ SAMPLE_RADAR_XML_WITH_NS = """<?xml version='1.0' encoding='UTF-8'?>
          </parameterSet>
       </datasetInfo>
       <resource>
-         <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png</ProductURL>
+         <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png</ProductURL>
       </resource>
       <DateTime>2026-10-07T20:30:00+08:00</DateTime>
    </dataset>
@@ -739,7 +739,7 @@ SAMPLE_RADAR_XML_NO_NS = """<?xml version='1.0' encoding='UTF-8'?>
          </parameterSet>
       </datasetInfo>
       <resource>
-         <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png</ProductURL>
+         <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png</ProductURL>
       </resource>
       <DateTime>2026-10-07T20:30:00+08:00</DateTime>
    </dataset>
@@ -749,7 +749,7 @@ SAMPLE_RADAR_XML_NO_NS = """<?xml version='1.0' encoding='UTF-8'?>
 def test_parse_radar_metadata_xml_with_namespace():
     """Verify parse_radar_metadata_xml handles XML namespaces robustly."""
     res = parse_radar_metadata_xml(SAMPLE_RADAR_XML_WITH_NS)
-    assert res["product_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+    assert res["product_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png"
     assert res["radar_time"] == "2026-10-07T20:30:00+08:00"
     assert res["sent_time"] == "2026-10-07T20:36:26+08:00"
     assert res["west"] == 115.00
@@ -763,7 +763,7 @@ def test_parse_radar_metadata_xml_with_namespace():
 def test_parse_radar_metadata_xml_no_namespace():
     """Verify parse_radar_metadata_xml succeeds with non-namespaced XML."""
     res = parse_radar_metadata_xml(SAMPLE_RADAR_XML_NO_NS)
-    assert res["product_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+    assert res["product_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png"
     assert res["radar_time"] == "2026-10-07T20:30:00+08:00"
     assert res["west"] == 115.00
     assert res["east"] == 126.50

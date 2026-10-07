@@ -876,8 +876,8 @@ from app.services.weather_service import WeatherServiceError
 def test_get_radar_api_success():
     """Verify GET /api/radar returns 200 with valid RadarMetadataResponse."""
     mock_data = {
-        "dataset_id": "O-A0058-002",
-        "image_url": "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png",
+        "dataset_id": "O-A0058-001",
+        "image_url": "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png",
         "radar_time": "2026-10-07T20:30:00+08:00",
         "time_source": "radar_datetime",
         "bounds": {
@@ -897,8 +897,8 @@ def test_get_radar_api_success():
         mock_service.assert_called_once()
 
         body = response.json()
-        assert body["dataset_id"] == "O-A0058-002"
-        assert body["image_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+        assert body["dataset_id"] == "O-A0058-001"
+        assert body["image_url"] == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png"
         assert body["radar_time"] == "2026-10-07T20:30:00+08:00"
         assert body["time_source"] == "radar_datetime"
         assert body["bounds"]["south"] == 17.75
@@ -912,8 +912,8 @@ def test_get_radar_api_success():
 def test_get_radar_api_fallback_with_last_modified():
     """Verify GET /api/radar returns safe fallback metadata when XML is unavailable."""
     mock_fallback_data = {
-        "dataset_id": "O-A0058-002",
-        "image_url": "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png",
+        "dataset_id": "O-A0058-001",
+        "image_url": "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png",
         "radar_time": None,
         "time_source": "last_modified",
         "bounds": {
@@ -931,7 +931,7 @@ def test_get_radar_api_fallback_with_last_modified():
         response = client.get("/api/radar")
         assert response.status_code == 200
         body = response.json()
-        assert body["dataset_id"] == "O-A0058-002"
+        assert body["dataset_id"] == "O-A0058-001"
         assert body["radar_time"] is None
         assert body["time_source"] == "last_modified"
         assert body["updated_at"] == "2026-10-07T20:46:15+08:00"

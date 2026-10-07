@@ -618,11 +618,11 @@ def parse_observation_stations(data: Any) -> List[Dict[str, Any]]:
 
 
 # ==============================================================================
-# Phase 8D: O-A0058-002 Radar Reflectivity Metadata XML Parser
+# Phase 8D: O-A0058-001 Radar Reflectivity Metadata XML Parser
 # ==============================================================================
 
 def parse_radar_metadata_xml(xml_content: str) -> Dict[str, Any]:
-    """Parse CWA O-A0058-002 radar metadata XML.
+    """Parse CWA O-A0058-001 radar metadata XML.
 
     Extracts:
         - product_url (str): Image ProductURL

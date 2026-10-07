@@ -727,11 +727,11 @@ def refresh_forecasts(
 
 
 # ==============================================================================
-# Phase 8D: Radar Reflectivity Overlay Service (O-A0058-002)
+# Phase 8D: Radar Reflectivity Overlay Service (O-A0058-001)
 # ==============================================================================
 
-RADAR_DATASET_ID = "O-A0058-002"
-RADAR_PRODUCT_URL = "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+RADAR_DATASET_ID = "O-A0058-001"
+RADAR_PRODUCT_URL = "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png"
 RADAR_BOUNDS = {
     "south": 17.75,
     "west": 115.00,
@@ -765,7 +765,7 @@ def get_radar_metadata(
     current_time: Optional[float] = None,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
-    """Retrieve radar reflectivity metadata (O-A0058-002) for map overlay.
+    """Retrieve radar reflectivity metadata (O-A0058-001) for map overlay.
 
     First attempts to obtain official XML metadata via CWA File API.
     If unavailable or on failure, falls back safely to official documented constants

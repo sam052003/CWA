@@ -1451,16 +1451,17 @@ Supabase PostgreSQL
 ### 5. 8D — Radar Layer (雷達整合回波圖層疊加)
 
 #### 5.1 資料來源與地理空間幾何
-- **資料集代號**：`O-A0058-002` (雷達整合回波圖－臺灣（較大範圍）_有地形)
+- **資料集代號 (Active Product)**：`O-A0058-001` (雷達整合回波圖－臺灣（較大範圍）_無地形)
+  - **選用決策說明**：Phase 8D 最初曾評估有地形版本 `O-A0058-002`，但在生產視覺實測中發現，在既有 OpenStreetMap 底圖與 GeoJSON 邊界之上再次疊加內建地形與海岸線之圖層會產生明顯之雙重地圖對齊視覺瑕疵。因此正式啟用之雷達疊加圖資全面切換為 `O-A0058-001`（較大範圍_無地形），純回波圖層更適合與 Web 地圖底圖無縫疊合。（`O-A0058-002` 僅保留作為獨立靜態圖資參考，非主動疊加圖層）。
 - **官方中繼規格 (Official Metadata)**：
   - **更新頻率**：約每 10 分鐘產製一次
   - **經度涵蓋範圍 (Longitude Range)**：`115.00 – 126.50`（西界 115.00, 東界 126.50）
   - **緯度涵蓋範圍 (Latitude Range)**：`17.75 – 29.25`（南界 17.75, 北界 29.25）
   - **影像解析度尺寸 (Image Dimension)**：`3600 × 3600` 像素
-  - **官方最新圖檔 ProductURL**：`https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png`
+  - **官方最新圖檔 ProductURL**：`https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png`
 - **地理範圍邊界與前端顯示校準 (Geographic Bounds & Display Calibration)**：
   - 後端 API 端點 `GET /api/radar` 始終保持回傳 CWA 官方原始幾何範圍（南界 17.75、西界 115.00、北界 29.25、東界 126.50），絕不竄改或偽造官方中繼資料。
-  - **前端顯示校準層 (Display Calibration Layer)**：因 CWA `O-A0058-002` 預渲染圖檔內建地形底圖與經緯格線樣式，在 Web Mercator 投影之 Leaflet/OSM 底圖與 GeoJSON 邊界疊加時，會產生微小之視覺渲染對齊誤差。前端透過集中式校準常數 `RADAR_DISPLAY_BOUND_ADJUST` 與專屬轉換函式 `getRadarDisplayBounds()` 進行顯示微調，專門供給 `L.imageOverlay` 使用，原始快取中繼物件保持不可變。
+  - **前端顯示校準結構 (Display Calibration Layer)**：保留集中式校準常數 `RADAR_DISPLAY_BOUND_ADJUST` 與專屬轉換函式 `getRadarDisplayBounds()`，現階段各項偏移量均維持中性 `0.0`，不隨意加入未經測量之魔法數值。啟用無地形圖檔 `O-A0058-001` 為當前解決視覺對齊之根本架構方案。
 
 #### 5.2 Leaflet 架構定位與 ImageOverlay 圖層控制
 - **關鍵架構原則：獨立圖層疊加 (Overlay)，絕非第 4 種地圖模式 (Map Mode)**：
@@ -1664,7 +1665,7 @@ Supabase PostgreSQL
 1. `weather_forecasts`：縣市級預報（包含 `F-C0032-005` 一週預報與 `F-C0032-001` 短期預報，透過 `dataset_id` 嚴格區隔，持久化存儲於 Supabase PostgreSQL）。
 2. `weather_observations`：`O-A0001` 自動氣象站真實量測數據（現行：伺服器端 live CWA 查詢 + 行程內 10 分鐘 TTL 快取）。
 3. `typhoon_events` & `typhoon_tracks`：`W-C0034-005` 颱風中繼、歷史與預報路徑座標（未來擴充規劃）。
-4. `radar_metadata`：`O-A0058-002` 雷達圖片時間戳與中繼 URL（現行：伺服器端 File API/S3 查詢 + 行程內 5 分鐘 TTL 快取，零圖片二進位入庫）。
+4. `radar_metadata`：`O-A0058-001` 雷達圖片時間戳與中繼 URL（現行：伺服器端 File API/S3 查詢 + 行程內 5 分鐘 TTL 快取，零圖片二進位入庫）。
 5. `township_forecasts`：`F-D0047-093` 鄉鎮市區層級預報（未來擴充規劃）。
 
 #### 10.2 嚴謹分層軟體架構 (Strict Layered Architecture)
@@ -1687,7 +1688,7 @@ CWA Open Data API
 
 #### 10.3 智慧快取策略 (Smart Caching Strategy)
 為防止高流量訪問對 CWA API 造成配額耗盡與頻寬浪費，設計基於資料更新特性的分級快取機制：
-- **雷達回波 (`O-A0058-002`)**：CWA 約 10 分鐘產製一次 → 伺服器端行程內最佳努力快取 TTL: 5 分鐘（零圖片二進位寫入資料庫）。
+- **雷達回波 (`O-A0058-001`)**：CWA 約 10 分鐘產製一次 → 伺服器端行程內最佳努力快取 TTL: 5 分鐘（零圖片二進位寫入資料庫）。
 - **現在觀測 (`O-A0001`)**：氣象站約 10–15 分鐘取樣一次 → 伺服器端行程內最佳努力快取 TTL: 10 分鐘（零 DB 綱要異動）。
 - **颱風資訊 (`W-C0034-005`)**：平時無颱風快取 1 小時；警報發布期間快取 TTL: 15–30 分鐘（未來擴充規劃）。
 - **短時預報 (`F-C0032-001`)**：每日發布約 4 次（約 05:00、11:00、17:00、23:00 四次常態更新，並視氣象情勢調整更新） → 伺服器端行程內快取 TTL: 10–30 分鐘。
@@ -1736,7 +1737,7 @@ CWA Open Data API
   - [x] 測站 Hover 安全 Tooltip 與 Click 詳情 Popup（DOM 安全構建，無 innerHTML 插值）
   - [x] 觀測資料延遲載入（首次切換才抓取），切換縣市或測站重用客戶端快取
 - [ ] **Phase 8D — Radar Layer** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
-  - [x] 修正雷達圖資標準規格為 `O-A0058-002`（雷達整合回波圖－臺灣（較大範圍）_有地形，經度 115.00–126.50、緯度 17.75–29.25、解析度 3600×3600、更新頻率約 10 分鐘）
+  - [x] 採用無地形標準圖資 `O-A0058-001`（雷達整合回波圖－臺灣（較大範圍）_無地形，經度 115.00–126.50、緯度 17.75–29.25、解析度 3600×3600、更新頻率約 10 分鐘，消除底圖地形重複渲染誤差）
   - [x] CWA File API XML 伺服器端中繼資料解析（`ProductURL`, `DateTime`, `LongitudeRange`, `LatitudeRange`, `ImageDimension`）與 XML 命名空間韌性解析
   - [x] S3 HEAD `Last-Modified` 安全平降備援機制與語義明確時間來源標註（`radar_datetime` vs `last_modified`）
   - [x] 獨立行程內最佳努力 5 分鐘 TTL 快取（零 PNG 二進位寫入資料庫、零 DB 變更）

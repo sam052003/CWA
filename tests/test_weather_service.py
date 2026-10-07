@@ -981,8 +981,8 @@ from app.services.weather_service import (
 
 def test_radar_constants():
     """Verify centralized radar constants."""
-    assert RADAR_DATASET_ID == "O-A0058-002"
-    assert RADAR_PRODUCT_URL == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png"
+    assert RADAR_DATASET_ID == "O-A0058-001"
+    assert RADAR_PRODUCT_URL == "https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png"
     assert RADAR_BOUNDS == {
         "south": 17.75,
         "west": 115.00,
@@ -1010,14 +1010,14 @@ def test_get_radar_metadata_xml_strategy(mock_head):
              </parameterSet>
           </datasetInfo>
           <resource>
-             <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png</ProductURL>
+             <ProductURL>https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-001.png</ProductURL>
           </resource>
           <DateTime>2026-10-07T20:30:00+08:00</DateTime>
        </dataset>
     </cwaopendata>"""
 
     res = get_radar_metadata(client=mock_client)
-    assert res["dataset_id"] == "O-A0058-002"
+    assert res["dataset_id"] == "O-A0058-001"
     assert res["radar_time"] == "2026-10-07T20:30:00+08:00"
     assert res["time_source"] == "radar_datetime"
     assert res["bounds"]["south"] == 17.75
@@ -1042,7 +1042,7 @@ def test_get_radar_metadata_fallback_with_last_modified(mock_head):
     mock_head.return_value = mock_resp
 
     res = get_radar_metadata(client=mock_client)
-    assert res["dataset_id"] == "O-A0058-002"
+    assert res["dataset_id"] == "O-A0058-001"
     assert res["image_url"] == RADAR_PRODUCT_URL
     assert res["radar_time"] is None  # Crucial: never invent radar observation time
     assert res["time_source"] == "last_modified"
@@ -1061,7 +1061,7 @@ def test_get_radar_metadata_fallback_without_last_modified(mock_head):
     mock_head.side_effect = Exception("S3 timeout")
 
     res = get_radar_metadata(client=mock_client)
-    assert res["dataset_id"] == "O-A0058-002"
+    assert res["dataset_id"] == "O-A0058-001"
     assert res["image_url"] == RADAR_PRODUCT_URL
     assert res["radar_time"] is None
     assert res["time_source"] == "fallback"

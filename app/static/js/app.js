@@ -18,7 +18,7 @@ let selectedObservationStationId = null;
 let stationObservationLayer = null;
 let observationCanvasRenderer = null;
 
-// Phase 8D: Radar Reflectivity Overlay (O-A0058-002)
+// Phase 8D: Radar Reflectivity Overlay (O-A0058-001)
 let radarEnabled = false;
 let radarOverlayLayer = null;
 let radarPendingOverlayLayer = null;
@@ -2542,7 +2542,7 @@ async function loadRegions() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 8D: Radar Reflectivity Overlay (O-A0058-002)
+// Phase 8D: Radar Reflectivity Overlay (O-A0058-001)
 // ---------------------------------------------------------------------------
 
 /**
@@ -2621,12 +2621,13 @@ async function loadRadarMetadata(forceRefresh = false) {
 /**
  * Radar Display Bound Adjustment (Calibration)
  * 
- * Official CWA O-A0058-002 geographic bounds:
+ * Official CWA O-A0058-001 geographic bounds:
  *   south: 17.75, west: 115.00, north: 29.25, east: 126.50
  * 
- * Because the pre-rendered radar PNG from CWA includes built-in topography/graticule styling,
- * slight visual rendering mismatches with Web Mercator Leaflet map tiles & GeoJSON county boundaries
- * can be finely compensated here with display-only calibration offsets.
+ * Note: O-A0058-001 (較大範圍_無地形) is used as the active radar overlay product,
+ * which does not render a second terrain/coastline map underneath the radar echoes.
+ * No arbitrary calibration offsets are applied unless a repeatable measured displacement is demonstrated.
+ * The switch to the no-terrain radar product is the current visual alignment solution.
  * 
  * Centralized in this single structure for easy manual tuning without touching multiple functions.
  * Raw metadata from the backend/API is never mutated.

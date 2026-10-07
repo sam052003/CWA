@@ -229,20 +229,20 @@ def get_observations_endpoint():
 
 
 # ==============================================================================
-# Phase 8D: Radar Reflectivity Overlay Endpoint (O-A0058-002)
+# Phase 8D: Radar Reflectivity Overlay Endpoint (O-A0058-001)
 # ==============================================================================
 
 @router.get(
     "/radar",
     response_model=RadarMetadataResponse,
-    summary="Get radar reflectivity overlay metadata (O-A0058-002)",
+    summary="Get radar reflectivity overlay metadata (O-A0058-001)",
     responses={
         502: {"model": ErrorResponse, "description": "Upstream radar data service unavailable"},
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
 def get_radar_endpoint():
-    """Retrieve radar reflectivity metadata (O-A0058-002) for map overlay."""
+    """Retrieve radar reflectivity metadata (O-A0058-001) for map overlay."""
     try:
         data = weather_service.get_radar_metadata()
         return RadarMetadataResponse(**data)

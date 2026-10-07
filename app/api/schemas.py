@@ -147,7 +147,7 @@ class ObservationResponse(BaseModel):
 
 
 # ==============================================================================
-# Phase 8D: Radar Reflectivity Overlay Schemas (O-A0058-002)
+# Phase 8D: Radar Reflectivity Overlay Schemas (O-A0058-001)
 # ==============================================================================
 
 class RadarBounds(BaseModel):
@@ -170,7 +170,7 @@ class RadarBounds(BaseModel):
 class RadarMetadataResponse(BaseModel):
     """Response model for GET /api/radar endpoint."""
 
-    dataset_id: str = Field("O-A0058-002", description="CWA Dataset ID")
+    dataset_id: str = Field("O-A0058-001", description="CWA Dataset ID")
     image_url: str = Field(..., description="Direct URL of the latest radar reflectivity PNG image")
     radar_time: Optional[str] = Field(None, description="Official radar observation timestamp in ISO 8601 (Asia/Taipei)")
     time_source: str = Field(..., description="Source of timestamp: radar_datetime, last_modified, or fallback")

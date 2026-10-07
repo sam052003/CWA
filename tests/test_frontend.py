@@ -1095,6 +1095,33 @@ def test_phase_8d_radar_display_bound_calibration():
     assert "radarEnabled = false" in js
 
 
+def test_phase_8d_radar_no_terrain_product_and_neutral_calibration():
+    """Verify Phase 8D radar uses no-terrain product O-A0058-001 and neutral display calibration:
+    - HTML and JS document O-A0058-001
+    - RADAR_DISPLAY_BOUND_ADJUST offsets are all 0.0 (neutral calibration)
+    - No arbitrary magic numbers applied
+    """
+    html_resp = client.get("/")
+    assert html_resp.status_code == 200
+    assert "O-A0058-001" in html_resp.text
+
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    assert "O-A0058-001" in js
+    # Verify all calibration adjustments are neutral 0.0
+    calib_idx = js.find("const RADAR_DISPLAY_BOUND_ADJUST")
+    assert calib_idx != -1
+    calib_end = js.find("};", calib_idx)
+    calib_body = js[calib_idx:calib_end]
+    assert "south: 0.0" in calib_body
+    assert "west: 0.0" in calib_body
+    assert "north: 0.0" in calib_body
+    assert "east: 0.0" in calib_body
+
+
+
 
 
 

@@ -53,7 +53,7 @@ class CWAClient:
     DATASET_FORECAST_36H = "F-C0032-001"
     DATASET_OBSERVATION = "O-A0001"
     DATASET_OBSERVATION_RESOURCE = "O-A0001-001"
-    DATASET_RADAR = "O-A0058-002"
+    DATASET_RADAR = "O-A0058-001"
     DEFAULT_TIMEOUT = 15.0
 
     def __init__(
@@ -88,7 +88,7 @@ class CWAClient:
         return self.fetch_dataset(self.DATASET_OBSERVATION_RESOURCE)
 
     def fetch_radar_metadata(self) -> str:
-        """Fetch radar reflectivity metadata XML for O-A0058-002 via File API.
+        """Fetch radar reflectivity metadata XML for O-A0058-001 via File API.
 
         Uses Authorization header without placing API key into URL parameters or logs.
 
