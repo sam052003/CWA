@@ -1091,36 +1091,52 @@ function getWeatherIcon(weatherCode, weatherText) {
 }
 
 /**
- * Determine a natural friendly title for the short-term forecast interval.
+ * Determine a natural friendly title for the short-term forecast interval
+ * derived directly from actual start_time and end_time.
+ * Avoids browser timezone conversion by parsing ISO components directly.
+ * Does NOT rely on array index as calendar truth.
+ *
+ * Examples:
+ *   "2026-10-07T06:00:00+08:00" ~ "2026-10-07T18:00:00+08:00" -> "10/07 白天"
+ *   "2026-10-07T18:00:00+08:00" ~ "2026-10-08T06:00:00+08:00" -> "10/07 晚上 ～ 10/08 清晨"
+ *   "2026-10-08T06:00:00+08:00" ~ "2026-10-08T18:00:00+08:00" -> "10/08 白天"
  */
 function getShortTermPeriodTitle(startStr, endStr, index) {
-    if (!startStr || !endStr) return `預報時段 ${index + 1}`;
-    const startMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-    if (!startMatch) return formatForecastPeriod(startStr, endStr);
-
-    const sHour = parseInt(startMatch[4], 10);
-    if (index === 0) {
-        if (sHour >= 5 && sHour < 12) return "今天白天";
-        if (sHour >= 12 && sHour < 18) return "今天下午至晚上";
-        return "今天晚上 ～ 明天清晨";
-    } else if (index === 1) {
-        if (sHour >= 5 && sHour < 12) return "明天白天";
-        if (sHour >= 12 && sHour < 18) return "明天下午至晚上";
-        return "明天晚上 ～ 後天清晨";
-    } else if (index === 2) {
-        if (sHour >= 5 && sHour < 12) return "後天白天";
-        if (sHour >= 12 && sHour < 18) return "後天下午至晚上";
-        return "明天晚上 ～ 後天清晨";
+    if (!startStr) return "生活預報";
+    const startMatch = String(startStr).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if (!startMatch) {
+        return endStr ? formatForecastPeriod(startStr, endStr) : "生活預報";
     }
-    return `生活預報時段 ${index + 1}`;
+
+    const sMonth = startMatch[2];
+    const sDay = startMatch[3];
+    const sHour = parseInt(startMatch[4], 10);
+    const sDate = `${sMonth}/${sDay}`;
+
+    const endMatch = endStr ? String(endStr).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/) : null;
+    const eDate = endMatch ? `${endMatch[2]}/${endMatch[3]}` : "";
+
+    if (sHour >= 5 && sHour < 12) {
+        return `${sDate} 白天`;
+    } else if (sHour >= 12 && sHour < 18) {
+        return `${sDate} 下午至晚上`;
+    } else if (sHour >= 18) {
+        if (eDate && eDate !== sDate) {
+            return `${sDate} 晚上 ～ ${eDate} 清晨`;
+        }
+        return `${sDate} 晚上`;
+    } else {
+        // sHour < 5 (e.g. 00:00 - 06:00 凌晨至清晨)
+        return `${sDate} 凌晨至清晨`;
+    }
 }
 
 /**
- * Render 36-hour living forecast cards.
+ * Render 36-hour living forecast cards safely without innerHTML interpolation.
  */
 function renderShortTermForecast(forecasts) {
     if (!elements.shortTermCardsGrid) return;
-    elements.shortTermCardsGrid.innerHTML = "";
+    elements.shortTermCardsGrid.replaceChildren();
 
     if (!forecasts || forecasts.length === 0) {
         if (elements.shortTermEmpty) {
@@ -1140,47 +1156,126 @@ function renderShortTermForecast(forecasts) {
         const friendlyTitle = getShortTermPeriodTitle(f.start_time, f.end_time, idx);
         const periodTime = formatForecastPeriod(f.start_time, f.end_time);
         const icon = getWeatherIcon(f.weather_code, f.weather);
-        const weatherDesc = f.weather || "--";
+        const weatherDesc = (f.weather !== null && f.weather !== undefined && String(f.weather).trim() !== "")
+            ? String(f.weather).trim()
+            : "--";
 
         let tempStr = "--";
-        if (f.min_temp !== null && f.max_temp !== null) {
+        if (f.min_temp !== null && f.min_temp !== undefined && f.max_temp !== null && f.max_temp !== undefined) {
             tempStr = `${f.min_temp} ～ ${f.max_temp} °C`;
-        } else if (f.min_temp !== null) {
+        } else if (f.min_temp !== null && f.min_temp !== undefined) {
             tempStr = `最低 ${f.min_temp} °C`;
-        } else if (f.max_temp !== null) {
+        } else if (f.max_temp !== null && f.max_temp !== undefined) {
             tempStr = `最高 ${f.max_temp} °C`;
         }
 
-        const popVal = f.pop !== null && f.pop !== undefined ? `${f.pop}%` : "--";
-        const popPercent = f.pop !== null && f.pop !== undefined ? Math.min(100, Math.max(0, f.pop)) : 0;
-        const ciVal = f.comfort_index || "--";
+        const popVal = (f.pop !== null && f.pop !== undefined) ? `${f.pop}%` : "--";
 
-        card.innerHTML = `
-            <div class="st-card-header">
-                <span class="st-period-name">${friendlyTitle}</span>
-                <span class="st-period-time">${periodTime}</span>
-            </div>
-            <div class="st-weather-row">
-                <span class="st-weather-icon" aria-hidden="true">${icon}</span>
-                <div class="st-weather-info">
-                    <span class="st-weather-desc">${weatherDesc}</span>
-                    <span class="st-temp-range">🌡️ ${tempStr}</span>
-                </div>
-            </div>
-            <div class="st-metrics-group">
-                <div class="st-metric-row">
-                    <span class="st-metric-label">🌧️ 降雨機率</span>
-                    <strong class="st-pop-value">${popVal}</strong>
-                </div>
-                <div class="st-pop-bar-bg" aria-hidden="true">
-                    <div class="st-pop-bar-fill" style="width: ${popPercent}%;"></div>
-                </div>
-                <div class="st-metric-row st-ci-row">
-                    <span class="st-metric-label">👕 舒適度</span>
-                    <span class="st-ci-value">${ciVal}</span>
-                </div>
-            </div>
-        `;
+        let popPercent = 0;
+        if (typeof f.pop === "number" && !isNaN(f.pop)) {
+            popPercent = Math.min(100, Math.max(0, f.pop));
+        } else if (typeof f.pop === "string" && f.pop.trim() !== "") {
+            const parsedNum = parseFloat(f.pop);
+            if (!isNaN(parsedNum)) {
+                popPercent = Math.min(100, Math.max(0, parsedNum));
+            }
+        }
+
+        const ciVal = (f.comfort_index !== null && f.comfort_index !== undefined && String(f.comfort_index).trim() !== "")
+            ? String(f.comfort_index).trim()
+            : "--";
+
+        // 1. Header: Friendly Period Title & Exact Timestamp
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "st-card-header";
+
+        const periodNameSpan = document.createElement("span");
+        periodNameSpan.className = "st-period-name";
+        periodNameSpan.textContent = friendlyTitle;
+
+        const periodTimeSpan = document.createElement("span");
+        periodTimeSpan.className = "st-period-time";
+        periodTimeSpan.textContent = periodTime;
+
+        headerDiv.appendChild(periodNameSpan);
+        headerDiv.appendChild(periodTimeSpan);
+
+        // 2. Weather Row: Icon, Description, Temperature Range
+        const weatherRow = document.createElement("div");
+        weatherRow.className = "st-weather-row";
+
+        const iconSpan = document.createElement("span");
+        iconSpan.className = "st-weather-icon";
+        iconSpan.setAttribute("aria-hidden", "true");
+        iconSpan.textContent = icon;
+
+        const weatherInfo = document.createElement("div");
+        weatherInfo.className = "st-weather-info";
+
+        const descSpan = document.createElement("span");
+        descSpan.className = "st-weather-desc";
+        descSpan.textContent = weatherDesc;
+
+        const tempSpan = document.createElement("span");
+        tempSpan.className = "st-temp-range";
+        tempSpan.textContent = `🌡️ ${tempStr}`;
+
+        weatherInfo.appendChild(descSpan);
+        weatherInfo.appendChild(tempSpan);
+
+        weatherRow.appendChild(iconSpan);
+        weatherRow.appendChild(weatherInfo);
+
+        // 3. Metrics Group: Precipitation Probability (PoP) & Comfort Index (CI)
+        const metricsGroup = document.createElement("div");
+        metricsGroup.className = "st-metrics-group";
+
+        const popRow = document.createElement("div");
+        popRow.className = "st-metric-row";
+
+        const popLabel = document.createElement("span");
+        popLabel.className = "st-metric-label";
+        popLabel.textContent = "🌧️ 降雨機率";
+
+        const popValue = document.createElement("strong");
+        popValue.className = "st-pop-value";
+        popValue.textContent = popVal;
+
+        popRow.appendChild(popLabel);
+        popRow.appendChild(popValue);
+
+        const popBarBg = document.createElement("div");
+        popBarBg.className = "st-pop-bar-bg";
+        popBarBg.setAttribute("aria-hidden", "true");
+
+        const popBarFill = document.createElement("div");
+        popBarFill.className = "st-pop-bar-fill";
+        popBarFill.style.width = `${popPercent}%`;
+
+        popBarBg.appendChild(popBarFill);
+
+        const ciRow = document.createElement("div");
+        ciRow.className = "st-metric-row st-ci-row";
+
+        const ciLabel = document.createElement("span");
+        ciLabel.className = "st-metric-label";
+        ciLabel.textContent = "👕 舒適度";
+
+        const ciValue = document.createElement("span");
+        ciValue.className = "st-ci-value";
+        ciValue.textContent = ciVal;
+
+        ciRow.appendChild(ciLabel);
+        ciRow.appendChild(ciValue);
+
+        metricsGroup.appendChild(popRow);
+        metricsGroup.appendChild(popBarBg);
+        metricsGroup.appendChild(ciRow);
+
+        // Assemble Card
+        card.appendChild(headerDiv);
+        card.appendChild(weatherRow);
+        card.appendChild(metricsGroup);
 
         elements.shortTermCardsGrid.appendChild(card);
     });

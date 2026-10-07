@@ -122,20 +122,10 @@ class CWAClient:
             raise CWATimeoutError(
                 f"Request to CWA dataset '{dataset_id}' timed out after {self.timeout}s."
             ) from exc
-        except requests.exceptions.SSLError:
-            # Fallback for environments with strict OpenSSL (e.g. Python 3.14 Missing Subject Key Identifier on government CA)
-            try:
-                response = requests.get(
-                    url,
-                    headers=headers,
-                    params=params,
-                    timeout=self.timeout,
-                    verify=False,
-                )
-            except requests.exceptions.RequestException as retry_exc:
-                raise CWAConnectionError(
-                    f"Failed to connect to CWA API endpoint for dataset '{dataset_id}'."
-                ) from retry_exc
+        except requests.exceptions.SSLError as exc:
+            raise CWAConnectionError(
+                f"TLS verification failed for CWA dataset '{dataset_id}'."
+            ) from exc
         except requests.exceptions.ConnectionError as exc:
             raise CWAConnectionError(
                 f"Failed to connect to CWA API endpoint for dataset '{dataset_id}'."
@@ -160,6 +150,10 @@ class CWAClient:
             except requests.exceptions.Timeout as exc:
                 raise CWATimeoutError(
                     f"Request to CWA File API dataset '{dataset_id}' timed out after {self.timeout}s."
+                ) from exc
+            except requests.exceptions.SSLError as exc:
+                raise CWAConnectionError(
+                    f"TLS verification failed for CWA dataset '{dataset_id}'."
                 ) from exc
             except requests.exceptions.ConnectionError as exc:
                 raise CWAConnectionError(

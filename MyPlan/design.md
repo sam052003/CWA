@@ -1394,6 +1394,7 @@ Supabase PostgreSQL
 - **CWAClient (`app/clients/cwa_client.py`)**：
   - 定義 `DATASET_FORECAST_36H = "F-C0032-001"`。
   - 新增 `fetch_forecast_36h(region_name: Optional[str] = None)`，以 `locationName` 伺服器端過濾。嚴格不對前端暴露 `CWA_API_KEY`。
+  - 嚴格啟用 HTTPS TLS 憑證驗證，嚴禁任何 `verify=False`；若發生 `requests.exceptions.SSLError` 則立即安全 Fail-Closed 並封裝為 `CWAConnectionError`，不外洩憑證內部細節、金鑰或標頭。
 - **CWAParser (`app/parsers/cwa_parser.py`)**：
   - 新增 `parse_short_term_forecast(data, dataset_id="F-C0032-001")`。
   - 核心要素：`Wx`、`MinT`、`MaxT`、`PoP`、`CI`，以 `(start_time, end_time)` 複合鍵嚴格對齊（不依賴陣列索引）。
@@ -1403,6 +1404,10 @@ Supabase PostgreSQL
   - 內建行程級最佳努力（best-effort）TTL 快取（10~30 分鐘），冷啟動安全容錯，不干擾既有排程。
 - **API 端點設計**：
   - `GET /api/forecast/short-term?region={region_name}`：回傳該縣市 36 小時三時段之生活預報資料。
+- **前端安全與時段標籤 (`app/static/js/app.js`)**：
+  - 卡片渲染全面採用安全 DOM 操作（`createElement`, `textContent`, `appendChild`, `replaceChildren`），嚴禁將 API 字串內插至 `innerHTML`。
+  - 時段標題依據實際 `start_time` 與 `end_time` 之時間戳記解析判定（如 `10/07 白天`、`10/07 晚上 ～ 10/08 清晨`），不以陣列索引猜測日曆真相。既有精確時段時間戳記維持清晰顯示。
+  - 降雨機率條寬度經 0~100 數值驗證與限制後以 `style.width` 安全賦值。
 - **Phase 8B2 — Rainfall Map Mode (選項目標)**：
   - 降雨機率地圖面量圖切換（`GET /api/map-data?type=short-term`）移至 Phase 8B2，待 36 小時生活預報卡片於生產環境驗收後再行評估。既有地圖維持氣溫面量圖不變。
 

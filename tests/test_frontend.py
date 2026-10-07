@@ -643,6 +643,65 @@ def test_phase_8b_short_term_forecast_frontend():
     assert "@media (max-width: 600px)" in css
 
 
+def test_phase_8b_short_term_safe_dom_and_period_labels():
+    """Verify renderShortTermForecast uses safe DOM construction without innerHTML interpolation,
+    clamps PoP bar width, and derives friendly labels from actual timestamps instead of array index.
+    """
+    js_resp = client.get("/static/js/app.js")
+    assert js_resp.status_code == 200
+    js = js_resp.text
+
+    # 1. Locate renderShortTermForecast function body
+    render_st_idx = js.find("function renderShortTermForecast(")
+    assert render_st_idx != -1
+    render_st_end = js.find("async function loadShortTermForecast(", render_st_idx)
+    render_st_body = js[render_st_idx:render_st_end]
+
+    # Safe DOM construction: uses createElement, textContent, appendChild, replaceChildren
+    assert "document.createElement(" in render_st_body
+    assert "textContent" in render_st_body
+    assert "appendChild(" in render_st_body
+    assert "replaceChildren(" in render_st_body
+
+    # No innerHTML in renderShortTermForecast
+    assert "innerHTML" not in render_st_body
+
+    # Dynamic values safely assigned via textContent
+    assert "periodNameSpan.textContent = friendlyTitle" in render_st_body
+    assert "periodTimeSpan.textContent = periodTime" in render_st_body
+    assert "descSpan.textContent = weatherDesc" in render_st_body
+    assert "tempSpan.textContent = `🌡️ ${tempStr}`" in render_st_body
+    assert "popValue.textContent = popVal" in render_st_body
+    assert "ciValue.textContent = ciVal" in render_st_body
+
+    # PoP width is clamped 0-100 before assigning to style.width
+    assert "Math.min(100, Math.max(0," in render_st_body
+    assert "popBarFill.style.width = `${popPercent}%`" in render_st_body
+
+    # 2. Friendly period labels derived from actual timestamps, not array index
+    title_fn_idx = js.find("function getShortTermPeriodTitle(")
+    assert title_fn_idx != -1
+    title_fn_end = js.find("function renderShortTermForecast(", title_fn_idx)
+    title_fn_body = js[title_fn_idx:title_fn_end]
+
+    # Parses ISO components directly without browser timezone shift
+    assert "match(/^(\\d{4})-(\\d{2})-(\\d{2})[T ](\\d{2}):(\\d{2})/" in title_fn_body
+    # Does NOT use index === 0, index === 1, index === 2 for calendar truth
+    assert "index === 0" not in title_fn_body
+    assert "index === 1" not in title_fn_body
+    assert "index === 2" not in title_fn_body
+    # Derives friendly period based on start / end hours and dates
+    assert "白天" in title_fn_body
+    assert "晚上" in title_fn_body
+    assert "清晨" in title_fn_body
+
+    # 3. Phase 7 pointer bridge and map regressions remain intact
+    assert "function handleCountyPointerDown(event)" in js
+    assert "function setMapPeriod(" in js
+    assert "function selectCounty(" in js
+
+
+
 
 
 

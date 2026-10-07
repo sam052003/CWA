@@ -273,3 +273,54 @@ def test_fetch_forecast_36h_cwa_error_mapped(mock_get, mock_client):
 
     assert exc_info.value.status_code == 502
 
+
+# ==============================================================================
+# Security & TLS Verification Hardening Tests
+# ==============================================================================
+
+def test_no_verify_false_in_production_client():
+    """Verify no production CWA client code uses or falls back to verify=False."""
+    import inspect
+    from app.clients import cwa_client
+
+    source = inspect.getsource(cwa_client)
+    assert "verify=False" not in source
+    assert "verify = False" not in source
+
+
+@patch("requests.get")
+def test_ssl_error_fails_closed_without_insecure_retry(mock_get, mock_client):
+    """Verify SSLError fails closed immediately, raises CWAConnectionError, and does NOT retry with verify=False."""
+    mock_get.side_effect = requests.exceptions.SSLError("certificate verify failed: [SSL: CERTIFICATE_VERIFY_FAILED]")
+
+    with pytest.raises(CWAConnectionError) as exc_info:
+        mock_client.fetch_dataset("F-C0032-001")
+
+    # Safe error message without exposing cert internals or secrets
+    assert "TLS verification failed for CWA dataset 'F-C0032-001'." in str(exc_info.value)
+    assert "CERTIFICATE_VERIFY_FAILED" not in str(exc_info.value)
+
+    # Fail closed: exactly one request attempted, never retried with verify=False
+    assert mock_get.call_count == 1
+    call_kwargs = mock_get.call_args[1]
+    assert call_kwargs.get("verify") is not False
+
+
+@patch("requests.get")
+def test_file_api_ssl_error_fails_closed(mock_get, mock_client):
+    """Verify File API fallback SSLError fails closed immediately without insecure retry."""
+    datastore_404 = MagicMock(status_code=404)
+    mock_get.side_effect = [
+        datastore_404,
+        requests.exceptions.SSLError("File API cert error"),
+    ]
+
+    with pytest.raises(CWAConnectionError) as exc_info:
+        mock_client.fetch_forecast_1week()
+
+    assert "TLS verification failed for CWA dataset 'F-C0032-005'." in str(exc_info.value)
+    assert mock_get.call_count == 2
+    for call in mock_get.call_args_list:
+        assert call[1].get("verify") is not False
+
+
