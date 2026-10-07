@@ -268,10 +268,18 @@ VALID_TAIWAN_REGIONS = {
 _short_term_cache: Dict[str, Dict[str, Any]] = {}
 SHORT_TERM_CACHE_TTL_SECONDS = 900  # 15 minutes TTL
 
+_short_term_map_cache: Dict[str, Dict[str, Any]] = {}
+SHORT_TERM_MAP_CACHE_TTL_SECONDS = 900  # 15 minutes TTL
+
 
 def clear_short_term_cache() -> None:
     """Clear in-memory short-term forecast cache (used for test isolation)."""
     _short_term_cache.clear()
+
+
+def clear_short_term_map_cache() -> None:
+    """Clear in-memory short-term all-county map data cache (used for test isolation)."""
+    _short_term_map_cache.clear()
 
 
 def _to_taipei_iso(time_str: str) -> str:
@@ -376,6 +384,109 @@ def get_short_term_forecast(
     _short_term_cache[clean_region] = {
         "data": response_data,
         "expires_at": now + SHORT_TERM_CACHE_TTL_SECONDS,
+    }
+
+    return response_data
+
+
+def get_short_term_map_data(
+    client: Optional[CWAClient] = None,
+    current_time: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Retrieve 36-hour rich living forecasts across all Taiwan regions (F-C0032-001) for rainfall map.
+
+    Uses an in-memory process-local best-effort TTL cache (15 min).
+    Does NOT require a database session.
+    Fetches the complete all-county F-C0032-001 dataset in ONE CWA request (no 22-request N+1).
+
+    Args:
+        client: Optional CWAClient instance for dependency injection / testing.
+        current_time: Optional unix timestamp float for deterministic cache testing.
+
+    Returns:
+        Dictionary formatted for ShortTermMapDataResponse.
+
+    Raises:
+        ForecastNotFoundError: If no valid short-term forecast intervals exist in response.
+        CWAClientError / Exception: If upstream CWA request fails.
+    """
+    now = current_time if current_time is not None else time.time()
+
+    # 1. Check process-local best-effort cache
+    cached_entry = _short_term_map_cache.get("all_counties")
+    if cached_entry and cached_entry.get("expires_at", 0) > now:
+        cached_data = cached_entry.get("data")
+        if cached_data:
+            return cached_data
+
+    # 2. Fetch from CWA client without region filter (all 22 counties in 1 request)
+    if client is None:
+        client = CWAClient()
+
+    raw_data = client.fetch_forecast_36h(region_name=None)
+
+    # 3. Parse using dedicated short-term parser
+    all_records = parse_short_term_forecast(raw_data)
+    if not all_records:
+        raise ForecastNotFoundError("No active short-term map forecasts found")
+
+    # 4. Filter for recognized Taiwan regions if desired, allowing partial counties
+    valid_records = [r for r in all_records if r.get("region_name") in VALID_TAIWAN_REGIONS]
+    if not valid_records:
+        valid_records = all_records
+
+    # Format and sort deterministically: start_time ASC, region_name ASC
+    formatted_records = []
+    for r in valid_records:
+        iso_start = _to_taipei_iso(r["start_time"])
+        iso_end = _to_taipei_iso(r["end_time"])
+        formatted_records.append({
+            "region_name": r["region_name"],
+            "start_time": iso_start,
+            "end_time": iso_end,
+            "weather": r.get("weather"),
+            "weather_code": r.get("weather_code"),
+            "min_temp": r.get("min_temp"),
+            "max_temp": r.get("max_temp"),
+            "pop": r.get("pop"),
+            "comfort_index": r.get("comfort_index"),
+        })
+
+    formatted_records.sort(key=lambda r: (r["start_time"], r["region_name"]))
+
+    # 5. Derive unique periods sorted chronologically
+    unique_period_keys = sorted(
+        list({(r["start_time"], r["end_time"]) for r in formatted_records}),
+        key=lambda p: (p[0], p[1]),
+    )
+    periods = [
+        {"start_time": p[0], "end_time": p[1]}
+        for p in unique_period_keys
+    ]
+
+    # 6. Build forecast items for all available counties
+    forecast_items = formatted_records
+
+    # Determine updated_at timestamp
+    updated_at_str = None
+    if isinstance(raw_data, dict):
+        cwa_sent = raw_data.get("cwaopendata", {}).get("sent") if isinstance(raw_data.get("cwaopendata"), dict) else None
+        if cwa_sent and isinstance(cwa_sent, str):
+            updated_at_str = _to_taipei_iso(cwa_sent)
+    if not updated_at_str:
+        updated_at_str = to_taipei_isoformat(datetime.now(timezone.utc))
+
+    response_data = {
+        "dataset_id": "F-C0032-001",
+        "updated_at": updated_at_str,
+        "periods": periods,
+        "forecasts": forecast_items,
+    }
+
+    # 7. Cache successful result only
+    _short_term_map_cache["all_counties"] = {
+        "data": response_data,
+        "expires_at": now + SHORT_TERM_MAP_CACHE_TTL_SECONDS,
     }
 
     return response_data

@@ -12,7 +12,11 @@ from app.services.weather_service import (
     RegionNotFoundError,
     WeatherDatabaseError,
     WeatherRefreshError,
+    clear_short_term_cache,
+    clear_short_term_map_cache,
     get_forecast,
+    get_short_term_forecast,
+    get_short_term_map_data,
     list_regions,
     refresh_forecasts,
     sanitize_error,
@@ -588,5 +592,226 @@ def test_get_short_term_forecast_exception_not_cached():
     data = get_short_term_forecast("臺中市", client=mock_client)
     assert data["region"] == "臺中市"
     assert data["forecasts"][0]["weather"] == "多雲"
+
+
+# ==============================================================================
+# Phase 8B2: get_short_term_map_data Tests (Rainfall Map Mode F-C0032-001)
+# ==============================================================================
+
+def _make_dummy_36h_all_counties_payload():
+    return {
+        "cwaopendata": {
+            "sent": "2026-10-05T17:00:00+08:00",
+            "dataset": {
+                "location": [
+                    {
+                        "locationName": "臺北市",
+                        "weatherElement": [
+                            {
+                                "elementName": "Wx",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "晴", "parameterValue": "01"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "多雲", "parameterValue": "02"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "陰", "parameterValue": "03"}},
+                                ],
+                            },
+                            {
+                                "elementName": "MinT",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "23"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "25"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "22"}},
+                                ],
+                            },
+                            {
+                                "elementName": "MaxT",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "27"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "31"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "28"}},
+                                ],
+                            },
+                            {
+                                "elementName": "PoP",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "10"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "20"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "40"}},
+                                ],
+                            },
+                            {
+                                "elementName": "CI",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "舒適"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "悶熱"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "舒適"}},
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "locationName": "臺中市",
+                        "weatherElement": [
+                            {
+                                "elementName": "Wx",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "多雲短暫陣雨", "parameterValue": "08"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "多雲", "parameterValue": "02"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "晴", "parameterValue": "01"}},
+                                ],
+                            },
+                            {
+                                "elementName": "MinT",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "25"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "26"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "24"}},
+                                ],
+                            },
+                            {
+                                "elementName": "MaxT",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "29"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "33"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "30"}},
+                                ],
+                            },
+                            {
+                                "elementName": "PoP",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "60"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "30"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "10"}},
+                                ],
+                            },
+                            {
+                                "elementName": "CI",
+                                "time": [
+                                    {"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "舒適至悶熱"}},
+                                    {"startTime": "2026-10-06 06:00:00", "endTime": "2026-10-06 18:00:00", "parameter": {"parameterName": "悶熱"}},
+                                    {"startTime": "2026-10-06 18:00:00", "endTime": "2026-10-07 06:00:00", "parameter": {"parameterName": "舒適"}},
+                                ],
+                            },
+                        ],
+                    },
+                ]
+            }
+        }
+    }
+
+
+def test_get_short_term_map_data_success():
+    """Verify get_short_term_map_data fetches all counties in 1 call, sorts periods and forecasts, and preserves PoP/CI."""
+    clear_short_term_map_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.return_value = _make_dummy_36h_all_counties_payload()
+
+    data = get_short_term_map_data(client=mock_client)
+
+    # Exactly 1 CWA call with region_name=None (no N+1 22 requests)
+    assert mock_client.fetch_forecast_36h.call_count == 1
+    assert mock_client.fetch_forecast_36h.call_args[1].get("region_name") is None
+
+    # Dataset ID
+    assert data["dataset_id"] == "F-C0032-001"
+    assert "updated_at" in data
+
+    # Unique periods derived and sorted chronologically
+    periods = data["periods"]
+    assert len(periods) == 3
+    for i in range(len(periods) - 1):
+        assert periods[i]["start_time"] <= periods[i + 1]["start_time"]
+
+    # Forecasts sorted deterministically (start_time ASC, region_name ASC)
+    forecasts = data["forecasts"]
+    assert len(forecasts) == 6  # 2 counties x 3 intervals
+    for i in range(len(forecasts) - 1):
+        curr_key = (forecasts[i]["start_time"], forecasts[i]["region_name"])
+        next_key = (forecasts[i + 1]["start_time"], forecasts[i + 1]["region_name"])
+        assert curr_key <= next_key
+
+    # Preserves PoP and CI
+    tc_first = next(f for f in forecasts if f["region_name"] == "臺中市" and "18:00" in f["start_time"])
+    assert tc_first["pop"] == 60
+    assert tc_first["comfort_index"] == "舒適至悶熱"
+    assert tc_first["weather"] == "多雲短暫陣雨"
+    assert tc_first["weather_code"] == "08"
+
+
+def test_get_short_term_map_data_ttl_cache_behavior():
+    """Verify all-county map cache serves cached data within TTL and refetches when expired."""
+    clear_short_term_map_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.return_value = _make_dummy_36h_all_counties_payload()
+
+    t0 = 5000.0
+    # First call at t0: calls CWA client
+    res1 = get_short_term_map_data(client=mock_client, current_time=t0)
+    assert mock_client.fetch_forecast_36h.call_count == 1
+
+    # Second call at t0 + 300s (5 min, within 15 min TTL): cache hit, no CWA client call
+    res2 = get_short_term_map_data(client=mock_client, current_time=t0 + 300.0)
+    assert mock_client.fetch_forecast_36h.call_count == 1
+    assert res2 == res1
+
+    # Third call at t0 + 1000s (exceeds 900s TTL): cache expired, re-fetches
+    res3 = get_short_term_map_data(client=mock_client, current_time=t0 + 1000.0)
+    assert mock_client.fetch_forecast_36h.call_count == 2
+    assert res3["dataset_id"] == "F-C0032-001"
+
+
+def test_get_short_term_map_data_partial_counties_allowed():
+    """Verify partial counties payload does not fail the entire map."""
+    clear_short_term_map_cache()
+    mock_client = MagicMock()
+    # Payload contains only 1 county
+    single_county_payload = {
+        "records": {
+            "location": [
+                {
+                    "locationName": "澎湖縣",
+                    "weatherElement": [
+                        {"elementName": "Wx", "time": [{"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "晴"}}]},
+                        {"elementName": "PoP", "time": [{"startTime": "2026-10-05 18:00:00", "endTime": "2026-10-06 06:00:00", "parameter": {"parameterName": "0"}}]},
+                    ],
+                }
+            ]
+        }
+    }
+    mock_client.fetch_forecast_36h.return_value = single_county_payload
+
+    data = get_short_term_map_data(client=mock_client)
+    assert data["dataset_id"] == "F-C0032-001"
+    assert len(data["forecasts"]) == 1
+    assert data["forecasts"][0]["region_name"] == "澎湖縣"
+
+
+def test_get_short_term_map_data_no_records_raises_forecast_not_found():
+    """Verify empty/unusable records raises ForecastNotFoundError."""
+    clear_short_term_map_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.return_value = {"records": {"location": []}}
+
+    with pytest.raises(ForecastNotFoundError, match="No active short-term map forecasts found"):
+        get_short_term_map_data(client=mock_client)
+
+
+def test_get_short_term_map_data_exception_not_cached():
+    """Verify upstream exceptions are not cached so recovery succeeds immediately."""
+    clear_short_term_map_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_forecast_36h.side_effect = CWATimeoutError("CWA network timeout")
+
+    with pytest.raises(CWATimeoutError):
+        get_short_term_map_data(client=mock_client)
+
+    # Next call succeeds
+    mock_client.fetch_forecast_36h.side_effect = None
+    mock_client.fetch_forecast_36h.return_value = _make_dummy_36h_all_counties_payload()
+
+    data = get_short_term_map_data(client=mock_client)
+    assert data["dataset_id"] == "F-C0032-001"
+    assert len(data["forecasts"]) == 6
+
 
 

@@ -78,6 +78,39 @@ class MapDataResponse(BaseModel):
     forecasts: List[MapForecastItem] = Field(..., description="Active forecasts across all regions sorted by start_time ASC, region_name ASC")
 
 
+# Phase 8B2: 36-Hour Short-Term Map Data Schemas (F-C0032-001)
+
+
+class ShortTermMapPeriodItem(BaseModel):
+    """Single forecast period interval for short-term rainfall map visualization."""
+
+    start_time: str = Field(..., description="Forecast period start time in ISO 8601 (Asia/Taipei)")
+    end_time: str = Field(..., description="Forecast period end time in ISO 8601 (Asia/Taipei)")
+
+
+class ShortTermMapForecastItem(BaseModel):
+    """Forecast item for county short-term map (F-C0032-001) including PoP and CI."""
+
+    region_name: str = Field(..., description="County/City name, e.g. 臺中市")
+    start_time: str = Field(..., description="Forecast period start time in ISO 8601 (Asia/Taipei)")
+    end_time: str = Field(..., description="Forecast period end time in ISO 8601 (Asia/Taipei)")
+    weather: Optional[str] = Field(None, description="Weather description, e.g. 多雲短暫陣雨")
+    weather_code: Optional[str] = Field(None, description="Weather code, e.g. 08")
+    min_temp: Optional[float] = Field(None, description="Minimum temperature in Celsius")
+    max_temp: Optional[float] = Field(None, description="Maximum temperature in Celsius")
+    pop: Optional[int] = Field(None, description="Probability of precipitation (0-100)")
+    comfort_index: Optional[str] = Field(None, description="Comfort index description, e.g. 舒適至悶熱")
+
+
+class ShortTermMapDataResponse(BaseModel):
+    """Response model for /api/map-data/short-term endpoint."""
+
+    dataset_id: str = Field("F-C0032-001", description="CWA Dataset ID, e.g. F-C0032-001")
+    updated_at: str = Field(..., description="Data update timestamp in ISO 8601 (Asia/Taipei)")
+    periods: List[ShortTermMapPeriodItem] = Field(..., description="Unique active forecast periods sorted chronologically")
+    forecasts: List[ShortTermMapForecastItem] = Field(..., description="Active short-term forecasts across all regions sorted by start_time ASC, region_name ASC")
+
+
 
 class RefreshResponse(BaseModel):
     """Response model for /api/refresh endpoint."""

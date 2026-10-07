@@ -1661,7 +1661,7 @@ CWA Open Data API
 - **雷達回波 (`O-A0058-002`)**：CWA 約 10 分鐘產製一次 → 伺服器快取 TTL: 6–8 分鐘。
 - **現在觀測 (`O-A0001`)**：氣象站約 10–15 分鐘取樣一次 → 伺服器快取 TTL: 10 分鐘。
 - **颱風資訊 (`W-C0034-005`)**：平時無颱風快取 1 小時；警報發布期間快取 TTL: 15–30 分鐘。
-- **短時預報 (`F-C0032-001`)**：每日固定發布 3 次 → 伺服器快取 TTL: 60 分鐘。
+- **短時預報 (`F-C0032-001`)**：每日發布約 4 次（約 05:00、11:00、17:00、23:00 四次常態更新，並視氣象情勢調整更新） → 伺服器快取 TTL: 60 分鐘（快取為效能優化，正確性不依賴固定發布時點）。
 - **鄉鎮預報 (`F-D0047-093`)**：每日更新 2–4 次 → 伺服器快取 TTL: 60–120 分鐘。
 - 快取架構：後端以內存記憶體快取（In-Memory TTLCache）作為第一防線，Supabase PostgreSQL 作為持久化批次備份，達成極速回應（< 50ms）。
 
@@ -1679,13 +1679,22 @@ CWA Open Data API
   - [x] 重設臺灣視角控制按鈕（採用 GeoJSON `getBounds()` 動態計算，涵蓋本島與外島全境）
   - [x] 全螢幕地圖工作區控制按鈕（HTML5 Fullscreen API，支援尺寸動態重新計算）
   - [x] 跨裝置響應式支援（行動端 <= 960px 面板回歸靜態堆疊排版）
-- [ ] **Phase 8B — Rich County Forecast** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+- [x] **Phase 8B — Rich County Forecast** (已完成並通過生產環境驗收 / Completed and Production Verified)：
   - [x] CWA `F-C0032-001` 今明 36 小時預報客戶端與安全過濾
   - [x] 專屬短天期解析器（`(start_time, end_time)` 嚴格複合鍵對齊，PoP/CI 容錯與數值安全轉換）
   - [x] 行程內最佳努力（best-effort）TTL 快取（10~30 分鐘，冷啟動自癒容錯，零 DB 結構變更）
   - [x] `GET /api/forecast/short-term` 專屬 API 端點與錯誤遮罩
   - [x] 前端今明 36 小時生活預報卡片（3 時段卡片、PoP 機率條、CI 舒適度文字標籤、獨立載入/錯誤狀態、防競態 AbortController）
-- [ ] **Phase 8B2 — Rainfall Map Mode (選項目標 / Optional Future Target)**：`GET /api/map-data?type=short-term` 與降雨機率面量圖切換模式（待 36 小時卡片生產驗收後進行評估）。
+- [ ] **Phase 8B2 — Rainfall Probability Map Mode** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+  - [x] 獨立端點 `GET /api/map-data/short-term`（不破壞既有 `/api/map-data` 契約）
+  - [x] 後端單次請求獲取全臺 22 縣市 F-C0032-001 完整資料（無 N+1 請求）
+  - [x] 獨立全縣市地圖行程內快取（TTL: 15 分鐘，不與單一縣市快取共用）
+  - [x] 單一 Leaflet 地圖實例支援 [🌡️ 溫度] 與 [🌧️ 降雨機率] 雙模式切換
+  - [x] 降雨機率面量圖（藍色系漸層 0–20%, 21–40%, 41–60%, 61–80%, 81–100%, 無資料灰色）
+  - [x] 降雨機率專屬圖例與安全 DOM Tooltip（呈現 PoP% 與舒適度文字）
+  - [x] 浮動面板模式連動（降雨模式切換為短時預報摘要卡片群與獨立更新時間）
+  - [x] 降雨資料延遲載入（首次點擊才抓取，後續切換時段無額外網路請求）
+  - [x] 完整保留縣市選取、外框高亮、重設視角、全螢幕與深淺色主題
 - [ ] **Phase 8C — Current Weather Observations**：`O-A0001` 即時氣象觀測串接（測站標記圖層、目前觀測 vs 未來預報嚴格區隔 UI、選取縣市即時氣候摘要）。
 - [ ] **Phase 8D — Radar Layer**：`O-A0058-002` 雷達回波圖疊加（ImageOverlay、透明度滑桿、時間戳記、零二進位入庫）。
 - [ ] **Phase 8E — Typhoon Center**：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。

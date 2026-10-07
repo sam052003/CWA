@@ -24,7 +24,8 @@
 - Phase 7B ✅ Forecast Period Map
 - Phase 7C ✅ Complete Taiwan Weather Dashboard
 - Phase 8A ✅ App Experience & Map Workspace (已完成並通過生產環境驗收)
-- Phase 8B 📋 Rich County Forecast 今明 36 小時生活預報 (實作完成，待正式環境手動驗收)
+- Phase 8B ✅ Rich County Forecast 今明 36 小時生活預報 (已完成並通過生產環境驗收)
+- Phase 8B2 📋 Rainfall Probability Map Mode 降雨機率地圖模式 (實作完成，待正式環境手動驗收)
 
 ---
 

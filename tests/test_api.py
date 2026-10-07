@@ -700,3 +700,84 @@ def test_get_short_term_forecast_api_unexpected_internal_error():
         assert "pwd" not in response.text
 
 
+# ==============================================================================
+# Phase 8B2: GET /api/map-data/short-term Endpoint Tests
+# ==============================================================================
+
+def test_get_short_term_map_data_api_success():
+    """Verify GET /api/map-data/short-term returns 200 with ShortTermMapDataResponse."""
+    mock_data = {
+        "dataset_id": "F-C0032-001",
+        "updated_at": "2026-10-05T18:00:00+08:00",
+        "periods": [
+            {
+                "start_time": "2026-10-05T18:00:00+08:00",
+                "end_time": "2026-10-06T06:00:00+08:00",
+            }
+        ],
+        "forecasts": [
+            {
+                "region_name": "臺中市",
+                "start_time": "2026-10-05T18:00:00+08:00",
+                "end_time": "2026-10-06T06:00:00+08:00",
+                "weather": "多雲短暫陣雨",
+                "weather_code": "08",
+                "min_temp": 25.0,
+                "max_temp": 29.0,
+                "pop": 40,
+                "comfort_index": "舒適",
+            }
+        ],
+    }
+
+    with patch("app.api.routes.weather_service.get_short_term_map_data", return_value=mock_data) as mock_service:
+        response = client.get("/api/map-data/short-term")
+        assert response.status_code == 200
+        mock_service.assert_called_once()
+
+        body = response.json()
+        assert body["dataset_id"] == "F-C0032-001"
+        assert len(body["periods"]) == 1
+        assert len(body["forecasts"]) == 1
+        assert body["forecasts"][0]["region_name"] == "臺中市"
+        assert body["forecasts"][0]["pop"] == 40
+        assert body["forecasts"][0]["comfort_index"] == "舒適"
+
+
+def test_get_short_term_map_data_api_not_found():
+    """Verify 404 when no short-term map data is found."""
+    with patch(
+        "app.api.routes.weather_service.get_short_term_map_data",
+        side_effect=ForecastNotFoundError("No active short-term map forecasts found"),
+    ):
+        response = client.get("/api/map-data/short-term")
+        assert response.status_code == 404
+        assert "No active short-term map forecasts found" in response.json()["detail"]
+
+
+def test_get_short_term_map_data_api_upstream_cwa_failure():
+    """Verify 502 Bad Gateway when upstream CWA fails without leaking secrets."""
+    with patch(
+        "app.api.routes.weather_service.get_short_term_map_data",
+        side_effect=CWAClientError("CWA timeout with secret key CWA-SECRET-99999"),
+    ):
+        response = client.get("/api/map-data/short-term")
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Upstream weather data service unavailable"
+        assert "CWA-SECRET-99999" not in response.text
+
+
+def test_get_short_term_map_data_api_unexpected_internal_error():
+    """Verify 500 when unexpected error occurs without leaking traces or credentials."""
+    with patch(
+        "app.api.routes.weather_service.get_short_term_map_data",
+        side_effect=Exception("Database crash with postgresql://admin:secretpass@db:5432/cwa"),
+    ):
+        response = client.get("/api/map-data/short-term")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error occurred while retrieving short-term map data"
+        assert "secretpass" not in response.text
+        assert "postgresql://" not in response.text
+
+
+

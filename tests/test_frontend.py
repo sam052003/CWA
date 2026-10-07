@@ -701,6 +701,93 @@ def test_phase_8b_short_term_safe_dom_and_period_labels():
     assert "function selectCounty(" in js
 
 
+def test_phase_8b2_rainfall_map_mode_html():
+    """Verify HTML markup contains required map mode controls, legends, and summary elements for Phase 8B2."""
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    # Map mode controls
+    assert 'class="map-mode-control"' in html
+    assert 'id="map-mode-temperature"' in html
+    assert 'id="map-mode-rainfall"' in html
+    assert 'aria-label="地圖顯示模式"' in html
+
+    # Legends: both temperature and rainfall legends exist
+    assert 'id="map-legend"' in html
+    assert 'id="rainfall-legend"' in html
+    assert "降雨機率 %" in html
+    assert "無資料" in html
+
+    # Detail panel: temperature and rainfall summary groups exist
+    assert 'id="temperature-summary-group"' in html
+    assert 'id="rainfall-summary-group"' in html
+    assert 'id="rainfall-summary-period"' in html
+    assert 'id="rainfall-card-weather"' in html
+    assert 'id="rainfall-card-pop"' in html
+    assert 'id="rainfall-card-ci"' in html
+    assert 'id="rainfall-detail-last-updated"' in html
+    assert 'id="detail-last-updated"' in html
+
+
+def test_phase_8b2_rainfall_map_mode_js():
+    """Verify JS contains independent state variables, safe tooltip rendering,
+    color scale, and separate period setters for Phase 8B2.
+    """
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. State variables
+    assert 'currentMapMode = "temperature"' in js
+    assert "shortTermMapDataCache = null" in js
+    assert "currentRainfallMapPeriod = null" in js
+
+    # 2. Key functions
+    assert "function getRainfallColor(" in js
+    assert "function getRainfallForecastForCounty(" in js
+    assert "function setRainfallMapPeriod(" in js
+    assert "function loadShortTermMapData(" in js
+    assert "function setMapMode(" in js
+    assert "function updateRainfallSummary(" in js
+
+    # 3. Dedicated endpoint lazy fetch
+    assert '"/api/map-data/short-term"' in js
+
+    # 4. Period switching does NOT make network fetches
+    rf_period_idx = js.find("function setRainfallMapPeriod(")
+    assert rf_period_idx != -1
+    rf_period_end = js.find("function selectCounty(", rf_period_idx)
+    rf_period_body = js[rf_period_idx:rf_period_end]
+    assert "fetch(" not in rf_period_body
+
+    temp_period_idx = js.find("function setMapPeriod(")
+    assert temp_period_idx != -1
+    temp_period_end = js.find("function setRainfallMapPeriod(", temp_period_idx)
+    temp_period_body = js[temp_period_idx:temp_period_end]
+    assert "fetch(" not in temp_period_body
+
+    # 5. Safe DOM tooltip rendering (no innerHTML with untrusted strings)
+    tt_idx = js.find("function createTooltipElement(")
+    assert tt_idx != -1
+    tt_end = js.find("function closeActiveTooltip(", tt_idx)
+    tt_body = js[tt_idx:tt_end]
+    assert "document.createElement(" in tt_body
+    assert "textContent" in tt_body
+    assert "innerHTML" not in tt_body
+
+    # 6. Selected county outline re-applied on period switch and mode switch
+    assert "geojsonLayer.setStyle(getCountyStyle)" in rf_period_body
+    assert "selectedLayer.bringToFront()" in rf_period_body
+    assert "geojsonLayer.setStyle(getCountyStyle)" in temp_period_body
+    assert "selectedLayer.bringToFront()" in temp_period_body
+
+    # 7. Pointer bridge unchanged
+    assert "function handleCountyPointerDown(event)" in js
+    assert "countyLayersByName" in js
+
+
+
 
 
 

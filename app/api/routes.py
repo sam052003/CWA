@@ -10,6 +10,7 @@ from app.api.schemas import (
     RefreshResponse,
     RegionsResponse,
     ShortTermForecastResponse,
+    ShortTermMapDataResponse,
 )
 from app.clients.cwa_client import CWAClientError
 from app.core.config import get_settings
@@ -153,6 +154,38 @@ def get_short_term_forecast_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving short-term forecast",
+        )
+
+
+@router.get(
+    "/map-data/short-term",
+    response_model=ShortTermMapDataResponse,
+    summary="Get active 36-hour living forecast data for Taiwan county rainfall map",
+    responses={
+        404: {"model": ErrorResponse, "description": "No active short-term map forecasts found"},
+        502: {"model": ErrorResponse, "description": "CWA API request failed"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+def get_short_term_map_data_endpoint():
+    """Retrieve 36-hour rich forecasts (F-C0032-001) across all Taiwan regions for rainfall probability map."""
+    try:
+        data = weather_service.get_short_term_map_data()
+        return ShortTermMapDataResponse(**data)
+    except ForecastNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active short-term map forecasts found",
+        )
+    except CWAClientError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Upstream weather data service unavailable",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving short-term map data",
         )
 
 

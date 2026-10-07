@@ -368,6 +368,51 @@ body {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
+/* Map Mode Control (Phase 8B2) */
+.map-mode-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    background: var(--control-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.15rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.map-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.map-mode-btn:hover {
+    color: var(--text-main);
+    background-color: var(--primary-light);
+}
+
+.map-mode-btn.active,
+.map-mode-btn[aria-pressed="true"] {
+    background-color: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.map-mode-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+
 /* Map Toolbar: Reset View and Fullscreen */
 .map-toolbar {
     display: inline-flex;
@@ -778,6 +823,47 @@ body {
 
 .county-tooltip .temp-label-warm {
     color: #fb923c;
+}
+
+.county-tooltip .tooltip-period {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    margin-bottom: 2px;
+}
+
+.county-tooltip .tooltip-pop {
+    color: #60a5fa;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.county-tooltip .tooltip-ci {
+    color: #cbd5e1;
+    font-size: 0.8rem;
+    margin-top: 2px;
+}
+
+.rainfall-summary-period {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+}
+
+[data-theme="dark"] .rainfall-summary-period {
+    background: rgba(96, 165, 250, 0.18);
+    color: #60a5fa;
+}
+
+.pop-card .card-value {
+    color: #2563eb;
+}
+
+[data-theme="dark"] .pop-card .card-value {
+    color: #60a5fa;
+}
+
+.ci-card .card-value {
+    font-size: 1.05rem;
 }
 
 /* Leaflet control dark theme tweaks */

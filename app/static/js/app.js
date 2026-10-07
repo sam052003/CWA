@@ -10,6 +10,9 @@ let leafletMap = null;
 let geojsonLayer = null;
 let mapDataCache = null;
 let currentMapPeriod = null;
+let currentMapMode = "temperature"; // "temperature" | "rainfall"
+let shortTermMapDataCache = null;
+let currentRainfallMapPeriod = null;
 let selectedCountyName = null;
 let activeTooltipLayer = null;
 let hoveredCountyLayer = null;
@@ -36,6 +39,17 @@ const elements = {
     mapError: document.getElementById("map-error"),
     mapPeriodBadge: document.getElementById("map-period-badge"),
     mapPeriodSelect: document.getElementById("map-period-select"),
+    mapLegend: document.getElementById("map-legend"),
+    mapModeTemperature: document.getElementById("map-mode-temperature"),
+    mapModeRainfall: document.getElementById("map-mode-rainfall"),
+    rainfallLegend: document.getElementById("rainfall-legend"),
+    rainfallSummaryGroup: document.getElementById("rainfall-summary-group"),
+    temperatureSummaryGroup: document.getElementById("temperature-summary-group"),
+    rainfallSummaryPeriod: document.getElementById("rainfall-summary-period"),
+    rainfallCardWeather: document.getElementById("rainfall-card-weather"),
+    rainfallCardPoP: document.getElementById("rainfall-card-pop"),
+    rainfallCardCI: document.getElementById("rainfall-card-ci"),
+    rainfallDetailLastUpdated: document.getElementById("rainfall-detail-last-updated"),
     detailLastUpdated: document.getElementById("detail-last-updated"),
     themeToggle: document.getElementById("theme-toggle"),
     mapResetView: document.getElementById("map-reset-view"),
@@ -311,14 +325,63 @@ function getForecastForCounty(countyName) {
 }
 
 /**
- * Leaflet style function: Returns styling object based on county temperature.
+ * Return color for rainfall probability choropleth (Phase 8B2).
+ * Monotonic blue scale, readable in light and dark mode, neutral gray for missing/null.
+ */
+function getRainfallColor(pop) {
+    if (pop === null || pop === undefined || isNaN(pop)) {
+        return "#cbd5e1"; // Neutral gray for no data
+    }
+    const val = Number(pop);
+    if (val <= 20) return "#dbeafe";
+    if (val <= 40) return "#93c5fd";
+    if (val <= 60) return "#60a5fa";
+    if (val <= 80) return "#2563eb";
+    return "#1e40af";
+}
+
+/**
+ * Retrieve rainfall forecast item for a given county in the active short-term map period (Phase 8B2).
+ * Matches region_name and exact start_time & end_time (does not fall back to wrong period).
+ */
+function getRainfallForecastForCounty(countyName) {
+    if (!shortTermMapDataCache || !shortTermMapDataCache.forecasts) return null;
+    if (currentRainfallMapPeriod) {
+        return (
+            shortTermMapDataCache.forecasts.find(
+                (f) =>
+                    f.region_name === countyName &&
+                    f.start_time === currentRainfallMapPeriod.start_time &&
+                    f.end_time === currentRainfallMapPeriod.end_time
+            ) || null
+        );
+    }
+    return (
+        shortTermMapDataCache.forecasts.find((f) => f.region_name === countyName) || null
+    );
+}
+
+/**
+ * Leaflet style function: Returns styling object based on county temperature or rainfall (Phase 8B2).
  */
 function getCountyStyle(feature) {
     const countyName = feature.properties.COUNTYNAME || feature.properties.name;
+    const isSelected = selectedCountyName && selectedCountyName === countyName;
+
+    if (currentMapMode === "rainfall") {
+        const forecast = getRainfallForecastForCounty(countyName);
+        const fillColor = forecast ? getRainfallColor(forecast.pop) : "#cbd5e1";
+        return {
+            fillColor: fillColor,
+            weight: isSelected ? 3.5 : 1.2,
+            opacity: 1,
+            color: isSelected ? "#1e3a8a" : "#ffffff",
+            fillOpacity: isSelected ? 0.95 : 0.78,
+        };
+    }
+
     const forecast = getForecastForCounty(countyName);
     const fillColor = forecast ? getTemperatureColor(forecast.max_temp) : "#cbd5e1";
-
-    const isSelected = selectedCountyName && selectedCountyName === countyName;
 
     return {
         fillColor: fillColor,
@@ -330,11 +393,9 @@ function getCountyStyle(feature) {
 }
 
 /**
- * Build rich HTML DOM element for county hover tooltip.
+ * Build rich HTML DOM element for county hover tooltip (Safe DOM manipulation).
  */
 function createTooltipElement(countyName) {
-    const forecast = getForecastForCounty(countyName);
-
     const container = document.createElement("div");
     container.className = "county-tooltip";
 
@@ -342,6 +403,58 @@ function createTooltipElement(countyName) {
     titleEl.className = "tooltip-county";
     titleEl.textContent = countyName;
     container.appendChild(titleEl);
+
+    if (currentMapMode === "rainfall") {
+        const rfForecast = getRainfallForecastForCounty(countyName);
+
+        if (currentRainfallMapPeriod) {
+            const periodEl = document.createElement("div");
+            periodEl.className = "tooltip-period";
+            periodEl.textContent = formatForecastPeriod(
+                currentRainfallMapPeriod.start_time,
+                currentRainfallMapPeriod.end_time
+            );
+            container.appendChild(periodEl);
+        }
+
+        const weatherEl = document.createElement("div");
+        weatherEl.className = "tooltip-weather";
+        weatherEl.textContent = rfForecast ? (rfForecast.weather || "無資料") : "無預報資料";
+        container.appendChild(weatherEl);
+
+        const popEl = document.createElement("div");
+        popEl.className = "tooltip-pop";
+        popEl.textContent = rfForecast && rfForecast.pop !== null && rfForecast.pop !== undefined
+            ? `降雨機率 ${rfForecast.pop}%`
+            : "降雨機率 --";
+        container.appendChild(popEl);
+
+        if (rfForecast && rfForecast.comfort_index) {
+            const ciEl = document.createElement("div");
+            ciEl.className = "tooltip-ci";
+            ciEl.textContent = `舒適度 ${rfForecast.comfort_index}`;
+            container.appendChild(ciEl);
+        }
+
+        if (rfForecast && (rfForecast.min_temp !== null || rfForecast.max_temp !== null)) {
+            const tempsEl = document.createElement("div");
+            tempsEl.className = "tooltip-temps";
+            let tempStr = "--";
+            if (rfForecast.min_temp !== null && rfForecast.max_temp !== null) {
+                tempStr = `${rfForecast.min_temp} ～ ${rfForecast.max_temp} °C`;
+            } else if (rfForecast.min_temp !== null) {
+                tempStr = `最低 ${rfForecast.min_temp} °C`;
+            } else if (rfForecast.max_temp !== null) {
+                tempStr = `最高 ${rfForecast.max_temp} °C`;
+            }
+            tempsEl.textContent = tempStr;
+            container.appendChild(tempsEl);
+        }
+
+        return container;
+    }
+
+    const forecast = getForecastForCounty(countyName);
 
     const weatherEl = document.createElement("div");
     weatherEl.className = "tooltip-weather";
@@ -485,6 +598,67 @@ function setMapPeriod(periodOrKey) {
 }
 
 /**
+ * Canonical forecast period update pipeline for Rainfall mode (Phase 8B2).
+ * 1. Updates currentRainfallMapPeriod.
+ * 2. Closes any active tooltip.
+ * 3. Updates map period UI (select element and badge).
+ * 4. Redraws all 22 county polygon styles (PoP choropleth).
+ * 5. Preserves selected county highlight outline.
+ * 6. Updates selected county rainfall summary panel for the new period.
+ * Does NOT make any network fetch.
+ *
+ * @param {Object|string} periodOrKey Period object with start_time & end_time, or period key string
+ */
+function setRainfallMapPeriod(periodOrKey) {
+    if (!periodOrKey) return;
+    let period = periodOrKey;
+    if (typeof periodOrKey === "string" && shortTermMapDataCache && shortTermMapDataCache.periods) {
+        period = shortTermMapDataCache.periods.find(
+            (p) => `${p.start_time}_${p.end_time}` === periodOrKey
+        ) || null;
+    }
+    if (!period) return;
+
+    currentRainfallMapPeriod = period;
+
+    // 1. Close any active tooltip
+    closeActiveTooltip();
+
+    // 2. Synchronize period selector and badge
+    const periodKey = `${period.start_time}_${period.end_time}`;
+    if (elements.mapPeriodSelect && elements.mapPeriodSelect.value !== periodKey) {
+        elements.mapPeriodSelect.value = periodKey;
+    }
+    if (elements.mapPeriodBadge) {
+        elements.mapPeriodBadge.textContent = formatForecastPeriod(
+            period.start_time,
+            period.end_time
+        );
+    }
+
+    // 3. Redraw all county polygon styles using getCountyStyle
+    if (geojsonLayer) {
+        geojsonLayer.setStyle(getCountyStyle);
+    }
+
+    // 4. Preserve selected county polygon highlight
+    if (selectedCountyName && countyLayersByName.has(selectedCountyName)) {
+        const selectedLayer = countyLayersByName.get(selectedCountyName);
+        selectedLayer.setStyle({
+            weight: 3.5,
+            color: "#1e3a8a",
+            fillOpacity: 0.95,
+        });
+        selectedLayer.bringToFront();
+    }
+
+    // 5. Immediately update selected county rainfall summary panel for the new period
+    if (selectedCountyName) {
+        updateRainfallSummary(getRainfallForecastForCounty(selectedCountyName));
+    }
+}
+
+/**
  * Shared county-selection function for both map clicks and dropdown changes.
  * 1. Closes any active tooltip.
  * 2. Updates selected county state and manages visual polygon highlights.
@@ -544,9 +718,13 @@ function selectCounty(countyName, options = {}) {
         elements.detailPanelSummaryLabel.textContent = `📍 ${countyName}`;
     }
 
-    // 6. Immediately update nearest-period summary using mapDataCache for currently displayed period
-    const cachedForecast = getForecastForCounty(countyName);
-    updateSummary(cachedForecast);
+    // 6. Immediately update nearest-period summary for currently displayed period
+    if (currentMapMode === "rainfall" && shortTermMapDataCache) {
+        updateRainfallSummary(getRainfallForecastForCounty(countyName));
+    } else {
+        const cachedForecast = getForecastForCounty(countyName);
+        updateSummary(cachedForecast);
+    }
 
     // 7. Load detailed 7-day forecast for Chart and Table
     loadForecast(countyName);
@@ -834,6 +1012,136 @@ function initMapControls() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 8B2: Map Mode Controls & Short-Term Rainfall Map (F-C0032-001)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lazy-load F-C0032-001 all-county 36h map dataset once per session.
+ */
+async function loadShortTermMapData() {
+    if (shortTermMapDataCache) return shortTermMapDataCache;
+
+    if (elements.mapPeriodBadge) {
+        elements.mapPeriodBadge.textContent = "正在載入降雨機率地圖...";
+    }
+
+    try {
+        const response = await fetch("/api/map-data/short-term");
+        if (!response.ok) {
+            throw new Error(`Short-term map data fetch failed: ${response.status}`);
+        }
+        const data = await response.json();
+        shortTermMapDataCache = data;
+        return data;
+    } catch (err) {
+        console.error("Failed to load short-term map data:", err);
+        return null;
+    }
+}
+
+/**
+ * Switch map mode between "temperature" and "rainfall" (Phase 8B2).
+ * Lazy-loads F-C0032-001 all-county map data on first rainfall mode selection.
+ * Preserves separate selected periods and does not reload on period changes.
+ *
+ * @param {"temperature" | "rainfall"} mode Desired map mode
+ */
+async function setMapMode(mode) {
+    if (mode === currentMapMode) return;
+
+    if (mode === "rainfall") {
+        // Lazy-load short-term all-county map data if not yet loaded
+        if (!shortTermMapDataCache) {
+            const data = await loadShortTermMapData();
+            if (!data || !data.periods || data.periods.length === 0) {
+                // Non-blocking fallback: remain in temperature mode
+                if (elements.mapPeriodBadge && currentMapPeriod) {
+                    elements.mapPeriodBadge.textContent = formatForecastPeriod(
+                        currentMapPeriod.start_time,
+                        currentMapPeriod.end_time
+                    );
+                }
+                if (elements.mapError) {
+                    elements.mapError.textContent = "降雨機率地圖暫時無法載入";
+                    elements.mapError.classList.remove("hidden");
+                    setTimeout(() => {
+                        elements.mapError.classList.add("hidden");
+                        elements.mapError.textContent = "地圖資料暫時無法載入";
+                    }, 4000);
+                }
+                return;
+            }
+        }
+
+        currentMapMode = "rainfall";
+
+        // 1. Update mode toggle button attributes
+        if (elements.mapModeTemperature) {
+            elements.mapModeTemperature.classList.remove("active");
+            elements.mapModeTemperature.setAttribute("aria-pressed", "false");
+        }
+        if (elements.mapModeRainfall) {
+            elements.mapModeRainfall.classList.add("active");
+            elements.mapModeRainfall.setAttribute("aria-pressed", "true");
+        }
+
+        // 2. Toggle legends
+        if (elements.mapLegend) elements.mapLegend.classList.add("hidden");
+        if (elements.rainfallLegend) elements.rainfallLegend.classList.remove("hidden");
+
+        // 3. Toggle detail panel summary groups
+        if (elements.temperatureSummaryGroup) elements.temperatureSummaryGroup.classList.add("hidden");
+        if (elements.rainfallSummaryGroup) elements.rainfallSummaryGroup.classList.remove("hidden");
+        if (elements.summaryPeriod) elements.summaryPeriod.classList.add("hidden");
+        if (elements.rainfallSummaryPeriod) elements.rainfallSummaryPeriod.classList.remove("hidden");
+
+        // 4. Set or restore currentRainfallMapPeriod
+        if (!currentRainfallMapPeriod && shortTermMapDataCache.periods.length > 0) {
+            currentRainfallMapPeriod = shortTermMapDataCache.periods[0];
+        }
+
+        // 5. Populate period selector options from shortTermMapDataCache.periods
+        populatePeriodSelector(shortTermMapDataCache.periods);
+
+        // 6. Apply active rainfall period
+        if (currentRainfallMapPeriod) {
+            setRainfallMapPeriod(currentRainfallMapPeriod);
+        }
+    } else {
+        // Temperature mode
+        currentMapMode = "temperature";
+
+        // 1. Update mode toggle button attributes
+        if (elements.mapModeTemperature) {
+            elements.mapModeTemperature.classList.add("active");
+            elements.mapModeTemperature.setAttribute("aria-pressed", "true");
+        }
+        if (elements.mapModeRainfall) {
+            elements.mapModeRainfall.classList.remove("active");
+            elements.mapModeRainfall.setAttribute("aria-pressed", "false");
+        }
+
+        // 2. Toggle legends
+        if (elements.mapLegend) elements.mapLegend.classList.remove("hidden");
+        if (elements.rainfallLegend) elements.rainfallLegend.classList.add("hidden");
+
+        // 3. Toggle detail panel summary groups
+        if (elements.temperatureSummaryGroup) elements.temperatureSummaryGroup.classList.remove("hidden");
+        if (elements.rainfallSummaryGroup) elements.rainfallSummaryGroup.classList.add("hidden");
+        if (elements.summaryPeriod) elements.summaryPeriod.classList.remove("hidden");
+        if (elements.rainfallSummaryPeriod) elements.rainfallSummaryPeriod.classList.add("hidden");
+
+        // 4. Restore period selector options from mapDataCache.periods
+        if (mapDataCache && mapDataCache.periods) {
+            populatePeriodSelector(mapDataCache.periods);
+            if (currentMapPeriod) {
+                setMapPeriod(currentMapPeriod);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Render Functions (Secure DOM manipulation with textContent & createElement)
 // ---------------------------------------------------------------------------
 
@@ -862,6 +1170,55 @@ function updateSummary(firstForecast) {
         firstForecast.max_temp !== null && firstForecast.max_temp !== undefined
             ? `${firstForecast.max_temp} °C`
             : "--";
+}
+
+/**
+ * Update rainfall summary card group in detail panel (Phase 8B2).
+ * Secure DOM manipulation with textContent.
+ */
+function updateRainfallSummary(forecast) {
+    if (!elements.rainfallSummaryGroup) return;
+
+    if (!forecast) {
+        if (elements.rainfallSummaryPeriod) elements.rainfallSummaryPeriod.textContent = "--";
+        if (elements.rainfallCardWeather) elements.rainfallCardWeather.textContent = "--";
+        if (elements.rainfallCardPoP) elements.rainfallCardPoP.textContent = "--";
+        if (elements.rainfallCardCI) elements.rainfallCardCI.textContent = "--";
+        if (elements.rainfallDetailLastUpdated) {
+            elements.rainfallDetailLastUpdated.textContent = formatUpdatedTimestamp(
+                shortTermMapDataCache?.updated_at
+            );
+        }
+        return;
+    }
+
+    if (elements.rainfallSummaryPeriod) {
+        elements.rainfallSummaryPeriod.textContent = formatForecastPeriod(
+            forecast.start_time,
+            forecast.end_time
+        );
+    }
+
+    if (elements.rainfallCardWeather) {
+        elements.rainfallCardWeather.textContent = forecast.weather || "--";
+    }
+
+    if (elements.rainfallCardPoP) {
+        elements.rainfallCardPoP.textContent =
+            forecast.pop !== null && forecast.pop !== undefined
+                ? `${forecast.pop}%`
+                : "--";
+    }
+
+    if (elements.rainfallCardCI) {
+        elements.rainfallCardCI.textContent = forecast.comfort_index || "--";
+    }
+
+    if (elements.rainfallDetailLastUpdated) {
+        elements.rainfallDetailLastUpdated.textContent = formatUpdatedTimestamp(
+            shortTermMapDataCache?.updated_at
+        );
+    }
 }
 
 function updateChart(forecasts) {
@@ -1533,15 +1890,36 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // 5c. Attach click listeners to map mode buttons (Phase 8B2)
+    if (elements.mapModeTemperature) {
+        elements.mapModeTemperature.addEventListener("click", () => {
+            setMapMode("temperature");
+        });
+    }
+    if (elements.mapModeRainfall) {
+        elements.mapModeRainfall.addEventListener("click", () => {
+            setMapMode("rainfall");
+        });
+    }
+
     // 6. Attach change event listener to forecast period selector
     if (elements.mapPeriodSelect) {
         elements.mapPeriodSelect.addEventListener("change", (event) => {
             const selectedKey = event.target.value;
-            const period = mapDataCache?.periods?.find(
-                (p) => `${p.start_time}_${p.end_time}` === selectedKey
-            );
-            if (period) {
-                setMapPeriod(period);
+            if (currentMapMode === "rainfall") {
+                const period = shortTermMapDataCache?.periods?.find(
+                    (p) => `${p.start_time}_${p.end_time}` === selectedKey
+                );
+                if (period) {
+                    setRainfallMapPeriod(period);
+                }
+            } else {
+                const period = mapDataCache?.periods?.find(
+                    (p) => `${p.start_time}_${p.end_time}` === selectedKey
+                );
+                if (period) {
+                    setMapPeriod(period);
+                }
             }
         });
     }

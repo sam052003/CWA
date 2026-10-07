@@ -82,6 +82,24 @@
                             <span id="map-period-badge" class="map-period-badge">載入中...</span>
                         </div>
                         <div class="map-controls-group">
+                            <div class="map-mode-control" role="group" aria-label="地圖顯示模式">
+                                <button
+                                    id="map-mode-temperature"
+                                    class="map-mode-btn active"
+                                    type="button"
+                                    aria-pressed="true"
+                                >
+                                    🌡️ 溫度
+                                </button>
+                                <button
+                                    id="map-mode-rainfall"
+                                    class="map-mode-btn"
+                                    type="button"
+                                    aria-pressed="false"
+                                >
+                                    🌧️ 降雨機率
+                                </button>
+                            </div>
                             <div class="map-period-control">
                                 <label for="map-period-select" class="map-period-label">預報時段</label>
                                 <select id="map-period-select" class="map-period-select" aria-label="選擇預報時段">
@@ -129,6 +147,18 @@
                             <span class="legend-chip"><i style="background:#cbd5e1"></i>無資料</span>
                         </div>
                     </div>
+                    <!-- Rainfall Legend (Phase 8B2) -->
+                    <div class="map-legend rainfall-legend hidden" id="rainfall-legend" aria-label="降雨機率圖例">
+                        <span class="legend-title">降雨機率 %</span>
+                        <div class="legend-items">
+                            <span class="legend-chip"><i style="background:#dbeafe"></i>0–20</span>
+                            <span class="legend-chip"><i style="background:#93c5fd"></i>21–40</span>
+                            <span class="legend-chip"><i style="background:#60a5fa"></i>41–60</span>
+                            <span class="legend-chip"><i style="background:#2563eb"></i>61–80</span>
+                            <span class="legend-chip"><i style="background:#1e40af"></i>81–100</span>
+                            <span class="legend-chip"><i style="background:#cbd5e1"></i>無資料</span>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Detail Panel: Region Selector & Summary Cards (Floating/Collapsible on Desktop, Static below map on Mobile) -->
@@ -162,33 +192,69 @@
                                     <span class="selected-region-subtitle">預報時段摘要</span>
                                 </div>
                                 <span id="summary-period" class="summary-period-badge">--</span>
+                                <span id="rainfall-summary-period" class="summary-period-badge rainfall-summary-period hidden">--</span>
                             </div>
-                            <div class="cards-grid vertical-cards-grid">
-                                <div class="card weather-card">
-                                    <div class="card-icon" aria-hidden="true">🌤️</div>
-                                    <div class="card-info">
-                                        <span class="card-label">天氣現象</span>
-                                        <strong id="card-weather" class="card-value">--</strong>
+
+                            <!-- Temperature Summary Group (One-Week F-C0032-005) -->
+                            <div id="temperature-summary-group" class="temperature-summary-group">
+                                <div class="cards-grid vertical-cards-grid">
+                                    <div class="card weather-card">
+                                        <div class="card-icon" aria-hidden="true">🌤️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">天氣現象</span>
+                                            <strong id="card-weather" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card min-temp-card">
+                                        <div class="card-icon" aria-hidden="true">🌡️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">預測最低溫</span>
+                                            <strong id="card-min-temp" class="card-value temp-cold">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card max-temp-card">
+                                        <div class="card-icon" aria-hidden="true">☀️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">預測最高溫</span>
+                                            <strong id="card-max-temp" class="card-value temp-warm">--</strong>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="card min-temp-card">
-                                    <div class="card-icon" aria-hidden="true">🌡️</div>
-                                    <div class="card-info">
-                                        <span class="card-label">預測最低溫</span>
-                                        <strong id="card-min-temp" class="card-value temp-cold">--</strong>
-                                    </div>
-                                </div>
-                                <div class="card max-temp-card">
-                                    <div class="card-icon" aria-hidden="true">☀️</div>
-                                    <div class="card-info">
-                                        <span class="card-label">預測最高溫</span>
-                                        <strong id="card-max-temp" class="card-value temp-warm">--</strong>
-                                    </div>
+                                <div class="detail-updated-bar">
+                                    <span class="detail-updated-label">資料更新</span>
+                                    <span id="detail-last-updated" class="detail-updated-time">--</span>
                                 </div>
                             </div>
-                            <div class="detail-updated-bar">
-                                <span class="detail-updated-label">資料更新</span>
-                                <span id="detail-last-updated" class="detail-updated-time">--</span>
+
+                            <!-- Rainfall Summary Group (Phase 8B2 Short-Term F-C0032-001) -->
+                            <div id="rainfall-summary-group" class="rainfall-summary-group hidden">
+                                <div class="cards-grid vertical-cards-grid">
+                                    <div class="card weather-card">
+                                        <div class="card-icon" aria-hidden="true">🌧️</div>
+                                        <div class="card-info">
+                                            <span class="card-label">天氣現象</span>
+                                            <strong id="rainfall-card-weather" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card pop-card">
+                                        <div class="card-icon" aria-hidden="true">☔</div>
+                                        <div class="card-info">
+                                            <span class="card-label">降雨機率</span>
+                                            <strong id="rainfall-card-pop" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                    <div class="card ci-card">
+                                        <div class="card-icon" aria-hidden="true">👕</div>
+                                        <div class="card-info">
+                                            <span class="card-label">舒適度</span>
+                                            <strong id="rainfall-card-ci" class="card-value">--</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="detail-updated-bar">
+                                    <span class="detail-updated-label">資料更新</span>
+                                    <span id="rainfall-detail-last-updated" class="detail-updated-time">--</span>
+                                </div>
                             </div>
                         </div>
                     </div>
