@@ -1239,7 +1239,7 @@ Supabase PostgreSQL
 +---------------------------------------------------------------------------------------------------+
 |                                CWA Advanced Weather Platform (Phase 8)                            |
 +---------------------------------------------------------------------------------------------------+
-|  [Header] Brand Title | Theme Toggle (Light/Dark) | Map Mode Selector: [預報] [觀測] [雷達] [颱風]   |
+|  [Header] Brand Title | Theme Toggle (Light/Dark) | Map Modes: [氣溫] [降雨] [觀測] | Overlay: [☁️雷達] |
 +---------------------------------------------------------------------------------------------------+
 |                                                                                                   |
 |  +---------------------------------------------------------------+  +--------------------------+  |
@@ -1579,37 +1579,49 @@ Supabase PostgreSQL
 |                       Single L.map Instance                           |
 +-----------------------------------------------------------------------+
 |  Base Layer:                                                          |
-|    - OpenStreetMap TileLayer (&copy; OpenStreetMap contributors)     |
-|      (Dark Mode: CSS filter applied to .leaflet-tile-pane)            |
+|    - OpenStreetMap TileLayer (© OpenStreetMap contributors)           |
+|      (Dark Mode: CSS filter applied strictly to .leaflet-tile-pane)   |
 +-----------------------------------------------------------------------+
 |  Independent Overlay Layers:                                          |
-|    1. countyForecastLayer     -> GeoJSON Choropleth (Phase 7 Core)    |
-|    2. stationObservationLayer -> Weather Station Markers              |
-|    3. radarOverlayLayer       -> ImageOverlay (Bounds, Opacity Slider)|
-|    4. typhoonTrackLayer       -> Polyline & Center Markers            |
-|    5. typhoonRadiusLayer      -> 7/10-Level Wind Radii & Circles      |
+|    - radarOverlayLayer       -> ImageOverlay (Bounds, Opacity Slider, |
+|                                 radarPane z-index:350, independent)   |
+|    - countyForecastLayer     -> GeoJSON Choropleth (Overlay, z:400)   |
+|    - stationObservationLayer -> Station Markers (Canvas, z:400)       |
+|    - typhoonTrackLayer       -> Future Tracks / Center Markers        |
+|    - typhoonRadiusLayer      -> Future 7/10-Level Wind Radii          |
 +-----------------------------------------------------------------------+
 |  Map Mode Controller (Segmented Bar):                                 |
-|    [ 預報 (Forecast) ]  [ 觀測 (Observation) ]  [ 雷達 ]  [ 颱風 ]     |
-|    - Single instance never destroyed                                  |
-|    - Switch active layer groups cleanly                               |
+|    [ 🌡️ 氣溫 (Temperature) ] [ 🌧️ 降雨 (Rainfall) ] [ 📍 觀測 (Observation) ] |
+|    - Single Leaflet instance never destroyed                          |
+|    - Switch mutually-exclusive core visualization modes cleanly       |
 |    - Preserve county pointer selection & highlight sync               |
+|                                                                       |
+|  Independent Overlay Controls:                                        |
+|    [ ☁️ 雷達回波 (Radar ON/OFF) ] (Independent overlay, NOT a mode)    |
+|      - Dedicated radarPane (z-index: 350, pointer-events: none)       |
+|      - Coexists simultaneously with all 3 map modes                   |
+|      - Independent opacity slider, status badge, manual/auto refresh  |
+|    (Future typhoon layers / controls)                                 |
 +-----------------------------------------------------------------------+
 ```
 
 1. **單一實例永續運行 (Single Leaflet Instance)**：
-   - 確保全站僅有一處 `L.map('map', ...)`。在模式切換（預報、觀測、雷達、颱風）時，僅進行圖層的 `addLayer` / `removeLayer` 或調整視角 `flyToBounds`，絕對不呼叫 `map.remove()` 重建實例。
-2. **獨立圖層樹結構 (Independent Layer Tree)**：
-   - `countyForecastLayer`：縣市多邊形面量圖（預報時段切換連動）。
-   - `stationObservationLayer`：自動氣象站觀測標記圖層。
-   - `radarOverlayLayer`：雷達回波合成圖（支援透明度動態滑動調整）。
-   - `typhoonTrackLayer`：颱風過去軌跡與未來預測路徑折線。
-   - `typhoonRadiusLayer`：颱風暴風圈多邊形與預報機率圓。
-3. **地圖模式切換列 (Map Mode UI)**：
-   - 頂部導覽列提供直覺模式切換（預報 / 觀測 / 雷達 / 颱風）。
-   - 支援複合圖層（如在預報模式或觀測模式下，可自由勾選是否疊加雷達回波）。
+   - 確保全站僅有一處 `L.map('map', ...)`。在模式切換（氣溫、降雨、即時觀測）時，僅切換對應視覺化與圖層，絕對不呼叫 `map.remove()` 重建實例。
+2. **圖層階層與獨立疊加架構 (Layer Hierarchy & Overlays)**：
+   - `countyForecastLayer`：縣市多邊形面量圖（氣溫面量圖 / 降雨機率面量圖，overlayPane z-index: 400）。
+   - `stationObservationLayer`：自動氣象站即時觀測 Canvas 標記圖層（overlayPane z-index: 400）。
+   - `radarOverlayLayer`：雷達整合回波圖層（專屬 `radarPane` z-index: 350，`pointer-events: none`，獨立疊加於底圖之上且置於縣市邊界與測站標記之下）。
+   - `typhoonTrackLayer` / `typhoonRadiusLayer`：未來颱風路徑折線與暴風圈多邊形。
+3. **地圖模式控制器與獨立圖層開關 (Map Mode Controller vs Independent Overlays)**：
+   - **地圖模式控制器 (Map Mode Controller)** 嚴格限定為 3 種互斥模式：
+     - `[🌡️ 氣溫預報 (Temperature)]`
+     - `[🌧️ 降雨機率 (Rainfall)]`
+     - `[📍 即時觀測 (Observations)]`
+   - **獨立疊加圖層 (Independent Overlays)**：
+     - `[☁️ 雷達回波 (Radar ON/OFF)]`：**雷達絕非第 4 種地圖模式**，而是可與氣溫、降雨、即時觀測三種模式並存之獨立 Leaflet 疊加層（Overlay）。
+     - 切換地圖模式時絕不影響雷達圖層的開啟狀態或生命週期。
 4. **完整保留既有縣市指標選取架構 (Preserve Proven County Selection)**：
-   - Phase 7 驗證通過之 GeoJSON 多邊形點擊、高亮邊框（Highlight）、懸浮 Tooltip 與下拉選單雙向聯動機制 100% 保留。在切換至觀測或雷達模式時，使用者仍可點選縣市並切換聚焦目標。
+   - Phase 7 驗證通過之 GeoJSON 多邊形點擊、高亮邊框（Highlight）、懸浮 Tooltip 與下拉選單雙向聯動機制 100% 保留。在切換至觀測或疊加雷達圖層時，使用者仍可點選縣市並切換聚焦目標，雷達圖層設有 `pointer-events: none` 絕不攔截縣市點擊橋接器。
 
 ---
 
@@ -1618,39 +1630,41 @@ Supabase PostgreSQL
 #### 10.1 領域模型與資料庫表結構分工 (Domain Models & Tables)
 **絕對不將所有異質氣象資料混入同一張 `weather_forecasts` 表！**
 
+> **架構重要說明（Phase 8C / 8D 現行實作）**：  
+> 目前已實作之 Phase 8C（氣象測站即時觀測）與 Phase 8D（雷達回波疊加中繼）採用「伺服器端即時向 CWA 抓取 + 行程內最佳努力 (process-local) TTL 快取」機制，**未在 Supabase 資料庫建立或寫入額外資料表**（零 DB 綱要異動、零 PNG 二進位寫庫）。在 Vercel Serverless 無狀態環境下，行程內快取為最佳努力機制（冷啟動自癒抓取），不依賴或保證跨執行個體共享快取。資料庫持久化儲存保留為未來擴充架構選項。
+
 ```text
 +-----------------------+     +--------------------------+
-|   weather_forecasts   |     |   weather_observations   |
+|   weather_forecasts   |     | (Future: observations)   |
 +-----------------------+     +--------------------------+
-| id (BigInt, PK)       |     | id (BigInt, PK)          |
-| dataset_id (VARCHAR)  |     | station_id (VARCHAR)     |
-| region_name (VARCHAR) |     | station_name (VARCHAR)   |
-| start_time (TIMESTAMPTZ)    | county_name (VARCHAR)    |
-| end_time (TIMESTAMPTZ)|     | latitude / longitude     |
-| weather (VARCHAR)     |     | observation_time (TS)    |
-| min_temp / max_temp   |     | temperature / humidity   |
-| pop (INT, nullable)   |     | wind_speed / direction   |
-| comfort_index (VAR)   |     | pressure / rain_1h       |
-| fetched_at (TS)       |     | fetched_at (TS)          |
+| id (BigInt, PK)       |     | station_id (VARCHAR)     |
+| dataset_id (VARCHAR)  |     | station_name (VARCHAR)   |
+| region_name (VARCHAR) |     | county_name (VARCHAR)    |
+| start_time (TIMESTAMPTZ)    | latitude / longitude     |
+| end_time (TIMESTAMPTZ)|     | observation_time (TS)    |
+| weather (VARCHAR)     |     | temperature / humidity   |
+| min_temp / max_temp   |     | wind_speed / direction   |
+| pop (INT, nullable)   |     | pressure / rain_1h       |
+| comfort_index (VAR)   |     | fetched_at (TS)          |
+| fetched_at (TS)       |     | [現行: 行程內 TTL 快取]  |
 +-----------------------+     +--------------------------+
 
 +-----------------------+     +--------------------------+
-|    typhoon_events     |     |      radar_metadata      |
+| (Future: typhoon)     |     | (Future: radar_meta)     |
 +-----------------------+     +--------------------------+
-| id (BigInt, PK)       |     | id (BigInt, PK)          |
 | typhoon_id (VARCHAR)  |     | dataset_id (VARCHAR)     |
 | cwa_id / name_zh/en   |     | observation_time (TS)    |
 | intensity (VARCHAR)   |     | image_url (TEXT)         |
 | is_active (BOOLEAN)   |     | bounds_geojson (TEXT)    |
-| latest_track_json     |     | fetched_at (TS)          |
+| latest_track_json     |     | [現行: 行程內 5分快取]    |
 +-----------------------+     +--------------------------+
 ```
 
-1. `weather_forecasts`：縣市級預報（包含 `F-C0032-005` 一週預報與 `F-C0032-001` 短期預報，透過 `dataset_id` 嚴格區隔）。
-2. `weather_observations`：`O-A0001` 自動氣象站真實量測數據。
-3. `typhoon_events` & `typhoon_tracks`：`W-C0034-005` 颱風中繼、歷史與預報路徑座標。
-4. `radar_metadata`：`O-A0058-002` 雷達圖片時間戳與中繼 URL（零圖片二進位寫入資料庫）。
-5. `township_forecasts`：`F-D0047-093` 鄉鎮市區層級預報。
+1. `weather_forecasts`：縣市級預報（包含 `F-C0032-005` 一週預報與 `F-C0032-001` 短期預報，透過 `dataset_id` 嚴格區隔，持久化存儲於 Supabase PostgreSQL）。
+2. `weather_observations`：`O-A0001` 自動氣象站真實量測數據（現行：伺服器端 live CWA 查詢 + 行程內 10 分鐘 TTL 快取）。
+3. `typhoon_events` & `typhoon_tracks`：`W-C0034-005` 颱風中繼、歷史與預報路徑座標（未來擴充規劃）。
+4. `radar_metadata`：`O-A0058-002` 雷達圖片時間戳與中繼 URL（現行：伺服器端 File API/S3 查詢 + 行程內 5 分鐘 TTL 快取，零圖片二進位入庫）。
+5. `township_forecasts`：`F-D0047-093` 鄉鎮市區層級預報（未來擴充規劃）。
 
 #### 10.2 嚴謹分層軟體架構 (Strict Layered Architecture)
 維持高內聚低耦合之設計準則：
@@ -1661,9 +1675,9 @@ CWA Open Data API
        ↓
   CWA Parser       (app/parsers/cwa_parser.py)
        ↓
- Weather Repository (app/repositories/weather_repository.py)
+ Weather Repository (app/repositories/weather_repository.py - 預報持久化)
        ↓
- Weather Service   (app/services/weather_service.py)
+ Weather Service   (app/services/weather_service.py - 行程內 TTL 快取與聚合)
        ↓
   FastAPI Routes   (app/api/routes.py)
        ↓
@@ -1672,12 +1686,12 @@ CWA Open Data API
 
 #### 10.3 智慧快取策略 (Smart Caching Strategy)
 為防止高流量訪問對 CWA API 造成配額耗盡與頻寬浪費，設計基於資料更新特性的分級快取機制：
-- **雷達回波 (`O-A0058-002`)**：CWA 約 10 分鐘產製一次 → 伺服器快取 TTL: 6–8 分鐘。
-- **現在觀測 (`O-A0001`)**：氣象站約 10–15 分鐘取樣一次 → 伺服器快取 TTL: 10 分鐘。
-- **颱風資訊 (`W-C0034-005`)**：平時無颱風快取 1 小時；警報發布期間快取 TTL: 15–30 分鐘。
-- **短時預報 (`F-C0032-001`)**：每日發布約 4 次（約 05:00、11:00、17:00、23:00 四次常態更新，並視氣象情勢調整更新） → 伺服器快取 TTL: 60 分鐘（快取為效能優化，正確性不依賴固定發布時點）。
-- **鄉鎮預報 (`F-D0047-093`)**：每日更新 2–4 次 → 伺服器快取 TTL: 60–120 分鐘。
-- 快取架構：後端以內存記憶體快取（In-Memory TTLCache）作為第一防線，Supabase PostgreSQL 作為持久化批次備份，達成極速回應（< 50ms）。
+- **雷達回波 (`O-A0058-002`)**：CWA 約 10 分鐘產製一次 → 伺服器端行程內最佳努力快取 TTL: 5 分鐘（零圖片二進位寫入資料庫）。
+- **現在觀測 (`O-A0001`)**：氣象站約 10–15 分鐘取樣一次 → 伺服器端行程內最佳努力快取 TTL: 10 分鐘（零 DB 綱要異動）。
+- **颱風資訊 (`W-C0034-005`)**：平時無颱風快取 1 小時；警報發布期間快取 TTL: 15–30 分鐘（未來擴充規劃）。
+- **短時預報 (`F-C0032-001`)**：每日發布約 4 次（約 05:00、11:00、17:00、23:00 四次常態更新，並視氣象情勢調整更新） → 伺服器端行程內快取 TTL: 10–30 分鐘。
+- **鄉鎮預報 (`F-D0047-093`)**：每日更新 2–4 次 → 伺服器快取 TTL: 60–120 分鐘（未來擴充規劃）。
+- **快取架構說明**：目前 Phase 8C 與 Phase 8D 架構為「伺服器端即時 CWA 抓取 + 行程內最佳努力（process-local）TTL 快取」。在 Vercel Serverless 無狀態環境下，各執行個體維護自身記憶體快取，冷啟動時安全自癒抓取，不依賴或承諾跨執行個體共享快取保證（不保證跨實例 < 50ms 命中）；持久化儲存（如 Supabase 資料庫或共享快取）保留為未來大規模擴充之架構選項。
 
 ---
 

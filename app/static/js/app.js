@@ -21,6 +21,7 @@ let observationCanvasRenderer = null;
 // Phase 8D: Radar Reflectivity Overlay (O-A0058-002)
 let radarEnabled = false;
 let radarOverlayLayer = null;
+let radarPendingOverlayLayer = null;
 let radarMetadataCache = null;
 let radarOpacity = 0.65;
 let radarAutoRefreshTimer = null;
@@ -2584,24 +2585,27 @@ function updateRadarStatusBadge(metadata) {
 
 /**
  * Append harmless cache-busting version parameter to official ProductURL without modifying base URL.
+ * When forceRefresh is true, uses Date.now().toString() to force the browser to re-request the PNG directly.
  */
-function getRadarImageUrlWithVersion(metadata) {
+function getRadarImageUrlWithVersion(metadata, forceRefresh = false) {
     if (!metadata || !metadata.image_url) return "";
-    const versionVal = metadata.radar_time || metadata.updated_at || Date.now().toString();
+    const versionVal = forceRefresh
+        ? Date.now().toString()
+        : metadata.radar_time || metadata.updated_at || Date.now().toString();
     const sep = metadata.image_url.includes("?") ? "&" : "?";
     return `${metadata.image_url}${sep}v=${encodeURIComponent(versionVal)}`;
 }
 
 /**
  * Lazy-load radar metadata from /api/radar.
+ * Does not expose or require a backend cache-bypass query param.
  */
 async function loadRadarMetadata(forceRefresh = false) {
     if (radarMetadataCache && !forceRefresh) {
         return radarMetadataCache;
     }
-    const url = forceRefresh ? `/api/radar?_t=${Date.now()}` : "/api/radar";
     try {
-        const res = await fetch(url);
+        const res = await fetch("/api/radar");
         if (!res.ok) {
             throw new Error(`Radar API returned status ${res.status}`);
         }
@@ -2616,6 +2620,7 @@ async function loadRadarMetadata(forceRefresh = false) {
 
 /**
  * Apply or refresh Leaflet image overlay for radar reflectivity.
+ * Preserves the previous valid overlay on refresh failure.
  */
 async function applyRadarOverlay(forceRefresh = false) {
     if (!elements.radarStatus) return;
@@ -2625,11 +2630,16 @@ async function applyRadarOverlay(forceRefresh = false) {
     const metadata = await loadRadarMetadata(forceRefresh);
     if (!metadata || !metadata.image_url) {
         if (elements.radarStatus) {
-            elements.radarStatus.textContent = "雷達影像暫時無法載入";
+            if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
+                elements.radarStatus.textContent = "雷達更新失敗，顯示上一張影像";
+            } else {
+                elements.radarStatus.textContent = "雷達影像暫時無法載入";
+            }
         }
-        if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
-            leafletMap.removeLayer(radarOverlayLayer);
+        if (radarPendingOverlayLayer && leafletMap && leafletMap.hasLayer(radarPendingOverlayLayer)) {
+            leafletMap.removeLayer(radarPendingOverlayLayer);
         }
+        radarPendingOverlayLayer = null;
         return;
     }
 
@@ -2637,39 +2647,76 @@ async function applyRadarOverlay(forceRefresh = false) {
         ? [[metadata.bounds.south, metadata.bounds.west], [metadata.bounds.north, metadata.bounds.east]]
         : [[17.75, 115.00], [29.25, 126.50]];
 
-    const versionedUrl = getRadarImageUrlWithVersion(metadata);
+    const versionedUrl = getRadarImageUrlWithVersion(metadata, forceRefresh);
 
-    // If overlay already exists on map, remove to recreate safely without recreating whole map
-    if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
-        leafletMap.removeLayer(radarOverlayLayer);
+    // If an earlier candidate was still pending, clean it up before starting a new candidate
+    if (radarPendingOverlayLayer && leafletMap && leafletMap.hasLayer(radarPendingOverlayLayer)) {
+        leafletMap.removeLayer(radarPendingOverlayLayer);
     }
 
-    radarOverlayLayer = L.imageOverlay(versionedUrl, bounds, {
+    const previousLayer = radarOverlayLayer;
+    const candidateLayer = L.imageOverlay(versionedUrl, bounds, {
         opacity: radarOpacity,
         interactive: false,
         pane: "radarPane",
     });
 
-    radarOverlayLayer.on("load", () => {
+    radarPendingOverlayLayer = candidateLayer;
+
+    candidateLayer.on("load", () => {
+        // Verify candidate is still the active pending replacement
+        if (candidateLayer !== radarPendingOverlayLayer) {
+            if (leafletMap && leafletMap.hasLayer(candidateLayer)) {
+                leafletMap.removeLayer(candidateLayer);
+            }
+            return;
+        }
+
+        // If radar was turned off while the image was downloading
+        if (!radarEnabled) {
+            if (leafletMap && leafletMap.hasLayer(candidateLayer)) {
+                leafletMap.removeLayer(candidateLayer);
+            }
+            radarPendingOverlayLayer = null;
+            return;
+        }
+
+        // Success: remove previous valid layer only now
+        if (previousLayer && leafletMap && leafletMap.hasLayer(previousLayer)) {
+            leafletMap.removeLayer(previousLayer);
+        }
+
+        radarOverlayLayer = candidateLayer;
+        radarPendingOverlayLayer = null;
         updateRadarStatusBadge(metadata);
     });
 
-    radarOverlayLayer.on("error", () => {
-        if (leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
-            leafletMap.removeLayer(radarOverlayLayer);
+    candidateLayer.on("error", () => {
+        // Remove candidate only
+        if (leafletMap && leafletMap.hasLayer(candidateLayer)) {
+            leafletMap.removeLayer(candidateLayer);
         }
+        if (radarPendingOverlayLayer === candidateLayer) {
+            radarPendingOverlayLayer = null;
+        }
+
         if (elements.radarStatus) {
-            elements.radarStatus.textContent = "雷達影像暫時無法載入";
+            if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
+                elements.radarStatus.textContent = "雷達更新失敗，顯示上一張影像";
+            } else {
+                elements.radarStatus.textContent = "雷達影像暫時無法載入";
+            }
         }
     });
 
     if (radarEnabled && leafletMap) {
-        radarOverlayLayer.addTo(leafletMap);
+        candidateLayer.addTo(leafletMap);
     }
 }
 
 /**
  * Start 10-minute non-blocking auto-refresh timer while radar is active.
+ * Maintains exactly one timer.
  */
 function startRadarAutoRefresh() {
     stopRadarAutoRefresh();
@@ -2716,9 +2763,15 @@ async function toggleRadar() {
         if (elements.radarControlsWrapper) {
             elements.radarControlsWrapper.classList.add("disabled");
         }
+        // Remove BOTH active overlay and pending candidate layer
         if (radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)) {
             leafletMap.removeLayer(radarOverlayLayer);
         }
+        if (radarPendingOverlayLayer && leafletMap && leafletMap.hasLayer(radarPendingOverlayLayer)) {
+            leafletMap.removeLayer(radarPendingOverlayLayer);
+        }
+        radarOverlayLayer = null;
+        radarPendingOverlayLayer = null;
         stopRadarAutoRefresh();
     } else {
         radarEnabled = true;
@@ -2762,6 +2815,9 @@ function initRadarControls() {
                 }
                 if (radarOverlayLayer) {
                     radarOverlayLayer.setOpacity(radarOpacity);
+                }
+                if (radarPendingOverlayLayer) {
+                    radarPendingOverlayLayer.setOpacity(radarOpacity);
                 }
             }
         });

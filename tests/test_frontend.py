@@ -982,6 +982,81 @@ def test_phase_8d_radar_js_architecture_and_lifecycle():
     assert "L.imageOverlay(" in apply_overlay_body
 
 
+def test_phase_8d_radar_refresh_lifecycle_and_pending_layer():
+    """Verify Phase 8D radar overlay lifecycle hardening:
+    - PNG cache-busting token on forceRefresh vs metadata timestamp on normal load
+    - No unrestricted backend cache-bypass query param
+    - Preservation of previous valid overlay on metadata/image refresh failure
+    - Replacement overlay load success promotes candidate and removes previousLayer
+    - Pending layer tracking and removal on Radar OFF
+    - Slow candidate cannot reappear after Radar OFF
+    - Exactly one 10-minute auto-refresh interval
+    """
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. Pending layer state variable
+    assert "let radarPendingOverlayLayer = null;" in js
+
+    # 2. getRadarImageUrlWithVersion accepts forceRefresh flag
+    assert "function getRadarImageUrlWithVersion(metadata, forceRefresh = false)" in js
+    img_fn_idx = js.find("function getRadarImageUrlWithVersion(")
+    img_fn_end = js.find("async function loadRadarMetadata(", img_fn_idx)
+    img_fn_body = js[img_fn_idx:img_fn_end]
+    # Uses Date.now().toString() when forceRefresh is true
+    assert "forceRefresh" in img_fn_body
+    assert "Date.now().toString()" in img_fn_body
+    # Uses metadata.radar_time || metadata.updated_at for normal load
+    assert "metadata.radar_time || metadata.updated_at" in img_fn_body
+
+    # 3. loadRadarMetadata does NOT expose /api/radar?_t= bypass
+    load_meta_idx = js.find("async function loadRadarMetadata(")
+    load_meta_end = js.find("async function applyRadarOverlay(", load_meta_idx)
+    load_meta_body = js[load_meta_idx:load_meta_end]
+    assert '"/api/radar"' in load_meta_body
+    assert "?_t=" not in load_meta_body
+
+    # 4. applyRadarOverlay lifecycle
+    apply_overlay_idx = js.find("async function applyRadarOverlay(")
+    apply_overlay_end = js.find("function startRadarAutoRefresh(", apply_overlay_idx)
+    apply_body = js[apply_overlay_idx:apply_overlay_end]
+
+    # A. Metadata failure keeps previous valid overlay and shows informative message
+    assert "雷達更新失敗，顯示上一張影像" in apply_body
+    assert "radarOverlayLayer && leafletMap && leafletMap.hasLayer(radarOverlayLayer)" in apply_body
+    # B. Candidate layer assignment to pending state
+    assert "radarPendingOverlayLayer = candidateLayer" in apply_body
+    # C. Candidate load event removes previousLayer only on success
+    assert "if (previousLayer && leafletMap && leafletMap.hasLayer(previousLayer))" in apply_body
+    assert "radarOverlayLayer = candidateLayer" in apply_body
+    assert "radarPendingOverlayLayer = null" in apply_body
+    # D. Candidate load checks if radar was disabled while downloading
+    assert "if (!radarEnabled)" in apply_body
+    # E. Candidate error removes candidate only, preserves previousLayer
+    assert 'candidateLayer.on("error"' in apply_body
+
+    # 5. toggleRadar cleans up BOTH radarOverlayLayer and radarPendingOverlayLayer
+    toggle_idx = js.find("async function toggleRadar()")
+    toggle_end = js.find("function initRadarControls()", toggle_idx)
+    toggle_body = js[toggle_idx:toggle_end]
+
+    assert "leafletMap.removeLayer(radarOverlayLayer)" in toggle_body
+    assert "leafletMap.removeLayer(radarPendingOverlayLayer)" in toggle_body
+    assert "radarOverlayLayer = null;" in toggle_body
+    assert "radarPendingOverlayLayer = null;" in toggle_body
+    assert "stopRadarAutoRefresh();" in toggle_body
+
+    # 6. Auto-refresh maintenance of exactly one interval
+    auto_idx = js.find("function startRadarAutoRefresh()")
+    auto_end = js.find("function stopRadarAutoRefresh()", auto_idx)
+    auto_body = js[auto_idx:auto_end]
+    assert "stopRadarAutoRefresh();" in auto_body
+    assert "radarAutoRefreshTimer = setInterval(" in auto_body
+    assert "600000" in auto_body
+
+
+
 
 
 
