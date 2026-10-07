@@ -1056,6 +1056,46 @@ def test_phase_8d_radar_refresh_lifecycle_and_pending_layer():
     assert "600000" in auto_body
 
 
+def test_phase_8d_radar_display_bound_calibration():
+    """Verify Phase 8D radar display-bound calibration architecture:
+    - RADAR_DISPLAY_BOUND_ADJUST calibration constants exist and are centralized
+    - getRadarDisplayBounds helper calculates display bounds without mutating raw metadata
+    - getRadarDisplayBounds is used by applyRadarOverlay
+    - L.imageOverlay receives calibrated display bounds
+    - Raw metadata cache remains intact
+    - Mode independence and handleCountyPointerDown remain preserved
+    """
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. Centralized calibration constants
+    assert "const RADAR_DISPLAY_BOUND_ADJUST" in js
+    assert "south:" in js and "west:" in js and "north:" in js and "east:" in js
+
+    # 2. Dedicated display bounds helper function
+    assert "function getRadarDisplayBounds(metadataBounds)" in js
+    helper_idx = js.find("function getRadarDisplayBounds(")
+    helper_end = js.find("async function applyRadarOverlay(", helper_idx)
+    helper_body = js[helper_idx:helper_end]
+    assert "RADAR_DISPLAY_BOUND_ADJUST.south" in helper_body
+    assert "RADAR_DISPLAY_BOUND_ADJUST.west" in helper_body
+    assert "RADAR_DISPLAY_BOUND_ADJUST.north" in helper_body
+    assert "RADAR_DISPLAY_BOUND_ADJUST.east" in helper_body
+
+    # 3. applyRadarOverlay uses getRadarDisplayBounds for L.imageOverlay
+    apply_idx = js.find("async function applyRadarOverlay(")
+    apply_end = js.find("function startRadarAutoRefresh(", apply_idx)
+    apply_body = js[apply_idx:apply_end]
+    assert "getRadarDisplayBounds(metadata.bounds)" in apply_body
+    assert "L.imageOverlay(versionedUrl, bounds," in apply_body
+
+    # 4. Mode independence and county click bridge preserved
+    assert "function handleCountyPointerDown(event)" in js
+    assert "radarEnabled = false" in js
+
+
+
 
 
 

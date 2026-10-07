@@ -2619,6 +2619,44 @@ async function loadRadarMetadata(forceRefresh = false) {
 }
 
 /**
+ * Radar Display Bound Adjustment (Calibration)
+ * 
+ * Official CWA O-A0058-002 geographic bounds:
+ *   south: 17.75, west: 115.00, north: 29.25, east: 126.50
+ * 
+ * Because the pre-rendered radar PNG from CWA includes built-in topography/graticule styling,
+ * slight visual rendering mismatches with Web Mercator Leaflet map tiles & GeoJSON county boundaries
+ * can be finely compensated here with display-only calibration offsets.
+ * 
+ * Centralized in this single structure for easy manual tuning without touching multiple functions.
+ * Raw metadata from the backend/API is never mutated.
+ */
+const RADAR_DISPLAY_BOUND_ADJUST = {
+    south: 0.0,
+    west: 0.0,
+    north: 0.0,
+    east: 0.0,
+};
+
+/**
+ * Compute calibrated display bounds for Leaflet L.imageOverlay without mutating raw metadata.
+ */
+function getRadarDisplayBounds(metadataBounds) {
+    const raw = metadataBounds || {
+        south: 17.75,
+        west: 115.00,
+        north: 29.25,
+        east: 126.50,
+    };
+    return {
+        south: raw.south + (RADAR_DISPLAY_BOUND_ADJUST.south || 0),
+        west: raw.west + (RADAR_DISPLAY_BOUND_ADJUST.west || 0),
+        north: raw.north + (RADAR_DISPLAY_BOUND_ADJUST.north || 0),
+        east: raw.east + (RADAR_DISPLAY_BOUND_ADJUST.east || 0),
+    };
+}
+
+/**
  * Apply or refresh Leaflet image overlay for radar reflectivity.
  * Preserves the previous valid overlay on refresh failure.
  */
@@ -2643,9 +2681,11 @@ async function applyRadarOverlay(forceRefresh = false) {
         return;
     }
 
-    const bounds = metadata.bounds
-        ? [[metadata.bounds.south, metadata.bounds.west], [metadata.bounds.north, metadata.bounds.east]]
-        : [[17.75, 115.00], [29.25, 126.50]];
+    const displayBounds = getRadarDisplayBounds(metadata.bounds);
+    const bounds = [
+        [displayBounds.south, displayBounds.west],
+        [displayBounds.north, displayBounds.east],
+    ];
 
     const versionedUrl = getRadarImageUrlWithVersion(metadata, forceRefresh);
 

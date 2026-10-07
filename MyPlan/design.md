@@ -1458,27 +1458,28 @@ Supabase PostgreSQL
   - **緯度涵蓋範圍 (Latitude Range)**：`17.75 – 29.25`（南界 17.75, 北界 29.25）
   - **影像解析度尺寸 (Image Dimension)**：`3600 × 3600` 像素
   - **官方最新圖檔 ProductURL**：`https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Observation/O-A0058-002.png`
-- **地理範圍邊界 (Geographic Bounding Box)**：
-  - 使用 Leaflet `L.latLngBounds([[17.75, 115.00], [29.25, 126.50]])` 精準對齊底圖。
-  - 邊界資訊由 `/api/radar` 集中回傳，前端避免分散硬編碼重複定義。
+- **地理範圍邊界與前端顯示校準 (Geographic Bounds & Display Calibration)**：
+  - 後端 API 端點 `GET /api/radar` 始終保持回傳 CWA 官方原始幾何範圍（南界 17.75、西界 115.00、北界 29.25、東界 126.50），絕不竄改或偽造官方中繼資料。
+  - **前端顯示校準層 (Display Calibration Layer)**：因 CWA `O-A0058-002` 預渲染圖檔內建地形底圖與經緯格線樣式，在 Web Mercator 投影之 Leaflet/OSM 底圖與 GeoJSON 邊界疊加時，會產生微小之視覺渲染對齊誤差。前端透過集中式校準常數 `RADAR_DISPLAY_BOUND_ADJUST` 與專屬轉換函式 `getRadarDisplayBounds()` 進行顯示微調，專門供給 `L.imageOverlay` 使用，原始快取中繼物件保持不可變。
 
 #### 5.2 Leaflet 架構定位與 ImageOverlay 圖層控制
 - **關鍵架構原則：獨立圖層疊加 (Overlay)，絕非第 4 種地圖模式 (Map Mode)**：
   - 既有 `currentMapMode` 保持 3 種模式（`temperature` 溫度、`rainfall` 降雨機率、`observations` 即時觀測）不變。
-  - 雷達狀態由獨立變數管控（`radarEnabled`, `radarOverlayLayer`, `radarMetadataCache`, `radarOpacity`），可與三種模式任意疊加共存。
+  - 雷達狀態由獨立變數管控（`radarEnabled`, `radarOverlayLayer`, `radarPendingOverlayLayer`, `radarMetadataCache`, `radarOpacity`），可與三種模式任意疊加共存。
 - **專屬 Leaflet Pane (`radarPane`) 與層次堆疊**：
   - 建立專屬 pane：`leafletMap.createPane("radarPane")`。
   - z-index 設定為 `350`（高於底圖 OSM tilePane 200，但低於縣市多邊形與測站標記 overlayPane 400）。
   - 設定 `pointer-events: none`：確保雷達圖層完全透通所有指標事件，絕不干擾縣市多邊形點擊橋接器 (`handleCountyPointerDown`)、測站 hover/click、以及地圖拖曳縮放。
-- **`radarOverlayLayer` 實作**：
-  - 使用 `L.imageOverlay(radarImageUrl, bounds, { opacity: radarOpacity, interactive: false, pane: "radarPane" })`。
-  - 圖檔載入時附帶防快取版本參數（`?v=<encoded timestamp>`），避免瀏覽器長快取導致圖資過期。
+- **`radarOverlayLayer` 實作與生命週期硬化**：
+  - 使用 `L.imageOverlay(radarImageUrl, calibratedBounds, { opacity: radarOpacity, interactive: false, pane: "radarPane" })`。
+  - 圖片載入附帶防快取版本參數（`?v=<encoded timestamp>`，強制重整時使用 `Date.now()` 直接向圖檔 CDN 請求最新圖檔）。
+  - 生命週期防護：採用 `radarPendingOverlayLayer` 候選圖層追蹤，重整失敗或圖檔載入失敗時保留前一張有效圖層；雷達關閉時同步卸載候選與啟用中圖層，杜絕延遲載入圖檔在關閉後竄出。
 - **圖層控制與工具條**：
   - **雷達開關按鈕 (Radar Toggle)**：`#radar-toggle`，一鍵開啟／隱藏雷達回波，aria-pressed 支援無障礙。
   - **透明度滑桿 (Opacity Slider)**：`#radar-opacity`，支援 0.1–1.0（step 0.05，預設 0.65），本地 `setOpacity()` 即時調整，零額外網路請求。
   - **觀測時間戳記展示**：`#radar-status`（aria-live="polite"），若為官方觀測時間標示「雷達時間：MM/DD HH:mm」，若為 HEAD Last-Modified 標示「影像更新：MM/DD HH:mm」，嚴格不偽造氣象觀測時間。
   - **手動重新整理與自動更新**：`#radar-refresh` 按鈕手動重取中繼並更新圖層；雷達開啟時每 10 分鐘自動進行單一非阻塞計時更新，雷達關閉時自動清除計時器。
-  - **載入與非阻塞錯誤狀態**：載入中顯示「正在載入雷達回波...」；若圖檔載入失敗顯示「雷達影像暫時無法載入」並安全卸載圖層，維持既有底圖與天氣功能正常可用。
+  - **載入與非阻塞錯誤狀態**：載入中顯示「正在載入雷達回波...」；若圖檔載入失敗顯示「雷達更新失敗，顯示上一張影像」（初次載入顯示「雷達影像暫時無法載入」），維持既有底圖與天氣功能正常可用。
 
 #### 5.3 儲存與快取架構
 - **二進位儲存禁令 (NO Large Binary in PostgreSQL)**：
