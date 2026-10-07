@@ -54,6 +54,7 @@ class CWAClient:
     DATASET_OBSERVATION = "O-A0001"
     DATASET_OBSERVATION_RESOURCE = "O-A0001-001"
     DATASET_RADAR = "O-A0058-001"
+    DATASET_TYPHOON = "W-C0034-005"
     DEFAULT_TIMEOUT = 15.0
 
     def __init__(
@@ -86,6 +87,14 @@ class CWAClient:
     def fetch_observations(self) -> Dict[str, Any]:
         """Fetch current weather observations dataset directly using official resource ID (O-A0001-001)."""
         return self.fetch_dataset(self.DATASET_OBSERVATION_RESOURCE)
+
+    def fetch_typhoon_data(self) -> Dict[str, Any]:
+        """Fetch tropical cyclone track and analysis dataset (W-C0034-005).
+
+        Returns:
+            JSON response dictionary from CWA Open Data API.
+        """
+        return self.fetch_dataset(self.DATASET_TYPHOON)
 
     def fetch_radar_metadata(self) -> str:
         """Fetch radar reflectivity metadata XML for O-A0058-001 via File API.

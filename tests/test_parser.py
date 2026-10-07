@@ -779,4 +779,271 @@ def test_parse_radar_metadata_xml_malformed_and_empty():
     assert parse_radar_metadata_xml("<empty></empty>") == {}
 
 
+# ==============================================================================
+# Phase 8E: Typhoon Parser Tests (W-C0034-005)
+# ==============================================================================
+
+from app.parsers.cwa_parser import parse_typhoon_data
+
+SAMPLE_TYPHOON_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<cwaopendata xmlns="urn:cwa:gov:tw:cwacommon:0.1">
+   <identifier>cwa-ty-2026-001</identifier>
+   <sent>2026-10-07T18:00:00+08:00</sent>
+   <dataset>
+      <datasetInfo>
+         <datasetDescription>Tropical Cyclone Track</datasetDescription>
+      </datasetInfo>
+      <tropicalCyclones>
+         <tropicalCyclone>
+            <year>2026</year>
+            <typhoon_name>NOLO</typhoon_name>
+            <cwa_typhoon_name>諾羅</cwa_typhoon_name>
+            <cwa_td_no>TD01</cwa_td_no>
+            <cwa_ty_no>2601</cwa_ty_no>
+            <analysis_data>
+               <fix>
+                  <fix_time>2026-10-07T06:00:00+08:00</fix_time>
+                  <coordinate>
+                     <latitude>19.0</latitude>
+                     <longitude>130.0</longitude>
+                  </coordinate>
+                  <max_wind_speed>30</max_wind_speed>
+                  <max_gust_speed>38</max_gust_speed>
+                  <pressure>975</pressure>
+                  <radius>
+                     <circle_of_15ms>
+                        <radius>150</radius>
+                        <quadrant_radii>
+                           <northeast>160</northeast>
+                           <southeast>150</southeast>
+                           <southwest>140</southwest>
+                           <northwest>150</northwest>
+                        </quadrant_radii>
+                     </circle_of_15ms>
+                     <circle_of_25ms>
+                        <radius>50</radius>
+                        <quadrant_radii>
+                           <northeast>50</northeast>
+                           <southeast>50</southeast>
+                           <southwest>50</southwest>
+                           <northwest>50</northwest>
+                        </quadrant_radii>
+                     </circle_of_25ms>
+                  </radius>
+                  <movement>
+                     <speed>15</speed>
+                     <moving_direction>西北</moving_direction>
+                     <moving_prediction>向西北緩慢進行</moving_prediction>
+                  </movement>
+               </fix>
+               <fix>
+                  <fix_time>2026-10-07T12:00:00+08:00</fix_time>
+                  <coordinate>
+                     <latitude>19.5</latitude>
+                     <longitude>129.2</longitude>
+                  </coordinate>
+                  <max_wind_speed>35</max_wind_speed>
+                  <max_gust_speed>45</max_gust_speed>
+                  <pressure>970</pressure>
+                  <radius>
+                     <circle_of_15ms>
+                        <radius>180</radius>
+                     </circle_of_15ms>
+                     <circle_of_25ms>
+                        <radius>60</radius>
+                     </circle_of_25ms>
+                  </radius>
+                  <movement>
+                     <speed>18</speed>
+                     <moving_direction>西北西</moving_direction>
+                     <moving_prediction>向西北西移動</moving_prediction>
+                  </movement>
+               </fix>
+            </analysis_data>
+            <forecast_data>
+               <fix>
+                  <init_time>2026-10-07T12:00:00+08:00</init_time>
+                  <tau>24</tau>
+                  <coordinate>
+                     <latitude>21.0</latitude>
+                     <longitude>127.0</longitude>
+                  </coordinate>
+                  <max_wind_speed>40</max_wind_speed>
+                  <max_gust_speed>50</max_gust_speed>
+                  <pressure>960</pressure>
+                  <circle_of_15ms>200</circle_of_15ms>
+                  <circle_of_25ms>80</circle_of_25ms>
+                  <radius_of_70percent_probability>100</radius_of_70percent_probability>
+                  <state_transfer>BECOMING EXTRATROPICAL LOW</state_transfer>
+               </fix>
+            </forecast_data>
+         </tropicalCyclone>
+      </tropicalCyclones>
+   </dataset>
+</cwaopendata>"""
+
+SAMPLE_TYPHOON_JSON = {
+    "cwaopendata": {
+        "Sent": "2026-10-07T18:00:00+08:00",
+        "Dataset": {
+            "TropicalCyclones": {
+                "TropicalCyclone": [
+                    {
+                        "Year": 2026,
+                        "TyphoonName": "KOGUMA",
+                        "CwaTyphoonName": "小熊",
+                        "CwaTdNo": "TD02",
+                        "CwaTyNo": "2602",
+                        "AnalysisData": {
+                            "Fix": [
+                                {
+                                    "DateTime": "2026-10-07T06:00:00+08:00",
+                                    "CoordinateLatitude": 18.0,
+                                    "CoordinateLongitude": 118.0,
+                                    "MaxWindSpeed": 25,
+                                    "MaxGustSpeed": 33,
+                                    "Pressure": 990,
+                                    "Circle15ms": {"Radius": 100},
+                                    "Circle25ms": {"Radius": 0},
+                                    "MovingSpeed": 20,
+                                    "MovingDirection": "西北",
+                                }
+                            ]
+                        },
+                        "ForecastData": {
+                            "Fix": [
+                                {
+                                    "InitialTime": "2026-10-07T06:00:00+08:00",
+                                    "ForecastHour": 12,
+                                    "CoordinateLatitude": 19.2,
+                                    "CoordinateLongitude": 116.5,
+                                    "MaxWindSpeed": 28,
+                                    "MaxGustSpeed": 35,
+                                    "Pressure": 985,
+                                    "Radius70PercentProbability": 70,
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}
+
+
+def test_parse_typhoon_data_xml():
+    """Verify parse_typhoon_data parses official XML structure correctly."""
+    result = parse_typhoon_data(SAMPLE_TYPHOON_XML)
+    assert result["dataset_id"] == "W-C0034-005"
+    assert result["active_count"] == 1
+    assert result["updated_at"] == "2026-10-07T18:00:00+08:00"
+
+    cyclone = result["cyclones"][0]
+    assert cyclone["name_en"] == "NOLO"
+    assert cyclone["name_zh"] == "諾羅"
+    assert cyclone["cwa_td_no"] == "TD01"
+    assert cyclone["cwa_ty_no"] == "2601"
+    assert cyclone["year"] == 2026
+
+    # Analysis points check & sorting
+    assert len(cyclone["analysis_points"]) == 2
+    assert cyclone["analysis_points"][0]["time"] == "2026-10-07T06:00:00+08:00"
+    assert cyclone["analysis_points"][1]["time"] == "2026-10-07T12:00:00+08:00"
+
+    # Current point must be the latest analysis point
+    current = cyclone["current"]
+    assert current is not None
+    assert current["time"] == "2026-10-07T12:00:00+08:00"
+    assert current["latitude"] == 19.5
+    assert current["longitude"] == 129.2
+    assert current["pressure"] == 970
+    assert current["max_wind_speed"] == 35
+    assert current["max_gust_speed"] == 45
+    assert current["radius_15ms"] == 180
+    assert current["radius_25ms"] == 60
+    assert current["movement_speed"] == 18
+    assert current["movement_direction"] == "西北西"
+
+    # Check first point quadrant values
+    pt0 = cyclone["analysis_points"][0]
+    assert pt0["quadrant_15ms"] == {"NE": 160.0, "SE": 150.0, "SW": 140.0, "NW": 150.0}
+
+    # Forecast points check
+    assert len(cyclone["forecast_points"]) == 1
+    fp = cyclone["forecast_points"][0]
+    assert fp["tau"] == 24
+    assert fp["latitude"] == 21.0
+    assert fp["longitude"] == 127.0
+    assert fp["valid_time"] == "2026-10-08T12:00:00+08:00"
+    assert fp["probability_70_radius"] == 100
+    assert "EXTRATROPICAL LOW" in fp["state_transfer"]
+
+
+def test_parse_typhoon_data_json():
+    """Verify parse_typhoon_data parses JSON structure correctly."""
+    result = parse_typhoon_data(SAMPLE_TYPHOON_JSON)
+    assert result["dataset_id"] == "W-C0034-005"
+    assert result["active_count"] == 1
+    cyclone = result["cyclones"][0]
+    assert cyclone["name_en"] == "KOGUMA"
+    assert cyclone["name_zh"] == "小熊"
+    assert cyclone["current"]["latitude"] == 18.0
+    assert cyclone["current"]["longitude"] == 118.0
+    assert cyclone["forecast_points"][0]["valid_time"] == "2026-10-07T18:00:00+08:00"
+    assert cyclone["forecast_points"][0]["probability_70_radius"] == 70
+
+
+def test_parse_typhoon_data_empty_state():
+    """Verify empty product returns 200 normal empty response."""
+    empty_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <cwaopendata xmlns="urn:cwa:gov:tw:cwacommon:0.1">
+       <sent>2026-10-07T18:00:00+08:00</sent>
+       <dataset>
+          <tropicalCyclones/>
+       </dataset>
+    </cwaopendata>"""
+    res_xml = parse_typhoon_data(empty_xml)
+    assert res_xml["dataset_id"] == "W-C0034-005"
+    assert res_xml["active_count"] == 0
+    assert res_xml["cyclones"] == []
+
+    empty_json = {"cwaopendata": {"dataset": {"tropicalCyclones": []}}}
+    res_json = parse_typhoon_data(empty_json)
+    assert res_json["active_count"] == 0
+    assert res_json["cyclones"] == []
+
+    # Invalid / empty string inputs
+    assert parse_typhoon_data("")["active_count"] == 0
+    assert parse_typhoon_data(None)["active_count"] == 0
+    assert parse_typhoon_data("<<<bad xml>>>")["active_count"] == 0
+
+
+def test_parse_typhoon_data_invalid_coordinates():
+    """Verify invalid latitudes and longitudes are rejected."""
+    bad_coord_json = {
+        "cwaopendata": {
+            "dataset": {
+                "tropicalCyclones": [
+                    {
+                        "name": "TEST",
+                        "analysisData": {
+                            "fix": [
+                                {"latitude": 120.0, "longitude": 120.0},  # lat > 90 invalid
+                                {"latitude": 20.0, "longitude": 200.0},  # lon > 180 invalid
+                                {"latitude": 20.0, "longitude": 120.0},  # valid
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+    res = parse_typhoon_data(bad_coord_json)
+    assert res["active_count"] == 1
+    assert len(res["cyclones"][0]["analysis_points"]) == 1
+    assert res["cyclones"][0]["current"]["latitude"] == 20.0
+
+
+
 

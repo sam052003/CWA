@@ -159,6 +159,17 @@
                                     </button>
                                     <span id="radar-status" class="radar-status-badge hidden" aria-live="polite">最新雷達影像</span>
                                 </div>
+                                <button
+                                    id="typhoon-toggle"
+                                    class="map-tool-btn typhoon-toggle-btn"
+                                    type="button"
+                                    aria-pressed="false"
+                                    aria-label="切換颱風動態路徑"
+                                    title="開啟/關閉颱風動態中心與路徑（W-C0034-005）"
+                                >
+                                    <span class="tool-icon" aria-hidden="true">🌀</span>
+                                    <span class="tool-label">颱風</span>
+                                </button>
                                 <div class="toolbar-divider" aria-hidden="true"></div>
                                 <button
                                     id="map-reset-view"
@@ -186,6 +197,78 @@
                     <div class="map-container" id="map-container">
                         <div id="taiwan-map" class="taiwan-map" aria-label="台灣各縣市預測最高溫地圖"></div>
                         <div id="map-error" class="map-error-overlay hidden" role="alert">地圖資料暫時無法載入</div>
+
+                        <!-- Typhoon Info Panel (Phase 8E) -->
+                        <div class="typhoon-panel hidden" id="typhoon-panel" aria-label="颱風動態中心與路徑資訊">
+                            <div class="typhoon-panel-header">
+                                <div class="typhoon-title-wrap">
+                                    <span class="typhoon-icon" aria-hidden="true">🌀</span>
+                                    <span class="typhoon-title" id="typhoon-title">颱風動態中心</span>
+                                </div>
+                                <button id="typhoon-panel-close" class="typhoon-panel-close-btn" type="button" aria-label="關閉颱風面板" title="關閉面板">✕</button>
+                            </div>
+
+                            <!-- Empty State Notification -->
+                            <div class="typhoon-empty-state hidden" id="typhoon-empty-state">
+                                <div class="typhoon-empty-icon" aria-hidden="true">🌊</div>
+                                <strong class="typhoon-empty-title">目前無活動熱帶氣旋</strong>
+                                <p class="typhoon-empty-desc">西北太平洋及南海目前沒有氣象署發布中的活動熱帶氣旋資料。</p>
+                            </div>
+
+                            <!-- Active Cyclone Content -->
+                            <div class="typhoon-active-content" id="typhoon-active-content">
+                                <div class="typhoon-selector-group hidden" id="typhoon-selector-group">
+                                    <label for="typhoon-select" class="typhoon-select-label">選擇熱帶氣旋</label>
+                                    <select id="typhoon-select" class="typhoon-select" aria-label="選擇熱帶氣旋"></select>
+                                </div>
+
+                                <div class="typhoon-badge-row">
+                                    <span class="typhoon-name-badge" id="typhoon-name-badge">--</span>
+                                    <span class="typhoon-no-badge" id="typhoon-no-badge">--</span>
+                                </div>
+
+                                <div class="typhoon-section-heading">📍 目前中心</div>
+                                <div class="typhoon-details-grid">
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">定位時間</span>
+                                        <span class="typhoon-detail-val" id="typhoon-fix-time">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">中心位置</span>
+                                        <span class="typhoon-detail-val" id="typhoon-coord">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">中心氣壓</span>
+                                        <span class="typhoon-detail-val" id="typhoon-pressure">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">近中心最大風速</span>
+                                        <span class="typhoon-detail-val" id="typhoon-max-wind">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">瞬間最大陣風</span>
+                                        <span class="typhoon-detail-val" id="typhoon-max-gust">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">移動方向與速度</span>
+                                        <span class="typhoon-detail-val" id="typhoon-movement">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">7級風暴風半徑</span>
+                                        <span class="typhoon-detail-val" id="typhoon-radius-15">--</span>
+                                    </div>
+                                    <div class="typhoon-detail-item">
+                                        <span class="typhoon-detail-label">10級風暴風半徑</span>
+                                        <span class="typhoon-detail-val" id="typhoon-radius-25">--</span>
+                                    </div>
+                                </div>
+
+                                <div class="typhoon-section-heading" style="margin-top: 8px;">🔮 預報路徑</div>
+                                <div class="typhoon-forecast-summary" id="typhoon-forecast-summary">
+                                    --
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <!-- Temperature Legend -->
                     <div class="map-legend" id="map-legend" aria-label="預測最高溫圖例">

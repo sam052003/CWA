@@ -1109,6 +1109,96 @@ def test_radar_failed_request_not_cached():
                 assert "latest" not in _radar_metadata_cache
 
 
+# ==============================================================================
+# Phase 8E: Typhoon Service Tests (W-C0034-005)
+# ==============================================================================
+
+from app.services.weather_service import (
+    get_typhoon_data,
+    clear_typhoon_cache,
+    TYPHOON_DATASET_ID,
+    TYPHOON_ACTIVE_CACHE_TTL_SECONDS,
+    TYPHOON_EMPTY_CACHE_TTL_SECONDS,
+)
+
+
+def test_typhoon_dataset_id():
+    """Verify official typhoon dataset ID is W-C0034-005."""
+    assert TYPHOON_DATASET_ID == "W-C0034-005"
+
+
+def test_typhoon_cache_hit_and_ttl_active():
+    """Verify typhoon cache hit and 15-minute TTL when active cyclones exist."""
+    clear_typhoon_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_typhoon_data.return_value = {
+        "cwaopendata": {
+            "Sent": "2026-10-07T18:00:00+08:00",
+            "Dataset": {
+                "TropicalCyclones": {
+                    "TropicalCyclone": [
+                        {
+                            "TyphoonName": "TEST_TY",
+                            "AnalysisData": {"Fix": [{"CoordinateLatitude": 20.0, "CoordinateLongitude": 125.0}]}
+                        }
+                    ]
+                }
+            }
+        }
+    }
+
+    # Call 1 at t=1000: Cache miss
+    res1 = get_typhoon_data(client=mock_client, current_time=1000.0)
+    assert mock_client.fetch_typhoon_data.call_count == 1
+    assert res1["active_count"] == 1
+
+    # Call 2 at t=1500 (500s later < 900s TTL): Cache hit
+    res2 = get_typhoon_data(client=mock_client, current_time=1500.0)
+    assert mock_client.fetch_typhoon_data.call_count == 1
+    assert res1 == res2
+
+    # Call 3 at t=1901 (901s later > 900s TTL): Cache expired
+    get_typhoon_data(client=mock_client, current_time=1901.0)
+    assert mock_client.fetch_typhoon_data.call_count == 2
+
+
+def test_typhoon_cache_hit_and_ttl_empty():
+    """Verify typhoon cache hit and 60-minute TTL when no active cyclones exist."""
+    clear_typhoon_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_typhoon_data.return_value = {
+        "cwaopendata": {"Dataset": {"TropicalCyclones": []}}
+    }
+
+    # Call 1 at t=1000: Cache miss
+    res1 = get_typhoon_data(client=mock_client, current_time=1000.0)
+    assert mock_client.fetch_typhoon_data.call_count == 1
+    assert res1["active_count"] == 0
+
+    # Call 2 at t=4000 (3000s later < 3600s TTL): Cache hit
+    res2 = get_typhoon_data(client=mock_client, current_time=4000.0)
+    assert mock_client.fetch_typhoon_data.call_count == 1
+    assert res1 == res2
+
+    # Call 3 at t=4601 (3601s later > 3600s TTL): Cache expired
+    get_typhoon_data(client=mock_client, current_time=4601.0)
+    assert mock_client.fetch_typhoon_data.call_count == 2
+
+
+def test_typhoon_failed_fetch_not_cached():
+    """Verify that failed upstream fetches are not cached."""
+    from app.services.weather_service import _typhoon_cache
+    clear_typhoon_cache()
+    mock_client = MagicMock()
+    mock_client.fetch_typhoon_data.side_effect = Exception("CWA Down")
+
+    with pytest.raises(Exception):
+        get_typhoon_data(client=mock_client)
+
+    assert "latest" not in _typhoon_cache
+
+
+
 
 
 

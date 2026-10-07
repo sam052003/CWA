@@ -1741,7 +1741,7 @@ CWA Open Data API
   - [x] 浮動面板切換至測站即時觀測摘要群組（明確標示「目前觀測 某某測站」與實際觀測時間，註明測站不代表全縣市平均）
   - [x] 測站 Hover 安全 Tooltip 與 Click 詳情 Popup（DOM 安全構建，無 innerHTML 插值）
   - [x] 觀測資料延遲載入（首次切換才抓取），切換縣市或測站重用客戶端快取
-- [ ] **Phase 8D — Radar Layer** (實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance)：
+- [x] **Phase 8D — Radar Layer** (已完成並通過生產環境驗收 / Completed and Production Accepted)：
   - [x] 採用無地形標準圖資 `O-A0058-001`（雷達整合回波圖－臺灣（較大範圍）_無地形，經度 115.00–126.50、緯度 17.75–29.25、解析度 3600×3600、更新頻率約 10 分鐘，消除底圖地形重複渲染誤差）
   - [x] CWA File API XML 伺服器端中繼資料解析（`ProductURL`, `DateTime`, `LongitudeRange`, `LatitudeRange`, `ImageDimension`）與 XML 命名空間韌性解析
   - [x] S3 HEAD `Last-Modified` 安全平降備援機制與語義明確時間來源標註（`radar_datetime` vs `last_modified`）
@@ -1752,8 +1752,28 @@ CWA Open Data API
   - [x] 聚焦渲染與底圖自動淡化（雷達開啟時 O-A0058-001 成為主視覺焦點並自動淡化 OSM 底圖至 0.08，關閉時立即恢復 1.0，縣市邊界與測站標記維持清晰）
   - [x] 地圖工具列雷達控制群組（開關 `#radar-toggle`、透明度滑桿 `#radar-opacity` 0.1–1.0、時間戳記 `#radar-status` 與重新整理 `#radar-refresh`）
   - [x] 圖片延遲載入（首次開啟才獲取）、防快取版本參數 (`?v=...`)、非阻塞錯誤處理與開啟時 10 分鐘自動背景更新
-- [ ] **Phase 8E — Typhoon Center**（最後規劃功能 / FINAL planned feature）：`W-C0034-005` 颱風中心與路徑（歷史/預報路徑、暴風圈多邊形、西北太平洋廣域視角、無颱風正常空狀態）。
+  - [x] **已知限制記錄**：CWA 雷達圖為預先渲染之點陣影像（raster product），疊加於 Leaflet / Web Mercator 投影與縣市 GeoJSON 上時可能存在細微地理擬合差異。專案不引入任意經驗偏移量（magic offsets），維持官方標準邊界與底圖淡化架構。
+- [x] **Phase 8E — Typhoon Center / Tropical Cyclone Track**（實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance；最後規劃功能 / FINAL Planned Feature）：
+  - [x] CWA `W-C0034-005` 西北太平洋及南海熱帶氣旋/颱風資料連線客戶端 (`DATASET_TYPHOON = "W-C0034-005"`)
+  - [x] 專屬颱風解析器（支援 XML 與 JSON 結構、WGS84 座標驗證 -90..90 與 -180..180、時間排序、最新分析點判定為 `current` 中心點、`init_time + tau` 導出預報時間、7級/10級暴風半徑與 70% 機率範圍解析）
+  - [x] 正常空狀態處理（無活動熱帶氣旋時回傳 HTTP 200 與 `active_count: 0`，絕非 404/500/502 錯誤）
+  - [x] 行程內最佳努力 TTL 快取（活動氣旋存在時 15 分鐘 TTL，無活動氣旋時 60 分鐘 TTL，零 DB 綱要異動、零 Cron 修改）
+  - [x] 專屬 API 端點 `GET /api/typhoons` 與安全防護（遮罩機密、502 上游異常、500 內部錯誤）
+  - [x] 地圖工具列獨立開關按鈕 `#typhoon-toggle`（`🌀 颱風`，獨立 Overlay，非第四種地圖模式）
+  - [x] 延遲載入（首次點擊開關才請求 `/api/typhoons`）與客戶端頁面 Session 快取
+  - [x] Leaflet 獨立圖層組（`typhoonTrackLayer` 與 `typhoonRadiusLayer`，不重複建立 `L.map`）
+  - [x] 路徑視覺化：歷史分析路徑實線（紅線）、預報路徑虛線（藍線 `6, 6`）、當前中心顯著標記、預報節點標記
+  - [x] 暴風半徑與機率範圍：7級暴風圈 (`radius_15ms * 1000` 公尺)、10級暴風圈 (`radius_25ms * 1000` 公尺)、70% 預報機率圓 (`probability_70_radius * 1000` 公尺，虛線 `4, 4`），皆設為 `interactive: false` 絕不干擾縣市點擊
+  - [x] 安全 DOM Popup（使用 `createElement`、`textContent` 與 `appendChild`，無 `innerHTML` 數據插值）
+  - [x] 多颱風切換支援（若多於 1 個氣旋時提供 `#typhoon-select`，切換重用客戶端快取無重複 API 請求）
+  - [x] 專屬浮動資訊面板 `#typhoon-panel`（呈現中文/英文名稱、編號、氣壓、風速、陣風、移動方向與速度、暴風圈半徑與空狀態提示）
+  - [x] 西北太平洋廣域視角自動適配（暫時調整 `minZoom: 3` 並 `fitBounds` 包含全路徑，關閉時精準還原原先地圖視角與 `minZoom`）
+  - [x] 完整保護既有功能（溫度/降雨/觀測三模式、縣市點擊橋接器 `handleCountyPointerDown`、雷達疊加層生命週期與深淺色主題）
 - [ ] **Phase 8F — Township Detailed Forecast**（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope）：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
 - [ ] **Phase 8G — Application Polish / Future Features**（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope）：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。
+
+> **專案結案邊界聲明**：
+> - **Phase 8E 為本專案最後一項實作之新功能**。
+> - 在 Phase 8E 驗收完成後，專案下一里程碑為 **Final Project Closeout（最終專案結案）**，不再進行任何額外產品功能開發。
 
 

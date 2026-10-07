@@ -1207,6 +1207,150 @@ def test_phase_8d_radar_focus_rendering_and_basemap_fading():
     assert "currentMapMode" in js
 
 
+# ==============================================================================
+# Phase 8E: Typhoon Center and Tropical Cyclone Track Frontend Tests
+# ==============================================================================
+
+
+def test_phase_8e_html_typhoon_structure():
+    """Verify HTML elements for Phase 8E Typhoon feature:
+    - #typhoon-toggle toolbar button with correct attributes
+    - #typhoon-panel with empty state, active content, and selector
+    - Safe markup without inline credentials
+    """
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    # 1. Typhoon toolbar button
+    assert 'id="typhoon-toggle"' in html
+    assert 'class="map-tool-btn typhoon-toggle-btn"' in html
+    assert 'aria-pressed="false"' in html
+    assert "🌀" in html
+    assert "颱風" in html
+
+    # 2. Typhoon info panel
+    assert 'id="typhoon-panel"' in html
+    assert 'id="typhoon-empty-state"' in html
+    assert "目前無活動熱帶氣旋" in html
+    assert 'id="typhoon-active-content"' in html
+    assert 'id="typhoon-selector-group"' in html
+    assert 'id="typhoon-select"' in html
+    assert 'id="typhoon-name-badge"' in html
+    assert 'id="typhoon-no-badge"' in html
+    assert 'id="typhoon-fix-time"' in html
+    assert 'id="typhoon-coord"' in html
+    assert 'id="typhoon-pressure"' in html
+    assert 'id="typhoon-max-wind"' in html
+    assert 'id="typhoon-max-gust"' in html
+    assert 'id="typhoon-movement"' in html
+    assert 'id="typhoon-radius-15"' in html
+    assert 'id="typhoon-radius-25"' in html
+    assert 'id="typhoon-forecast-summary"' in html
+
+
+def test_phase_8e_css_typhoon_styling():
+    """Verify CSS contains typhoon styles, dark mode, and responsive layout."""
+    response = client.get("/static/css/style.css")
+    assert response.status_code == 200
+    css = response.text
+
+    assert ".typhoon-toggle-btn" in css
+    assert "#typhoon-panel" in css
+    assert ".typhoon-name-badge" in css
+    assert ".typhoon-details-grid" in css
+    assert ".typhoon-popup-content" in css
+    assert "[data-theme=\"dark\"] #typhoon-panel" in css
+
+
+def test_phase_8e_js_typhoon_architecture():
+    """Verify Phase 8E JavaScript architecture:
+    - Global state variables: typhoonEnabled, typhoonDataCache, typhoonTrackLayer, typhoonRadiusLayer, preTyphoonMapView
+    - Layers added to Leaflet map in initMap()
+    - Lazy loading via loadTyphoonData() calling /api/typhoons
+    - Safe DOM popup construction (no innerHTML for data)
+    - Historical track is solid line, forecast is dashed line
+    - 7-level and 10-level wind radii rendered in meters (* 1000) with interactive: false
+    - 70% probability radius rendered separately in meters with interactive: false
+    - Multiple cyclones selector switches without refetching API
+    - Western North Pacific map view fitBounds and view restoration on OFF
+    - currentMapMode remains strictly temperature / rainfall / observations
+    - handleCountyPointerDown and radar code remain intact
+    """
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. State variables
+    assert "let typhoonEnabled = false;" in js
+    assert "let typhoonDataCache = null;" in js
+    assert "let typhoonTrackLayer = null;" in js
+    assert "let typhoonRadiusLayer = null;" in js
+    assert "let selectedTyphoonId = null;" in js
+    assert "let preTyphoonMapView = null;" in js
+
+    # 2. Layers initialized in initMap
+    assert "typhoonRadiusLayer = L.layerGroup().addTo(leafletMap);" in js
+    assert "typhoonTrackLayer = L.layerGroup().addTo(leafletMap);" in js
+
+    # 3. Lazy loading function
+    assert "async function loadTyphoonData(forceRefresh = false)" in js
+    assert '"/api/typhoons"' in js
+
+    # 4. Safe DOM popup
+    assert "function createTyphoonPointPopup(point, label, cyclone)" in js
+    popup_idx = js.find("function createTyphoonPointPopup(")
+    popup_end = js.find("function renderSelectedTyphoon(", popup_idx)
+    popup_body = js[popup_idx:popup_end]
+    assert "document.createElement(" in popup_body
+    assert ".textContent =" in popup_body
+    assert ".innerHTML" not in popup_body
+
+    # 5. Track rendering: solid vs dashed lines
+    assert "function renderSelectedTyphoon(cyclone)" in js
+    render_idx = js.find("function renderSelectedTyphoon(")
+    render_end = js.find("async function renderTyphoonOverlay(", render_idx)
+    render_body = js[render_idx:render_end]
+
+    # Historical analysis track: solid line
+    assert "L.polyline(histCoords" in render_body
+    assert "color: \"#ef4444\"" in render_body
+
+    # Forecast track: dashed line
+    assert "L.polyline(fcstCoords" in render_body
+    assert "dashArray: \"6, 6\"" in render_body
+
+    # Wind radii in meters (* 1000) with interactive: false
+    assert "radius: cur.radius_15ms * 1000" in render_body
+    assert "radius: cur.radius_25ms * 1000" in render_body
+    assert "interactive: false" in render_body
+
+    # 70% probability radius in meters (* 1000)
+    assert "radius: fp.probability_70_radius * 1000" in render_body
+    assert "dashArray: \"4, 4\"" in render_body
+
+    # 6. Multiple cyclone switching does not refetch API
+    toggle_overlay_idx = js.find("async function renderTyphoonOverlay(")
+    toggle_overlay_end = js.find("async function toggleTyphoon()", toggle_overlay_idx)
+    overlay_body = js[toggle_overlay_idx:toggle_overlay_end]
+    assert "elements.typhoonSelect.innerHTML = \"\";" in overlay_body
+    assert "renderSelectedTyphoon(activeCyclone);" in overlay_body
+
+    # 7. Map view save and restore
+    toggle_idx = js.find("async function toggleTyphoon()")
+    toggle_end = js.find("function initTyphoonControls()", toggle_idx)
+    toggle_body = js[toggle_idx:toggle_end]
+    assert "preTyphoonMapView = {" in toggle_body
+    assert "leafletMap.setMinZoom(preTyphoonMapView.minZoom" in toggle_body
+    assert "leafletMap.setView(preTyphoonMapView.center, preTyphoonMapView.zoom)" in toggle_body
+
+    # 8. Preservation of core modes and pointer bridge
+    assert "currentMapMode = \"temperature\";" in js
+    assert "function handleCountyPointerDown(event)" in js
+    assert "function selectCounty(countyName" in js
+
+
+
 
 
 

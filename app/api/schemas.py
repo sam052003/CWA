@@ -1,6 +1,4 @@
-"""Pydantic schemas for API request and response models."""
-
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -179,6 +177,67 @@ class RadarMetadataResponse(BaseModel):
     image_height: int = Field(3600, description="Image pixel height")
     updated_at: Optional[str] = Field(None, description="Metadata or file update timestamp in ISO 8601 (Asia/Taipei)")
 
+
+# ==============================================================================
+# Phase 8E: Typhoon Center / Tropical Cyclone Track Schemas (W-C0034-005)
+# ==============================================================================
+
+class TyphoonAnalysisPoint(BaseModel):
+    """Analysis data point along the past/current track of a tropical cyclone."""
+
+    time: Optional[str] = Field(None, description="Observation / fix timestamp in ISO 8601")
+    latitude: float = Field(..., description="Latitude (WGS84, -90 to 90)")
+    longitude: float = Field(..., description="Longitude (WGS84, -180 to 180)")
+    max_wind_speed: Optional[float] = Field(None, description="Maximum sustained wind speed in m/s")
+    max_gust_speed: Optional[float] = Field(None, description="Maximum peak gust speed in m/s")
+    pressure: Optional[float] = Field(None, description="Central atmospheric pressure in hPa")
+    radius_15ms: Optional[float] = Field(None, description="Radius of 15 m/s (7-level) wind circle in km")
+    radius_25ms: Optional[float] = Field(None, description="Radius of 25 m/s (10-level) wind circle in km")
+    quadrant_15ms: Optional[Dict[str, Optional[float]]] = Field(None, description="Quadrant radii for 15 m/s wind in km")
+    quadrant_25ms: Optional[Dict[str, Optional[float]]] = Field(None, description="Quadrant radii for 25 m/s wind in km")
+    movement_speed: Optional[float] = Field(None, description="Movement speed in km/h")
+    movement_direction: Optional[str] = Field(None, description="Movement direction (e.g. W, WNW, NW)")
+    movement_prediction: Optional[str] = Field(None, description="Movement prediction text description")
+
+
+class TyphoonForecastPoint(BaseModel):
+    """Forecast data point along the future track of a tropical cyclone."""
+
+    init_time: Optional[str] = Field(None, description="Forecast base initialization time in ISO 8601")
+    tau: Optional[int] = Field(None, description="Forecast lead time in hours (e.g. 6, 12, 24, 48, 72, 96, 120)")
+    valid_time: Optional[str] = Field(None, description="Derived forecast valid timestamp in ISO 8601")
+    latitude: float = Field(..., description="Forecast latitude (WGS84, -90 to 90)")
+    longitude: float = Field(..., description="Forecast longitude (WGS84, -180 to 180)")
+    max_wind_speed: Optional[float] = Field(None, description="Forecast maximum sustained wind speed in m/s")
+    max_gust_speed: Optional[float] = Field(None, description="Forecast maximum peak gust speed in m/s")
+    pressure: Optional[float] = Field(None, description="Forecast central pressure in hPa")
+    radius_15ms: Optional[float] = Field(None, description="Forecast radius of 15 m/s wind circle in km")
+    radius_25ms: Optional[float] = Field(None, description="Forecast radius of 25 m/s wind circle in km")
+    probability_70_radius: Optional[float] = Field(None, description="70% probability circle radius in km")
+    state_transfer: Optional[str] = Field(None, description="State transition (e.g. Extratropical, Dissipated)")
+
+
+class TyphoonItem(BaseModel):
+    """Normalized active tropical cyclone data item."""
+
+    id: str = Field(..., description="Unique tropical cyclone identifier")
+    year: Optional[int] = Field(None, description="Cyclone year")
+    name_en: Optional[str] = Field(None, description="International English name")
+    name_zh: Optional[str] = Field(None, description="CWA official Chinese name")
+    cwa_td_no: Optional[str] = Field(None, description="CWA Tropical Depression number")
+    cwa_ty_no: Optional[str] = Field(None, description="CWA Typhoon number")
+    analysis_points: List[TyphoonAnalysisPoint] = Field(default_factory=list, description="Historical analysis track points")
+    current: Optional[TyphoonAnalysisPoint] = Field(None, description="Latest analyzed cyclone center point")
+    forecast_points: List[TyphoonForecastPoint] = Field(default_factory=list, description="Future forecast track points")
+
+
+class TyphoonResponse(BaseModel):
+    """Response model for GET /api/typhoons endpoint."""
+
+    dataset_id: str = Field("W-C0034-005", description="CWA Dataset ID")
+    updated_at: Optional[str] = Field(None, description="Dataset update timestamp in ISO 8601 (Asia/Taipei)")
+    active_count: int = Field(..., description="Number of currently active tropical cyclones")
+    cyclones: List[TyphoonItem] = Field(default_factory=list, description="List of active tropical cyclones")
 
 
 class RefreshResponse(BaseModel):

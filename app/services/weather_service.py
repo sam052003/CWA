@@ -15,6 +15,7 @@ from app.parsers.cwa_parser import (
     parse_observation_stations,
     parse_radar_metadata_xml,
     parse_short_term_forecast,
+    parse_typhoon_data,
 )
 from app.repositories.weather_repository import (
     create_fetch_log,
@@ -892,6 +893,83 @@ def get_radar_metadata(
     return response_data
 
 
+# ==============================================================================
+# Phase 8E: Typhoon Center / Tropical Cyclone Track (W-C0034-005)
+# ==============================================================================
+
+TYPHOON_DATASET_ID = "W-C0034-005"
+TYPHOON_ACTIVE_CACHE_TTL_SECONDS = 900.0   # 15 minutes when active cyclones exist
+TYPHOON_EMPTY_CACHE_TTL_SECONDS = 3600.0   # 60 minutes when no active cyclones exist
+
+_typhoon_cache: Dict[str, Any] = {}
+
+
+def clear_typhoon_cache() -> None:
+    """Clear in-memory typhoon cache (primarily for unit/integration tests)."""
+    global _typhoon_cache
+    _typhoon_cache.clear()
+
+
+def get_typhoon_data(
+    client: Optional[CWAClient] = None,
+    current_time: Optional[float] = None,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """Retrieve active tropical cyclone / typhoon tracks dataset (W-C0034-005).
+
+    Uses an in-memory process-local best-effort TTL cache (15 min if active, 60 min if empty).
+    Does NOT require a database session.
+    Never caches failed requests.
+
+    Args:
+        client: Optional CWAClient instance for dependency injection / testing.
+        current_time: Optional unix timestamp float for deterministic cache testing.
+        force_refresh: If True, bypasses cache and performs live acquisition.
+
+    Returns:
+        Dictionary formatted for TyphoonResponse.
+
+    Raises:
+        WeatherServiceError: If upstream CWA client fails or returns unparseable content.
+    """
+    now = current_time if current_time is not None else time.time()
+
+    # 1. Check in-memory cache unless force_refresh
+    if not force_refresh:
+        cached_entry = _typhoon_cache.get("latest")
+        if cached_entry and cached_entry.get("expires_at", 0) > now:
+            cached_data = cached_entry.get("data")
+            if cached_data:
+                return cached_data
+
+    # 2. Fetch live data from CWA Open Data API
+    if client is None:
+        client = CWAClient()
+
+    try:
+        raw_data = client.fetch_typhoon_data()
+    except CWAClientError as exc:
+        raise WeatherServiceError(f"CWA API request for typhoon data failed: {sanitize_error(exc)}") from exc
+    except Exception as exc:
+        raise WeatherServiceError(f"Unexpected error while fetching typhoon data: {sanitize_error(exc)}") from exc
+
+    # 3. Parse and normalize dataset
+    try:
+        parsed_data = parse_typhoon_data(raw_data)
+    except Exception as exc:
+        raise WeatherServiceError(f"Failed to parse typhoon dataset: {sanitize_error(exc)}") from exc
+
+    # 4. Set appropriate TTL based on active cyclone count
+    active_count = parsed_data.get("active_count", 0)
+    ttl = TYPHOON_ACTIVE_CACHE_TTL_SECONDS if active_count > 0 else TYPHOON_EMPTY_CACHE_TTL_SECONDS
+
+    _typhoon_cache["latest"] = {
+        "data": parsed_data,
+        "expires_at": now + ttl,
+    }
+    return parsed_data
+
+
 class WeatherService:
     """Service class grouping weather domain operations."""
 
@@ -904,6 +982,9 @@ class WeatherService:
     clear_observation_cache = staticmethod(clear_observation_cache)
     get_radar_metadata = staticmethod(get_radar_metadata)
     clear_radar_cache = staticmethod(clear_radar_cache)
+    get_typhoon_data = staticmethod(get_typhoon_data)
+    clear_typhoon_cache = staticmethod(clear_typhoon_cache)
     refresh_forecasts = staticmethod(refresh_forecasts)
     to_taipei_isoformat = staticmethod(to_taipei_isoformat)
     sanitize_error = staticmethod(sanitize_error)
+

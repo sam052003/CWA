@@ -13,6 +13,7 @@ from app.api.schemas import (
     ShortTermMapDataResponse,
     ObservationResponse,
     RadarMetadataResponse,
+    TyphoonResponse,
 )
 from app.clients.cwa_client import CWAClientError
 from app.core.config import get_settings
@@ -255,6 +256,36 @@ def get_radar_endpoint():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error occurred while retrieving radar metadata",
+        )
+
+
+# ==============================================================================
+# Phase 8E: Typhoon Center / Tropical Cyclone Track Endpoint (W-C0034-005)
+# ==============================================================================
+
+@router.get(
+    "/typhoons",
+    response_model=TyphoonResponse,
+    summary="Get active tropical cyclone tracks and analysis data (W-C0034-005)",
+    responses={
+        502: {"model": ErrorResponse, "description": "Upstream typhoon data service unavailable"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+)
+def get_typhoons_endpoint():
+    """Retrieve active tropical cyclone / typhoon tracks and forecast data (W-C0034-005)."""
+    try:
+        data = weather_service.get_typhoon_data()
+        return TyphoonResponse(**data)
+    except WeatherServiceError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Upstream typhoon data service unavailable",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving typhoon data",
         )
 
 

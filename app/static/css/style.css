@@ -1799,4 +1799,241 @@ body {
         padding: 0.65rem 0.75rem;
         font-size: 0.88rem;
     }
+
+    .typhoon-panel {
+        position: static;
+        width: 100%;
+        max-height: none;
+        margin-top: 0.75rem;
+    }
+}
+
+/* ==============================================================================
+   Phase 8E: Typhoon Center UI Styles (W-C0034-005)
+   ============================================================================== */
+
+.typhoon-toggle-btn.active {
+    background-color: var(--primary-color, #2563eb);
+    color: #ffffff;
+    border-color: var(--primary-color, #2563eb);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+#typhoon-panel,
+.typhoon-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 320px;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    z-index: 400;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 0.85rem;
+    color: var(--text-primary);
+    transition: all 0.25s ease;
+}
+
+[data-theme="dark"] #typhoon-panel,
+[data-theme="dark"] .typhoon-panel {
+    background: rgba(15, 23, 42, 0.92);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.typhoon-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.65rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.typhoon-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.typhoon-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.typhoon-panel-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+}
+
+.typhoon-panel-close-btn:hover {
+    background: var(--btn-hover-bg);
+    color: var(--text-primary);
+}
+
+/* Empty State */
+.typhoon-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.25rem 0.5rem;
+    gap: 0.4rem;
+}
+
+.typhoon-empty-icon {
+    font-size: 2rem;
+    margin-bottom: 0.25rem;
+}
+
+.typhoon-empty-title {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.typhoon-empty-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Active Cyclone Selector & Badges */
+.typhoon-selector-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.65rem;
+}
+
+.typhoon-select-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.typhoon-select {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-primary);
+}
+
+.typhoon-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.65rem;
+}
+
+.typhoon-name-badge {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 0.2rem 0.55rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.typhoon-no-badge {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--badge-period-bg);
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--radius-sm);
+}
+
+.typhoon-section-heading {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+}
+
+.typhoon-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    background: var(--card-bg);
+    padding: 0.6rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.typhoon-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.typhoon-detail-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.typhoon-detail-val {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.typhoon-forecast-summary {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    background: var(--card-bg);
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    line-height: 1.4;
+}
+
+/* Typhoon Leaflet Popups */
+.typhoon-popup-content {
+    font-family: inherit;
+    font-size: 0.82rem;
+    min-width: 180px;
+}
+
+.typhoon-popup-header {
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #1e293b;
+}
+
+.typhoon-popup-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.typhoon-popup-table th {
+    text-align: left;
+    color: #64748b;
+    font-weight: 600;
+    padding: 0.2rem 0.4rem 0.2rem 0;
+    font-size: 0.76rem;
+    white-space: nowrap;
+}
+
+.typhoon-popup-table td {
+    text-align: right;
+    color: #0f172a;
+    font-weight: 600;
+    padding: 0.2rem 0;
+    font-size: 0.78rem;
 }

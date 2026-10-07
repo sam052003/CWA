@@ -27,10 +27,19 @@
 - Phase 8B ✅ Rich County Forecast 今明 36 小時生活預報 (已完成並通過生產環境驗收)
 - Phase 8B2 ✅ Rainfall Probability Map Mode 降雨機率地圖模式 (已完成並通過生產環境驗收)
 - Phase 8C ✅ Current Weather Observations 目前氣象觀測 (已完成並通過生產環境驗收)
-- Phase 8D 📋 Radar Reflectivity Overlay 雷達整合回波圖層 (實作完成，待正式環境手動驗收)
+- Phase 8D ✅ Radar Reflectivity Overlay 雷達整合回波圖層 (已完成並通過生產環境驗收)
+- Phase 8E 📋 Typhoon Center / Tropical Cyclone Track 颱風動態中心與路徑 (實作完成，待正式環境手動驗收；最後規劃功能 / FINAL Planned Feature)
+- Phase 8F ⏳ Township Detailed Forecast 鄉鎮細緻預報 (延後規劃 / 專案當前範圍外 / Deferred / Out of Scope)
+- Phase 8G ⏳ Application Polish 應用程式優化 (延後規劃 / 專案當前範圍外 / Deferred / Out of Scope)
 
-> **資料語義說明**：
-> - `O-A0058-001`：雷達整合回波圖－臺灣（較大範圍）_無地形（觀測圖資，約每 10 分鐘更新一次，經度 115.00–126.50，緯度 17.75–29.25，解析度 3600×3600；無地形底色更適合作為 Web 地圖疊加圖層）
+> **最後功能里程碑聲明**：
+> - **Phase 8E 為本專案最後一項規劃功能**。
+> - 在 Phase 8E 驗收完成後，本專案將直接進入 **Final Project Closeout（專案最終結案）**，不進行 Phase 8F 或 Phase 8G 之實作。
+
+> **資料語義與技術架構說明**：
+> - `W-C0034-005`：西北太平洋及南海熱帶氣旋/颱風動態與路徑（約每 6 小時常態更新、警報期間約每 3 小時更新；若無活動氣旋回傳 HTTP 200 正常空狀態，絕非系統錯誤；支援歷史路徑、預報路徑、7/10級暴風半徑與 70% 預報機率範圍；獨立於地圖模式之 Overlay 疊加層）
+> - `O-A0058-001`：雷達整合回波圖－臺灣（較大範圍）_無地形（觀測圖資，約每 10 分鐘更新一次，經度 115.00–126.50，緯度 17.75–29.25，解析度 3600×3600；無地形底色適合作為 Web 地圖疊加圖層，搭配 OSM 底圖聚焦淡化）
+>   - *已知限制*：氣象署雷達圖為預先渲染之點陣影像（raster product），疊加於 Leaflet / Web Mercator 投影與縣市 GeoJSON 上時可能存在細微地理擬合差異，系統不引入任意經驗偏移量（magic offsets），維持官方標準邊界與底圖淡化架構。
 > - `O-A0001`：氣象測站即時觀測資料（真實物理測量值，非預報值）
 > - `F-C0032-001`：今明 36 小時生活天氣預報（預測值）
 > - `F-C0032-005`：一週天氣預報（預測值）

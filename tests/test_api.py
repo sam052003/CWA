@@ -962,6 +962,132 @@ def test_get_radar_api_unexpected_internal_error():
         assert "pass" not in response.text
 
 
+# ==============================================================================
+# Phase 8E: GET /api/typhoons Endpoint Tests (W-C0034-005)
+# ==============================================================================
+
+
+def test_get_typhoons_api_active_cyclone():
+    """Verify GET /api/typhoons returns 200 with active cyclones."""
+    mock_data = {
+        "dataset_id": "W-C0034-005",
+        "updated_at": "2026-10-07T18:00:00+08:00",
+        "active_count": 1,
+        "cyclones": [
+            {
+                "id": "2026_2601",
+                "year": 2026,
+                "name_en": "NOLO",
+                "name_zh": "諾羅",
+                "cwa_td_no": "TD01",
+                "cwa_ty_no": "2601",
+                "analysis_points": [
+                    {
+                        "time": "2026-10-07T12:00:00+08:00",
+                        "latitude": 19.5,
+                        "longitude": 129.2,
+                        "max_wind_speed": 35.0,
+                        "max_gust_speed": 45.0,
+                        "pressure": 970.0,
+                        "radius_15ms": 180.0,
+                        "radius_25ms": 60.0,
+                        "quadrant_15ms": None,
+                        "quadrant_25ms": None,
+                        "movement_speed": 18.0,
+                        "movement_direction": "西北西",
+                        "movement_prediction": "向西北西移動",
+                    }
+                ],
+                "current": {
+                    "time": "2026-10-07T12:00:00+08:00",
+                    "latitude": 19.5,
+                    "longitude": 129.2,
+                    "max_wind_speed": 35.0,
+                    "max_gust_speed": 45.0,
+                    "pressure": 970.0,
+                    "radius_15ms": 180.0,
+                    "radius_25ms": 60.0,
+                    "quadrant_15ms": None,
+                    "quadrant_25ms": None,
+                    "movement_speed": 18.0,
+                    "movement_direction": "西北西",
+                    "movement_prediction": "向西北西移動",
+                },
+                "forecast_points": [
+                    {
+                        "init_time": "2026-10-07T12:00:00+08:00",
+                        "tau": 24,
+                        "valid_time": "2026-10-08T12:00:00+08:00",
+                        "latitude": 21.0,
+                        "longitude": 127.0,
+                        "max_wind_speed": 40.0,
+                        "max_gust_speed": 50.0,
+                        "pressure": 960.0,
+                        "radius_15ms": 200.0,
+                        "radius_25ms": 80.0,
+                        "probability_70_radius": 100.0,
+                        "state_transfer": None,
+                    }
+                ],
+            }
+        ],
+    }
+
+    with patch("app.api.routes.weather_service.get_typhoon_data", return_value=mock_data) as mock_service:
+        response = client.get("/api/typhoons")
+        assert response.status_code == 200
+        mock_service.assert_called_once()
+        body = response.json()
+        assert body["dataset_id"] == "W-C0034-005"
+        assert body["active_count"] == 1
+        assert len(body["cyclones"]) == 1
+        assert body["cyclones"][0]["name_zh"] == "諾羅"
+        assert body["cyclones"][0]["current"]["latitude"] == 19.5
+
+
+def test_get_typhoons_api_empty_state_is_200():
+    """Verify GET /api/typhoons returns 200 with active_count 0 when no cyclones active."""
+    mock_empty = {
+        "dataset_id": "W-C0034-005",
+        "updated_at": "2026-10-07T18:00:00+08:00",
+        "active_count": 0,
+        "cyclones": [],
+    }
+    with patch("app.api.routes.weather_service.get_typhoon_data", return_value=mock_empty):
+        response = client.get("/api/typhoons")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["dataset_id"] == "W-C0034-005"
+        assert body["active_count"] == 0
+        assert body["cyclones"] == []
+
+
+def test_get_typhoons_api_upstream_service_error():
+    """Verify 502 Bad Gateway when upstream CWA fails without leaking secrets."""
+    with patch(
+        "app.api.routes.weather_service.get_typhoon_data",
+        side_effect=WeatherServiceError("Upstream timeout with key CWA-SECRET-99999"),
+    ):
+        response = client.get("/api/typhoons")
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Upstream typhoon data service unavailable"
+        assert "CWA-SECRET-99999" not in response.text
+
+
+def test_get_typhoons_api_unexpected_internal_error():
+    """Verify 500 when unexpected error occurs without leaking credentials."""
+    with patch(
+        "app.api.routes.weather_service.get_typhoon_data",
+        side_effect=Exception("Database crash postgresql://user:pass@host/cwa"),
+    ):
+        response = client.get("/api/typhoons")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error occurred while retrieving typhoon data"
+        assert "postgresql://" not in response.text
+        assert "pass" not in response.text
+
+
+
 
 
 
