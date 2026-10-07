@@ -1799,13 +1799,6 @@ body {
         padding: 0.65rem 0.75rem;
         font-size: 0.88rem;
     }
-
-    .typhoon-panel {
-        position: static;
-        width: 100%;
-        max-height: none;
-        margin-top: 0.75rem;
-    }
 }
 
 /* ==============================================================================
@@ -1813,9 +1806,9 @@ body {
    ============================================================================== */
 
 .typhoon-toggle-btn.active {
-    background-color: var(--primary-color, #2563eb);
+    background-color: var(--primary);
     color: #ffffff;
-    border-color: var(--primary-color, #2563eb);
+    border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 
@@ -1823,7 +1816,8 @@ body {
 .typhoon-panel {
     position: absolute;
     top: 12px;
-    right: 12px;
+    left: 68px;
+    right: auto;
     width: 320px;
     max-height: calc(100% - 24px);
     overflow-y: auto;
@@ -1835,7 +1829,7 @@ body {
     border-radius: var(--radius-md);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     padding: 0.85rem;
-    color: var(--text-primary);
+    color: var(--text-main);
     transition: all 0.25s ease;
 }
 
@@ -1843,6 +1837,7 @@ body {
 [data-theme="dark"] .typhoon-panel {
     background: rgba(15, 23, 42, 0.92);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    color: var(--text-main);
 }
 
 .typhoon-panel-header {
@@ -1863,7 +1858,7 @@ body {
 .typhoon-title {
     font-size: 0.95rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .typhoon-panel-close-btn {
@@ -1878,8 +1873,8 @@ body {
 }
 
 .typhoon-panel-close-btn:hover {
-    background: var(--btn-hover-bg);
-    color: var(--text-primary);
+    background: var(--primary-light);
+    color: var(--text-main);
 }
 
 /* Empty State */
@@ -1899,10 +1894,39 @@ body {
 
 .typhoon-empty-title {
     font-size: 0.95rem;
-    color: var(--text-primary);
+    font-weight: 700;
+    color: var(--text-main);
 }
 
 .typhoon-empty-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Error State */
+.typhoon-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.25rem 0.5rem;
+    gap: 0.4rem;
+}
+
+.typhoon-error-icon {
+    font-size: 2rem;
+    margin-bottom: 0.25rem;
+}
+
+.typhoon-error-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ef4444;
+}
+
+.typhoon-error-desc {
     font-size: 0.8rem;
     color: var(--text-muted);
     line-height: 1.4;
@@ -1924,12 +1948,47 @@ body {
 }
 
 .typhoon-select {
-    padding: 0.35rem 0.5rem;
-    font-size: 0.82rem;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.85rem;
+    font-family: inherit;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
-    background: var(--card-bg);
-    color: var(--text-primary);
+    background-color: var(--control-bg);
+    color: var(--text-main);
+    color-scheme: light;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.typhoon-select:focus-visible {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.typhoon-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.typhoon-select option {
+    background-color: #ffffff;
+    color: #0f172a;
+    color-scheme: light;
+}
+
+[data-theme="dark"] .typhoon-select {
+    color-scheme: dark;
+    background-color: var(--control-bg);
+    color: var(--text-main);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .typhoon-select option {
+    background-color: #1e293b;
+    color: #f8fafc;
+    color-scheme: dark;
 }
 
 .typhoon-badge-row {
@@ -1969,7 +2028,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.45rem;
-    background: var(--card-bg);
+    background: var(--bg-card);
     padding: 0.6rem;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
@@ -1989,13 +2048,13 @@ body {
 .typhoon-detail-val {
     font-size: 0.82rem;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .typhoon-forecast-summary {
     font-size: 0.8rem;
-    color: var(--text-primary);
-    background: var(--card-bg);
+    color: var(--text-main);
+    background: var(--bg-card);
     padding: 0.5rem 0.6rem;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
@@ -2036,4 +2095,40 @@ body {
     font-weight: 600;
     padding: 0.2rem 0;
     font-size: 0.78rem;
+}
+
+/* Mobile & Tablet Overrides for Typhoon Panel (Placed after base rules to ensure correct cascade) */
+@media (max-width: 960px) {
+    #typhoon-panel,
+    .typhoon-panel {
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        margin-top: 0.75rem;
+        box-shadow: var(--shadow-sm);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+}
+
+@media (max-width: 600px) {
+    #typhoon-panel,
+    .typhoon-panel {
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        margin-top: 0.75rem;
+    }
+
+    .typhoon-details-grid {
+        grid-template-columns: 1fr;
+    }
 }

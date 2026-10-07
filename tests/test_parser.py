@@ -783,7 +783,7 @@ def test_parse_radar_metadata_xml_malformed_and_empty():
 # Phase 8E: Typhoon Parser Tests (W-C0034-005)
 # ==============================================================================
 
-from app.parsers.cwa_parser import parse_typhoon_data
+from app.parsers.cwa_parser import parse_typhoon_data, parse_typhoon_coordinate
 
 SAMPLE_TYPHOON_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <cwaopendata xmlns="urn:cwa:gov:tw:cwacommon:0.1">
@@ -803,33 +803,28 @@ SAMPLE_TYPHOON_XML = """<?xml version="1.0" encoding="UTF-8"?>
             <analysis_data>
                <fix>
                   <fix_time>2026-10-07T06:00:00+08:00</fix_time>
-                  <coordinate>
-                     <latitude>19.0</latitude>
-                     <longitude>130.0</longitude>
-                  </coordinate>
+                  <coordinate>130.0,19.0</coordinate>
                   <max_wind_speed>30</max_wind_speed>
                   <max_gust_speed>38</max_gust_speed>
                   <pressure>975</pressure>
-                  <radius>
-                     <circle_of_15ms>
-                        <radius>150</radius>
-                        <quadrant_radii>
-                           <northeast>160</northeast>
-                           <southeast>150</southeast>
-                           <southwest>140</southwest>
-                           <northwest>150</northwest>
-                        </quadrant_radii>
-                     </circle_of_15ms>
-                     <circle_of_25ms>
-                        <radius>50</radius>
-                        <quadrant_radii>
-                           <northeast>50</northeast>
-                           <southeast>50</southeast>
-                           <southwest>50</southwest>
-                           <northwest>50</northwest>
-                        </quadrant_radii>
-                     </circle_of_25ms>
-                  </radius>
+                  <circleOf15Ms>
+                     <radius>150</radius>
+                     <quadrantRadii>
+                        <northeast>160</northeast>
+                        <southeast>150</southeast>
+                        <southwest>140</southwest>
+                        <northwest>150</northwest>
+                     </quadrantRadii>
+                  </circleOf15Ms>
+                  <circleOf25Ms>
+                     <radius>50</radius>
+                     <quadrantRadii>
+                        <northeast>50</northeast>
+                        <southeast>50</southeast>
+                        <southwest>50</southwest>
+                        <northwest>50</northwest>
+                     </quadrantRadii>
+                  </circleOf25Ms>
                   <movement>
                      <speed>15</speed>
                      <moving_direction>西北</moving_direction>
@@ -838,21 +833,16 @@ SAMPLE_TYPHOON_XML = """<?xml version="1.0" encoding="UTF-8"?>
                </fix>
                <fix>
                   <fix_time>2026-10-07T12:00:00+08:00</fix_time>
-                  <coordinate>
-                     <latitude>19.5</latitude>
-                     <longitude>129.2</longitude>
-                  </coordinate>
+                  <coordinate>129.2,19.5</coordinate>
                   <max_wind_speed>35</max_wind_speed>
                   <max_gust_speed>45</max_gust_speed>
                   <pressure>970</pressure>
-                  <radius>
-                     <circle_of_15ms>
-                        <radius>180</radius>
-                     </circle_of_15ms>
-                     <circle_of_25ms>
-                        <radius>60</radius>
-                     </circle_of_25ms>
-                  </radius>
+                  <circleOf15Ms>
+                     <radius>180</radius>
+                  </circleOf15Ms>
+                  <circleOf25Ms>
+                     <radius>60</radius>
+                  </circleOf25Ms>
                   <movement>
                      <speed>18</speed>
                      <moving_direction>西北西</moving_direction>
@@ -864,16 +854,17 @@ SAMPLE_TYPHOON_XML = """<?xml version="1.0" encoding="UTF-8"?>
                <fix>
                   <init_time>2026-10-07T12:00:00+08:00</init_time>
                   <tau>24</tau>
-                  <coordinate>
-                     <latitude>21.0</latitude>
-                     <longitude>127.0</longitude>
-                  </coordinate>
+                  <coordinate>127.0,21.0</coordinate>
                   <max_wind_speed>40</max_wind_speed>
                   <max_gust_speed>50</max_gust_speed>
                   <pressure>960</pressure>
-                  <circle_of_15ms>200</circle_of_15ms>
-                  <circle_of_25ms>80</circle_of_25ms>
-                  <radius_of_70percent_probability>100</radius_of_70percent_probability>
+                  <circleOf15Ms>
+                     <radius>200</radius>
+                  </circleOf15Ms>
+                  <circleOf25Ms>
+                     <radius>80</radius>
+                  </circleOf25Ms>
+                  <radiusOf70PercentProbability>100</radiusOf70PercentProbability>
                   <state_transfer>BECOMING EXTRATROPICAL LOW</state_transfer>
                </fix>
             </forecast_data>
@@ -882,54 +873,91 @@ SAMPLE_TYPHOON_XML = """<?xml version="1.0" encoding="UTF-8"?>
    </dataset>
 </cwaopendata>"""
 
-SAMPLE_TYPHOON_JSON = {
-    "cwaopendata": {
-        "Sent": "2026-10-07T18:00:00+08:00",
-        "Dataset": {
-            "TropicalCyclones": {
-                "TropicalCyclone": [
-                    {
-                        "Year": 2026,
-                        "TyphoonName": "KOGUMA",
-                        "CwaTyphoonName": "小熊",
-                        "CwaTdNo": "TD02",
-                        "CwaTyNo": "2602",
-                        "AnalysisData": {
-                            "Fix": [
-                                {
-                                    "DateTime": "2026-10-07T06:00:00+08:00",
-                                    "CoordinateLatitude": 18.0,
-                                    "CoordinateLongitude": 118.0,
-                                    "MaxWindSpeed": 25,
-                                    "MaxGustSpeed": 33,
-                                    "Pressure": 990,
-                                    "Circle15ms": {"Radius": 100},
-                                    "Circle25ms": {"Radius": 0},
-                                    "MovingSpeed": 20,
-                                    "MovingDirection": "西北",
-                                }
-                            ]
-                        },
-                        "ForecastData": {
-                            "Fix": [
-                                {
-                                    "InitialTime": "2026-10-07T06:00:00+08:00",
-                                    "ForecastHour": 12,
-                                    "CoordinateLatitude": 19.2,
-                                    "CoordinateLongitude": 116.5,
-                                    "MaxWindSpeed": 28,
-                                    "MaxGustSpeed": 35,
-                                    "Pressure": 985,
-                                    "Radius70PercentProbability": 70,
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        }
-    }
-}
+
+def test_parse_typhoon_coordinate():
+    """Verify parse_typhoon_coordinate handles string (lon,lat), dict, and invalid inputs."""
+    # A. String format "longitude,latitude"
+    lat, lon = parse_typhoon_coordinate("120.5,20.5")
+    assert lat == 20.5
+    assert lon == 120.5
+
+    # String with spaces
+    lat, lon = parse_typhoon_coordinate(" 135.2 , -15.8 ")
+    assert lat == -15.8
+    assert lon == 135.2
+
+    # B. Dict format
+    lat, lon = parse_typhoon_coordinate({"latitude": 22.4, "longitude": 121.6})
+    assert lat == 22.4
+    assert lon == 121.6
+
+    lat, lon = parse_typhoon_coordinate({"CoordinateLatitude": 18.2, "CoordinateLongitude": 115.4})
+    assert lat == 18.2
+    assert lon == 115.4
+
+    # C. Parent fallback
+    lat, lon = parse_typhoon_coordinate(None, {"latitude": 25.0, "longitude": 122.0})
+    assert lat == 25.0
+    assert lon == 122.0
+
+    # D. Invalid / out-of-range coordinates -> (None, None)
+    assert parse_typhoon_coordinate("120.5,95.0") == (None, None)  # lat > 90
+    assert parse_typhoon_coordinate("190.0,20.5") == (None, None)  # lon > 180
+    assert parse_typhoon_coordinate("invalid,coords") == (None, None)
+    assert parse_typhoon_coordinate("") == (None, None)
+    assert parse_typhoon_coordinate(None) == (None, None)
+
+
+def test_parse_typhoon_data_real_sanitized_fixture():
+    """Verify parse_typhoon_data with realistic sanitized CWA Datastore JSON fixture."""
+    fixture_path = Path(__file__).resolve().parent / "fixtures" / "cwa_w_c0034_005_sample.json"
+    assert fixture_path.exists()
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    result = parse_typhoon_data(data)
+    assert result["dataset_id"] == "W-C0034-005"
+    assert result["active_count"] == 1
+    cyclone = result["cyclones"][0]
+    assert cyclone["name_en"] == "NOLO"
+    assert cyclone["name_zh"] == "諾羅"
+    assert cyclone["cwa_td_no"] == "TD01"
+    assert cyclone["cwa_ty_no"] == "2601"
+
+    # Analysis points check
+    assert len(cyclone["analysis_points"]) == 2
+    pt0 = cyclone["analysis_points"][0]
+    assert pt0["time"] == "2026-10-07T06:00:00+08:00"
+    assert pt0["latitude"] == 19.0
+    assert pt0["longitude"] == 130.0
+    assert pt0["radius_15ms"] == 150.0
+    assert pt0["radius_25ms"] == 50.0
+    assert pt0["quadrant_15ms"] == {"NE": 160.0, "SE": 150.0, "SW": 140.0, "NW": 150.0}
+    assert pt0["movement_prediction"] == "向西北緩慢進行"
+
+    # Current point must be the latest analysis point
+    current = cyclone["current"]
+    assert current["time"] == "2026-10-07T12:00:00+08:00"
+    assert current["latitude"] == 19.5
+    assert current["longitude"] == 129.2
+    assert current["pressure"] == 970.0
+    assert current["radius_15ms"] == 180.0
+    assert current["radius_25ms"] == 60.0
+    assert current["movement_prediction"] == "向西北西移動"
+
+    # Forecast points check
+    assert len(cyclone["forecast_points"]) == 1
+    fp = cyclone["forecast_points"][0]
+    assert fp["init_time"] == "2026-10-07T12:00:00+08:00"
+    assert fp["tau"] == 24
+    assert fp["valid_time"] == "2026-10-08T12:00:00+08:00"
+    assert fp["latitude"] == 21.0
+    assert fp["longitude"] == 127.0
+    assert fp["max_wind_speed"] == 40.0
+    assert fp["radius_15ms"] == 200.0
+    assert fp["radius_25ms"] == 80.0
+    assert fp["probability_70_radius"] == 100.0
+    assert fp["state_transfer"] == "轉變為溫帶氣旋"
 
 
 def test_parse_typhoon_data_xml():
@@ -980,20 +1008,6 @@ def test_parse_typhoon_data_xml():
     assert "EXTRATROPICAL LOW" in fp["state_transfer"]
 
 
-def test_parse_typhoon_data_json():
-    """Verify parse_typhoon_data parses JSON structure correctly."""
-    result = parse_typhoon_data(SAMPLE_TYPHOON_JSON)
-    assert result["dataset_id"] == "W-C0034-005"
-    assert result["active_count"] == 1
-    cyclone = result["cyclones"][0]
-    assert cyclone["name_en"] == "KOGUMA"
-    assert cyclone["name_zh"] == "小熊"
-    assert cyclone["current"]["latitude"] == 18.0
-    assert cyclone["current"]["longitude"] == 118.0
-    assert cyclone["forecast_points"][0]["valid_time"] == "2026-10-07T18:00:00+08:00"
-    assert cyclone["forecast_points"][0]["probability_70_radius"] == 70
-
-
 def test_parse_typhoon_data_empty_state():
     """Verify empty product returns 200 normal empty response."""
     empty_xml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -1029,9 +1043,9 @@ def test_parse_typhoon_data_invalid_coordinates():
                         "name": "TEST",
                         "analysisData": {
                             "fix": [
-                                {"latitude": 120.0, "longitude": 120.0},  # lat > 90 invalid
-                                {"latitude": 20.0, "longitude": 200.0},  # lon > 180 invalid
-                                {"latitude": 20.0, "longitude": 120.0},  # valid
+                                {"coordinate": "120.0,120.0"},  # lat > 90 invalid
+                                {"coordinate": "200.0,20.0"},  # lon > 180 invalid
+                                {"coordinate": "120.0,20.0"},  # valid
                             ]
                         }
                     }
@@ -1043,6 +1057,7 @@ def test_parse_typhoon_data_invalid_coordinates():
     assert res["active_count"] == 1
     assert len(res["cyclones"][0]["analysis_points"]) == 1
     assert res["cyclones"][0]["current"]["latitude"] == 20.0
+
 
 
 

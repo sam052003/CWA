@@ -1755,19 +1755,20 @@ CWA Open Data API
   - [x] **已知限制記錄**：CWA 雷達圖為預先渲染之點陣影像（raster product），疊加於 Leaflet / Web Mercator 投影與縣市 GeoJSON 上時可能存在細微地理擬合差異。專案不引入任意經驗偏移量（magic offsets），維持官方標準邊界與底圖淡化架構。
 - [x] **Phase 8E — Typhoon Center / Tropical Cyclone Track**（實作完成，待正式環境手動驗收 / Implemented, pending production manual acceptance；最後規劃功能 / FINAL Planned Feature）：
   - [x] CWA `W-C0034-005` 西北太平洋及南海熱帶氣旋/颱風資料連線客戶端 (`DATASET_TYPHOON = "W-C0034-005"`)
-  - [x] 專屬颱風解析器（支援 XML 與 JSON 結構、WGS84 座標驗證 -90..90 與 -180..180、時間排序、最新分析點判定為 `current` 中心點、`init_time + tau` 導出預報時間、7級/10級暴風半徑與 70% 機率範圍解析）
-  - [x] 正常空狀態處理（無活動熱帶氣旋時回傳 HTTP 200 與 `active_count: 0`，絕非 404/500/502 錯誤）
+  - [x] 專屬颱風解析器（支援 XML 與真實 Datastore JSON 結構、`"longitude,latitude"` 字串座標如 `"120.5,20.5"` -> lon 120.5, lat 20.5、WGS84 座標驗證 -90..90 與 -180..180、`fixTime` 時間排序、最新有效分析點判定為 `current` 中心點、`circleOf15Ms` / `circleOf25Ms` 四象限暴風半徑與繁體中文移動預測 `movingPrediction` 解析、`init_time + tau` 導出預報時間、`radiusOf70PercentProbability` 70% 機率範圍解析）
+  - [x] 嚴格區隔正常空狀態與連線失敗狀態（無活動熱帶氣旋時回傳 HTTP 200 與 `active_count: 0` 顯示 `#typhoon-empty-state`「目前無活動熱帶氣旋」且不變更正常臺灣地圖邊界；API 失敗時顯示 `#typhoon-error-state`「颱風資料暫時無法載入」、重設按鈕狀態並復原地圖視角與邊界，支援再次點擊重試）
   - [x] 行程內最佳努力 TTL 快取（活動氣旋存在時 15 分鐘 TTL，無活動氣旋時 60 分鐘 TTL，零 DB 綱要異動、零 Cron 修改）
   - [x] 專屬 API 端點 `GET /api/typhoons` 與安全防護（遮罩機密、502 上游異常、500 內部錯誤）
   - [x] 地圖工具列獨立開關按鈕 `#typhoon-toggle`（`🌀 颱風`，獨立 Overlay，非第四種地圖模式）
   - [x] 延遲載入（首次點擊開關才請求 `/api/typhoons`）與客戶端頁面 Session 快取
   - [x] Leaflet 獨立圖層組（`typhoonTrackLayer` 與 `typhoonRadiusLayer`，不重複建立 `L.map`）
+  - [x] 解決地圖世界重複複製（`baseTileLayer` 啟用 `noWrap: true`，地圖設定 `maxBoundsViscosity: 1.0`，常態臺灣導航邊界 `NORMAL_NAVIGATION_BOUNDS = [[17, 110], [32, 135]]`）
   - [x] 路徑視覺化：歷史分析路徑實線（紅線）、預報路徑虛線（藍線 `6, 6`）、當前中心顯著標記、預報節點標記
   - [x] 暴風半徑與機率範圍：7級暴風圈 (`radius_15ms * 1000` 公尺)、10級暴風圈 (`radius_25ms * 1000` 公尺)、70% 預報機率圓 (`probability_70_radius * 1000` 公尺，虛線 `4, 4`），皆設為 `interactive: false` 絕不干擾縣市點擊
   - [x] 安全 DOM Popup（使用 `createElement`、`textContent` 與 `appendChild`，無 `innerHTML` 數據插值）
-  - [x] 多颱風切換支援（若多於 1 個氣旋時提供 `#typhoon-select`，切換重用客戶端快取無重複 API 請求）
-  - [x] 專屬浮動資訊面板 `#typhoon-panel`（呈現中文/英文名稱、編號、氣壓、風速、陣風、移動方向與速度、暴風圈半徑與空狀態提示）
-  - [x] 西北太平洋廣域視角自動適配（暫時調整 `minZoom: 3` 並 `fitBounds` 包含全路徑，關閉時精準還原原先地圖視角與 `minZoom`）
+  - [x] 多颱風切換支援（若多於 1 個氣旋時提供 `#typhoon-select`，原生選單深淺色主題適配 `color-scheme: light/dark`，收合與展開選項皆清晰易讀，切換重用客戶端快取無重複 API 請求）
+  - [x] 桌面面板分離與自動收合（桌面版 `#typhoon-panel` 位於地圖左側 `left: 68px` 避開 Leaflet 縮放按鈕，開啟時自動收合右側縣市詳細面板，關閉時精準還原使用者原先收合/展開偏好；行動版保持 `position: static` 全寬排版）
+  - [x] 西北太平洋廣域視角自動適配（有活動氣旋時啟用 `TYPHOON_NAVIGATION_BOUNDS = [[0, 90], [45, 180]]`、暫時調整 `minZoom: 3` 並 `fitBounds` 包含全路徑，關閉或無氣旋時精準還原 `NORMAL_NAVIGATION_BOUNDS`、原先地圖視角與 `minZoom`）
   - [x] 完整保護既有功能（溫度/降雨/觀測三模式、縣市點擊橋接器 `handleCountyPointerDown`、雷達疊加層生命週期與深淺色主題）
 - [ ] **Phase 8F — Township Detailed Forecast**（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope）：`F-D0047-093` 鄉鎮市區細緻預報（伺服器端解構過濾、focused API 漸進查詢、縣市→鄉鎮二階選單）。
 - [ ] **Phase 8G — Application Polish / Future Features**（延後規劃 / 專案當前範圍外 / Deferred / Future Work / Out of current project scope）：喜愛縣市收藏、可分享網址狀態、PWA 離線支援、警特報橫幅與全方位無障礙適配。

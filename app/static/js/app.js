@@ -34,6 +34,18 @@ let typhoonTrackLayer = null;
 let typhoonRadiusLayer = null;
 let selectedTyphoonId = null;
 let preTyphoonMapView = null;
+let detailPanelWasCollapsedBeforeTyphoon = null;
+
+// Map Navigation Bounds (Normal Taiwan vs Western North Pacific Typhoon)
+const NORMAL_NAVIGATION_BOUNDS = [
+    [17, 110],
+    [32, 135],
+];
+
+const TYPHOON_NAVIGATION_BOUNDS = [
+    [0, 90],
+    [45, 180],
+];
 
 let selectedCountyName = null;
 let activeTooltipLayer = null;
@@ -98,6 +110,7 @@ const elements = {
     typhoonPanel: document.getElementById("typhoon-panel"),
     typhoonPanelClose: document.getElementById("typhoon-panel-close"),
     typhoonEmptyState: document.getElementById("typhoon-empty-state"),
+    typhoonErrorState: document.getElementById("typhoon-error-state"),
     typhoonActiveContent: document.getElementById("typhoon-active-content"),
     typhoonSelectorGroup: document.getElementById("typhoon-selector-group"),
     typhoonSelect: document.getElementById("typhoon-select"),
@@ -1015,6 +1028,25 @@ function syncMapWheelZoom() {
 }
 
 /**
+ * Synchronize Detail Panel collapsed state and toggle button accessibility / icons.
+ * Reused by manual toggle and automatic Typhoon open/close on desktop.
+ * @param {boolean} collapsed
+ */
+function setDetailPanelCollapsed(collapsed) {
+    if (!elements.detailPanel) return;
+    elements.detailPanel.classList.toggle("collapsed", collapsed);
+    if (elements.detailPanelToggle) {
+        elements.detailPanelToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        elements.detailPanelToggle.setAttribute("aria-label", collapsed ? "展開詳細資訊面板" : "收合詳細資訊面板");
+        elements.detailPanelToggle.title = collapsed ? "展開面板" : "收合面板";
+        const iconSpan = elements.detailPanelToggle.querySelector(".toggle-icon");
+        if (iconSpan) iconSpan.textContent = collapsed ? "▶" : "◀";
+        const textSpan = elements.detailPanelToggle.querySelector(".toggle-text");
+        if (textSpan) textSpan.textContent = collapsed ? "展開" : "收合";
+    }
+}
+
+/**
  * Initialize Leaflet Map with neutral OpenStreetMap basemap.
  */
 function initMap() {
@@ -1026,13 +1058,16 @@ function initMap() {
         minZoom: 6,
         maxZoom: 12,
         zoomSnap: 0.25,
+        maxBounds: NORMAL_NAVIGATION_BOUNDS,
+        maxBoundsViscosity: 1.0,
         scrollWheelZoom: false, // Safely initialized, dynamically enabled via syncMapWheelZoom()
     });
 
-    // Basemap: OpenStreetMap tiles with required attribution
+    // Basemap: OpenStreetMap tiles with required attribution and noWrap to prevent world copies
     baseTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
         maxZoom: 18,
+        noWrap: true,
     });
     baseTileLayer.addTo(leafletMap);
 
@@ -1153,14 +1188,8 @@ function initMapControls() {
     // 3. Collapsible Desktop Detail Panel
     if (elements.detailPanelToggle && elements.detailPanel) {
         elements.detailPanelToggle.addEventListener("click", () => {
-            const isCollapsed = elements.detailPanel.classList.toggle("collapsed");
-            elements.detailPanelToggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
-            elements.detailPanelToggle.setAttribute("aria-label", isCollapsed ? "展開詳細資訊面板" : "收合詳細資訊面板");
-            elements.detailPanelToggle.title = isCollapsed ? "展開面板" : "收合面板";
-            const iconSpan = elements.detailPanelToggle.querySelector(".toggle-icon");
-            if (iconSpan) iconSpan.textContent = isCollapsed ? "▶" : "◀";
-            const textSpan = elements.detailPanelToggle.querySelector(".toggle-text");
-            if (textSpan) textSpan.textContent = isCollapsed ? "展開" : "收合";
+            const isCurrentlyCollapsed = elements.detailPanel.classList.contains("collapsed");
+            setDetailPanelCollapsed(!isCurrentlyCollapsed);
         });
     }
 
@@ -3222,6 +3251,7 @@ function renderSelectedTyphoon(cyclone) {
 
     // 5. Fit Western North Pacific view around all cyclone points
     if (allLatLngs.length > 0) {
+        leafletMap.setMaxBounds(TYPHOON_NAVIGATION_BOUNDS);
         leafletMap.setMinZoom(3);
         const bounds = L.latLngBounds(allLatLngs);
         leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 });
@@ -3238,17 +3268,53 @@ async function renderTyphoonOverlay(forceRefresh = false) {
         elements.typhoonPanel.classList.remove("hidden");
     }
 
-    if (!data || data.active_count === 0 || !data.cyclones || data.cyclones.length === 0) {
-        // Normal Empty State
-        if (elements.typhoonEmptyState) elements.typhoonEmptyState.classList.remove("hidden");
+    // FAILED request / invalid response (Error State)
+    if (!data) {
+        if (elements.typhoonErrorState) elements.typhoonErrorState.classList.remove("hidden");
+        if (elements.typhoonEmptyState) elements.typhoonEmptyState.classList.add("hidden");
         if (elements.typhoonActiveContent) elements.typhoonActiveContent.classList.add("hidden");
         if (typhoonTrackLayer) typhoonTrackLayer.clearLayers();
         if (typhoonRadiusLayer) typhoonRadiusLayer.clearLayers();
+
+        // Restore map view, minZoom, and normal navigation bounds
+        if (leafletMap) {
+            leafletMap.setMaxBounds(NORMAL_NAVIGATION_BOUNDS);
+            if (preTyphoonMapView) {
+                leafletMap.setMinZoom(preTyphoonMapView.minZoom || 6);
+                leafletMap.setView(preTyphoonMapView.center, preTyphoonMapView.zoom);
+                preTyphoonMapView = null;
+            }
+        }
+
+        // Restore desktop detail panel if auto-collapsed
+        if (detailPanelWasCollapsedBeforeTyphoon !== null) {
+            setDetailPanelCollapsed(detailPanelWasCollapsedBeforeTyphoon);
+            detailPanelWasCollapsedBeforeTyphoon = null;
+        }
+
+        // Synchronize toggle button state to allow retry
+        typhoonEnabled = false;
+        if (elements.typhoonToggle) {
+            elements.typhoonToggle.setAttribute("aria-pressed", "false");
+            elements.typhoonToggle.classList.remove("active");
+        }
         return;
     }
 
-    // Active Cyclones Exist
+    // SUCCESS with 0 cyclones (Normal Meteorological Empty State)
+    if (data.active_count === 0 || !data.cyclones || data.cyclones.length === 0) {
+        if (elements.typhoonEmptyState) elements.typhoonEmptyState.classList.remove("hidden");
+        if (elements.typhoonErrorState) elements.typhoonErrorState.classList.add("hidden");
+        if (elements.typhoonActiveContent) elements.typhoonActiveContent.classList.add("hidden");
+        if (typhoonTrackLayer) typhoonTrackLayer.clearLayers();
+        if (typhoonRadiusLayer) typhoonRadiusLayer.clearLayers();
+        // Keep normal bounds and current viewport for empty state
+        return;
+    }
+
+    // SUCCESS with Active Cyclones
     if (elements.typhoonEmptyState) elements.typhoonEmptyState.classList.add("hidden");
+    if (elements.typhoonErrorState) elements.typhoonErrorState.classList.add("hidden");
     if (elements.typhoonActiveContent) elements.typhoonActiveContent.classList.remove("hidden");
 
     const cyclones = data.cyclones;
@@ -3300,8 +3366,16 @@ async function toggleTyphoon() {
         if (typhoonRadiusLayer) {
             typhoonRadiusLayer.clearLayers();
         }
+
+        // Restore desktop detail panel collapsed state
+        if (detailPanelWasCollapsedBeforeTyphoon !== null) {
+            setDetailPanelCollapsed(detailPanelWasCollapsedBeforeTyphoon);
+            detailPanelWasCollapsedBeforeTyphoon = null;
+        }
+
         if (leafletMap) {
             leafletMap.closePopup();
+            leafletMap.setMaxBounds(NORMAL_NAVIGATION_BOUNDS);
             // Restore previous view & minZoom
             if (preTyphoonMapView) {
                 leafletMap.setMinZoom(preTyphoonMapView.minZoom || 6);
@@ -3310,6 +3384,15 @@ async function toggleTyphoon() {
             }
         }
     } else {
+        // Desktop detail panel auto-collapse (window.innerWidth > 960)
+        const isDesktop = typeof window !== "undefined" && window.innerWidth > 960;
+        if (isDesktop && elements.detailPanel) {
+            detailPanelWasCollapsedBeforeTyphoon = elements.detailPanel.classList.contains("collapsed");
+            if (!detailPanelWasCollapsedBeforeTyphoon) {
+                setDetailPanelCollapsed(true);
+            }
+        }
+
         typhoonEnabled = true;
         if (elements.typhoonToggle) {
             elements.typhoonToggle.setAttribute("aria-pressed", "true");

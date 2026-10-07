@@ -751,14 +751,79 @@ def _derive_valid_time(init_time_str: Optional[str], tau: Optional[int]) -> Opti
         return None
 
 
+def parse_typhoon_coordinate(value: Any, parent_obj: Any = None) -> Tuple[Optional[float], Optional[float]]:
+    """Parse tropical cyclone coordinate into (latitude, longitude).
+
+    Supports:
+        - String format: "120.5,20.5" -> (lat=20.5, lon=120.5) [Note: Official string format is "longitude,latitude"]
+        - Dict format: {"longitude": 120.5, "latitude": 20.5} or {"CoordinateLongitude": ..., "CoordinateLatitude": ...}
+        - Parent object fallback if value is None or incomplete: parent_obj.get("latitude") / parent_obj.get("CoordinateLatitude"), etc.
+
+    Validation:
+        - latitude: -90.0 .. 90.0
+        - longitude: -180.0 .. 180.0
+        - Invalid / malformed: returns (None, None)
+    """
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+    if isinstance(value, str) and value.strip():
+        parts = [p.strip() for p in value.split(",") if p.strip()]
+        if len(parts) == 2:
+            lon_cand = _safe_parse_float(parts[0], min_val=-180.0, max_val=180.0)
+            lat_cand = _safe_parse_float(parts[1], min_val=-90.0, max_val=90.0)
+            if lat_cand is not None and lon_cand is not None:
+                return (lat_cand, lon_cand)
+    elif isinstance(value, dict):
+        lat_cand = value.get("latitude") or value.get("CoordinateLatitude") or value.get("lat") or value.get("Latitude")
+        lon_cand = value.get("longitude") or value.get("CoordinateLongitude") or value.get("lon") or value.get("Longitude")
+        lat = _safe_parse_float(lat_cand, min_val=-90.0, max_val=90.0)
+        lon = _safe_parse_float(lon_cand, min_val=-180.0, max_val=180.0)
+        if lat is not None and lon is not None:
+            return (lat, lon)
+
+    if (lat is None or lon is None) and isinstance(parent_obj, dict):
+        coord_val = parent_obj.get("coordinate") or parent_obj.get("Coordinate")
+        if isinstance(coord_val, str) and coord_val.strip() and coord_val != value:
+            c_lat, c_lon = parse_typhoon_coordinate(coord_val)
+            if c_lat is not None and c_lon is not None:
+                return (c_lat, c_lon)
+        lat_cand = parent_obj.get("CoordinateLatitude") or parent_obj.get("coordinateLatitude") or parent_obj.get("latitude") or parent_obj.get("Latitude")
+        lon_cand = parent_obj.get("CoordinateLongitude") or parent_obj.get("coordinateLongitude") or parent_obj.get("longitude") or parent_obj.get("Longitude")
+        lat = _safe_parse_float(lat_cand, min_val=-90.0, max_val=90.0)
+        lon = _safe_parse_float(lon_cand, min_val=-180.0, max_val=180.0)
+
+    if lat is not None and lon is not None:
+        return (lat, lon)
+
+    return (None, None)
+
+
 def _parse_quadrant_radii(circle_obj: Any) -> Optional[Dict[str, Optional[float]]]:
     """Parse 4-quadrant radii dictionary (NE, SE, SW, NW in km)."""
     if not isinstance(circle_obj, dict):
         return None
-    q_obj = circle_obj.get("QuadrantRadii") or circle_obj.get("quadrantRadii")
+    q_obj = circle_obj.get("quadrantRadii") or circle_obj.get("QuadrantRadii") or circle_obj.get("quadrant_radii") or circle_obj
     if not isinstance(q_obj, dict):
         return None
-    r_list = q_obj.get("Radius") or q_obj.get("radius") or []
+
+    dir_map = {
+        "ne": "NE", "northeast": "NE",
+        "se": "SE", "southeast": "SE",
+        "sw": "SW", "southwest": "SW",
+        "nw": "NW", "northwest": "NW",
+    }
+    direct_quads = {}
+    for k, v in q_obj.items():
+        k_lower = str(k).strip().lower()
+        if k_lower in dir_map:
+            val = _safe_parse_float(v)
+            if val is not None:
+                direct_quads[dir_map[k_lower]] = val
+    if len(direct_quads) == 4:
+        return direct_quads
+
+    r_list = q_obj.get("radius") or q_obj.get("Radius") or []
     if isinstance(r_list, dict):
         r_list = [r_list]
     if not isinstance(r_list, list):
@@ -767,9 +832,10 @@ def _parse_quadrant_radii(circle_obj: Any) -> Optional[Dict[str, Optional[float]
     for item in r_list:
         if isinstance(item, dict):
             direction = item.get("@dir") or item.get("dir") or item.get("direction")
-            val = _safe_parse_float(item.get("#text") or item.get("value") or item.get("Radius") or item.get("radius"))
-            if direction:
-                quads[str(direction).strip().upper()] = val
+            val = _safe_parse_float(item.get("value") or item.get("#text") or item.get("Radius") or item.get("radius"))
+            if direction and val is not None:
+                d_key = dir_map.get(str(direction).strip().lower(), str(direction).strip().upper())
+                quads[d_key] = val
     return quads if quads else None
 
 
@@ -833,7 +899,7 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
                     "id": "...",
                     "year": 2026,
                     "name_en": "NOLO",
-                    "name_zh": "諾盧",
+                    "name_zh": "諾羅",
                     "cwa_td_no": "32",
                     "cwa_ty_no": "27",
                     "analysis_points": [...],
@@ -906,8 +972,7 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
             if circle_elem is None:
                 return None
             quad_dict = {}
-            # 1. Check child elements like <northeast>160</northeast> or <NE>160</NE>
-            q_elem = find_local_any(circle_elem, ["quadrant_radii", "quadrantRadii", "QuadrantRadii"])
+            q_elem = find_local_any(circle_elem, ["quadrantRadii", "quadrant_radii", "QuadrantRadii"])
             target = q_elem if q_elem is not None else circle_elem
             dir_map = {
                 "northeast": "NE", "ne": "NE",
@@ -924,7 +989,7 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
                 elif local_tag == "radius" and child.text:
                     d = child.attrib.get("dir") or child.attrib.get("direction")
                     if d:
-                        d_key = str(d).strip().upper()
+                        d_key = dir_map.get(str(d).strip().lower(), str(d).strip().upper())
                         val = _safe_parse_float(child.text)
                         if val is not None:
                             quad_dict[d_key] = val
@@ -953,15 +1018,18 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
 
             for fix in fixes:
                 coord_elem = find_local_any(fix, ["Coordinate", "coordinate"])
-                lat_raw = find_text_any(fix, ["CoordinateLatitude", "latitude"]) or (find_text_any(coord_elem, ["Latitude", "latitude"]) if coord_elem is not None else None)
-                lon_raw = find_text_any(fix, ["CoordinateLongitude", "longitude"]) or (find_text_any(coord_elem, ["Longitude", "longitude"]) if coord_elem is not None else None)
-                lat = _safe_parse_float(lat_raw, min_val=-90.0, max_val=90.0)
-                lon = _safe_parse_float(lon_raw, min_val=-180.0, max_val=180.0)
+                coord_text = coord_elem.text.strip() if (coord_elem is not None and coord_elem.text and not list(coord_elem)) else None
+                if coord_text:
+                    lat, lon = parse_typhoon_coordinate(coord_text)
+                else:
+                    lat_raw = find_text_any(fix, ["CoordinateLatitude", "latitude"]) or (find_text_any(coord_elem, ["Latitude", "latitude"]) if coord_elem is not None else None)
+                    lon_raw = find_text_any(fix, ["CoordinateLongitude", "longitude"]) or (find_text_any(coord_elem, ["Longitude", "longitude"]) if coord_elem is not None else None)
+                    lat, lon = parse_typhoon_coordinate(None, {"latitude": lat_raw, "longitude": lon_raw})
                 if lat is None or lon is None:
                     continue
 
-                c15_elem = find_local_any(fix, ["Circle15ms", "circle_of_15ms", "circle15ms"])
-                c25_elem = find_local_any(fix, ["Circle25ms", "circle_of_25ms", "circle25ms"])
+                c15_elem = find_local_any(fix, ["circleOf15Ms", "Circle15ms", "circle_of_15ms", "circle15ms"])
+                c25_elem = find_local_any(fix, ["circleOf25Ms", "Circle25ms", "circle_of_25ms", "circle25ms"])
                 r15 = None
                 if c15_elem is not None:
                     r15 = _safe_parse_float(find_text_any(c15_elem, ["Radius", "radius"]))
@@ -975,19 +1043,19 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
                         r25 = _safe_parse_float(c25_elem.text)
 
                 p = {
-                    "time": _normalize_iso_time(find_text_any(fix, ["DateTime", "fix_time", "fixTime", "time"])),
+                    "time": _normalize_iso_time(find_text_any(fix, ["fixTime", "DateTime", "fix_time", "dateTime", "time"])),
                     "latitude": lat,
                     "longitude": lon,
-                    "max_wind_speed": _safe_parse_float(find_text_any(fix, ["MaxWindSpeed", "max_wind_speed", "maxWindSpeed"])),
-                    "max_gust_speed": _safe_parse_float(find_text_any(fix, ["MaxGustSpeed", "max_gust_speed", "maxGustSpeed"])),
-                    "pressure": _safe_parse_float(find_text_any(fix, ["Pressure", "pressure"])),
+                    "max_wind_speed": _safe_parse_float(find_text_any(fix, ["maxWindSpeed", "MaxWindSpeed", "max_wind_speed"])),
+                    "max_gust_speed": _safe_parse_float(find_text_any(fix, ["maxGustSpeed", "MaxGustSpeed", "max_gust_speed"])),
+                    "pressure": _safe_parse_float(find_text_any(fix, ["pressure", "Pressure"])),
                     "radius_15ms": r15,
                     "radius_25ms": r25,
                     "quadrant_15ms": extract_quadrant_xml(c15_elem),
                     "quadrant_25ms": extract_quadrant_xml(c25_elem),
-                    "movement_speed": _safe_parse_float(find_text_any(fix, ["MovingSpeed", "speed", "movingSpeed"])),
-                    "movement_direction": find_text_any(fix, ["MovingDirection", "moving_direction", "movingDirection"]),
-                    "movement_prediction": _parse_movement_prediction(find_text_any(fix, ["MovingPrediction", "moving_prediction", "movingPrediction"])),
+                    "movement_speed": _safe_parse_float(find_text_any(fix, ["movingSpeed", "MovingSpeed", "speed"])),
+                    "movement_direction": find_text_any(fix, ["movingDirection", "MovingDirection", "moving_direction"]),
+                    "movement_prediction": _parse_movement_prediction(find_text_any(fix, ["movingPrediction", "MovingPrediction", "moving_prediction"])),
                 }
                 analysis_points.append(p)
 
@@ -995,7 +1063,7 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
             current_pt = analysis_points[-1] if analysis_points else None
 
             # Forecast Points
-            forecast_elem = find_local_any(tc, ["ForecastData", "forecast_data", "forecastData"])
+            forecast_elem = find_local_any(tc, ["forecastData", "ForecastData", "forecast_data"])
             f_fixes = []
             if forecast_elem is not None:
                 f_fixes = find_all_local(forecast_elem, "Fix") or find_all_local(forecast_elem, "fix")
@@ -1003,19 +1071,22 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
 
             for fix in f_fixes:
                 coord_elem = find_local_any(fix, ["Coordinate", "coordinate"])
-                lat_raw = find_text_any(fix, ["CoordinateLatitude", "latitude"]) or (find_text_any(coord_elem, ["Latitude", "latitude"]) if coord_elem is not None else None)
-                lon_raw = find_text_any(fix, ["CoordinateLongitude", "longitude"]) or (find_text_any(coord_elem, ["Longitude", "longitude"]) if coord_elem is not None else None)
-                lat = _safe_parse_float(lat_raw, min_val=-90.0, max_val=90.0)
-                lon = _safe_parse_float(lon_raw, min_val=-180.0, max_val=180.0)
+                coord_text = coord_elem.text.strip() if (coord_elem is not None and coord_elem.text and not list(coord_elem)) else None
+                if coord_text:
+                    lat, lon = parse_typhoon_coordinate(coord_text)
+                else:
+                    lat_raw = find_text_any(fix, ["CoordinateLatitude", "latitude"]) or (find_text_any(coord_elem, ["Latitude", "latitude"]) if coord_elem is not None else None)
+                    lon_raw = find_text_any(fix, ["CoordinateLongitude", "longitude"]) or (find_text_any(coord_elem, ["Longitude", "longitude"]) if coord_elem is not None else None)
+                    lat, lon = parse_typhoon_coordinate(None, {"latitude": lat_raw, "longitude": lon_raw})
                 if lat is None or lon is None:
                     continue
 
-                init_time = _normalize_iso_time(find_text_any(fix, ["InitialTime", "init_time", "initialTime"]))
-                tau = _safe_parse_int(find_text_any(fix, ["ForecastHour", "tau", "forecastHour"]))
+                init_time = _normalize_iso_time(find_text_any(fix, ["initTime", "InitialTime", "initialTime", "init_time"]))
+                tau = _safe_parse_int(find_text_any(fix, ["tau", "ForecastHour", "forecastHour"]))
                 valid_time = _derive_valid_time(init_time, tau)
 
-                c15_elem = find_local_any(fix, ["Circle15ms", "circle_of_15ms", "circle15ms"])
-                c25_elem = find_local_any(fix, ["Circle25ms", "circle_of_25ms", "circle25ms"])
+                c15_elem = find_local_any(fix, ["circleOf15Ms", "Circle15ms", "circle_of_15ms", "circle15ms"])
+                c25_elem = find_local_any(fix, ["circleOf25Ms", "Circle25ms", "circle_of_25ms", "circle25ms"])
                 r15 = None
                 if c15_elem is not None:
                     r15 = _safe_parse_float(find_text_any(c15_elem, ["Radius", "radius"]))
@@ -1034,13 +1105,13 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
                     "valid_time": valid_time,
                     "latitude": lat,
                     "longitude": lon,
-                    "max_wind_speed": _safe_parse_float(find_text_any(fix, ["MaxWindSpeed", "max_wind_speed", "maxWindSpeed"])),
-                    "max_gust_speed": _safe_parse_float(find_text_any(fix, ["MaxGustSpeed", "max_gust_speed", "maxGustSpeed"])),
-                    "pressure": _safe_parse_float(find_text_any(fix, ["Pressure", "pressure"])),
+                    "max_wind_speed": _safe_parse_float(find_text_any(fix, ["maxWindSpeed", "MaxWindSpeed", "max_wind_speed"])),
+                    "max_gust_speed": _safe_parse_float(find_text_any(fix, ["maxGustSpeed", "MaxGustSpeed", "max_gust_speed"])),
+                    "pressure": _safe_parse_float(find_text_any(fix, ["pressure", "Pressure"])),
                     "radius_15ms": r15,
                     "radius_25ms": r25,
-                    "probability_70_radius": _safe_parse_float(find_text_any(fix, ["Radius70PercentProbability", "radius_of_70percent_probability", "radius70PercentProbability"])),
-                    "state_transfer": _parse_state_transfer(find_text_any(fix, ["StateTransfer", "state_transfer", "stateTransfer"])),
+                    "probability_70_radius": _safe_parse_float(find_text_any(fix, ["radiusOf70PercentProbability", "Radius70PercentProbability", "radius_of_70percent_probability"])),
+                    "state_transfer": _parse_state_transfer(find_text_any(fix, ["stateTransfer", "StateTransfer", "state_transfer"])),
                 }
                 forecast_points.append(fp)
 
@@ -1081,11 +1152,11 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
     updated_at = cwa_obj.get("Sent") or cwa_obj.get("sent") or cwa_obj.get("DateTime")
 
     dataset_obj = cwa_obj.get("Dataset") or cwa_obj.get("dataset") or data.get("records") or {}
-    tc_parent = dataset_obj.get("TropicalCyclones") or dataset_obj.get("tropicalCyclones") or {}
+    tc_parent = dataset_obj.get("tropicalCyclones") or dataset_obj.get("TropicalCyclones") or {}
     if isinstance(tc_parent, list):
         tc_list = tc_parent
     elif isinstance(tc_parent, dict):
-        tc_list = tc_parent.get("TropicalCyclone") or tc_parent.get("tropicalCyclone") or []
+        tc_list = tc_parent.get("tropicalCyclone") or tc_parent.get("TropicalCyclone") or []
         if isinstance(tc_list, dict):
             tc_list = [tc_list]
     else:
@@ -1098,19 +1169,19 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
     for tc in tc_list:
         if not isinstance(tc, dict):
             continue
-        year = _safe_parse_int(tc.get("Year") or tc.get("year"))
-        name_en = tc.get("TyphoonName") or tc.get("typhoonName") or tc.get("name")
-        name_zh = tc.get("CwaTyphoonName") or tc.get("cwaTyphoonName") or tc.get("cwa_name")
-        cwa_td_no = tc.get("CwaTdNo") or tc.get("cwaTdNo")
-        cwa_ty_no = tc.get("CwaTyNo") or tc.get("cwaTyNo")
+        year = _safe_parse_int(tc.get("year") or tc.get("Year"))
+        name_en = tc.get("typhoonName") or tc.get("TyphoonName") or tc.get("name")
+        name_zh = tc.get("cwaTyphoonName") or tc.get("CwaTyphoonName") or tc.get("cwa_name")
+        cwa_td_no = tc.get("cwaTdNo") or tc.get("CwaTdNo")
+        cwa_ty_no = tc.get("cwaTyNo") or tc.get("CwaTyNo")
         tc_id = f"{year or datetime.now().year}_{cwa_ty_no or cwa_td_no or name_en or len(cyclones)+1}"
 
         # Analysis Points
-        analysis_obj = tc.get("AnalysisData") or tc.get("analysisData") or tc.get("analysis_data") or {}
+        analysis_obj = tc.get("analysisData") or tc.get("AnalysisData") or tc.get("analysis_data") or {}
         if isinstance(analysis_obj, list):
             fixes = analysis_obj
         else:
-            fixes = analysis_obj.get("Fix") or analysis_obj.get("fix") or []
+            fixes = analysis_obj.get("fix") or analysis_obj.get("Fix") or []
         if isinstance(fixes, dict):
             fixes = [fixes]
         if not isinstance(fixes, list):
@@ -1120,34 +1191,30 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
         for fix in fixes:
             if not isinstance(fix, dict):
                 continue
-            coord_obj = fix.get("coordinate") if isinstance(fix.get("coordinate"), dict) else {}
-            lat_cand = fix.get("CoordinateLatitude") or fix.get("coordinateLatitude") or fix.get("latitude") or coord_obj.get("latitude")
-            lon_cand = fix.get("CoordinateLongitude") or fix.get("coordinateLongitude") or fix.get("longitude") or coord_obj.get("longitude")
-            lat = _safe_parse_float(lat_cand, min_val=-90.0, max_val=90.0)
-            lon = _safe_parse_float(lon_cand, min_val=-180.0, max_val=180.0)
+            lat, lon = parse_typhoon_coordinate(fix.get("coordinate") or fix.get("Coordinate"), fix)
             if lat is None or lon is None:
                 continue
 
-            c15 = fix.get("Circle15ms") or fix.get("circle15ms") or fix.get("circle_of_15ms") or {}
-            c25 = fix.get("Circle25ms") or fix.get("circle25ms") or fix.get("circle_of_25ms") or {}
+            c15 = fix.get("circleOf15Ms") or fix.get("Circle15ms") or fix.get("circle15ms") or fix.get("circle_of_15ms") or {}
+            c25 = fix.get("circleOf25Ms") or fix.get("Circle25ms") or fix.get("circle25ms") or fix.get("circle_of_25ms") or {}
 
-            r15_val = c15.get("Radius") if isinstance(c15, dict) else c15
-            r25_val = c25.get("Radius") if isinstance(c25, dict) else c25
+            r15_val = c15.get("radius") or c15.get("Radius") if isinstance(c15, dict) else c15
+            r25_val = c25.get("radius") or c25.get("Radius") if isinstance(c25, dict) else c25
 
             p = {
-                "time": _normalize_iso_time(fix.get("DateTime") or fix.get("dateTime") or fix.get("time") or fix.get("fix_time")),
+                "time": _normalize_iso_time(fix.get("fixTime") or fix.get("DateTime") or fix.get("dateTime") or fix.get("time") or fix.get("fix_time")),
                 "latitude": lat,
                 "longitude": lon,
-                "max_wind_speed": _safe_parse_float(fix.get("MaxWindSpeed") or fix.get("maxWindSpeed") or fix.get("max_wind_speed")),
-                "max_gust_speed": _safe_parse_float(fix.get("MaxGustSpeed") or fix.get("maxGustSpeed") or fix.get("max_gust_speed")),
-                "pressure": _safe_parse_float(fix.get("Pressure") or fix.get("pressure")),
+                "max_wind_speed": _safe_parse_float(fix.get("maxWindSpeed") or fix.get("MaxWindSpeed") or fix.get("max_wind_speed")),
+                "max_gust_speed": _safe_parse_float(fix.get("maxGustSpeed") or fix.get("MaxGustSpeed") or fix.get("max_gust_speed")),
+                "pressure": _safe_parse_float(fix.get("pressure") or fix.get("Pressure")),
                 "radius_15ms": _safe_parse_float(r15_val),
                 "radius_25ms": _safe_parse_float(r25_val),
                 "quadrant_15ms": _parse_quadrant_radii(c15),
                 "quadrant_25ms": _parse_quadrant_radii(c25),
-                "movement_speed": _safe_parse_float(fix.get("MovingSpeed") or fix.get("movingSpeed") or fix.get("speed")),
-                "movement_direction": fix.get("MovingDirection") or fix.get("movingDirection") or fix.get("moving_direction"),
-                "movement_prediction": _parse_movement_prediction(fix.get("MovingPrediction") or fix.get("movingPrediction") or fix.get("moving_prediction")),
+                "movement_speed": _safe_parse_float(fix.get("movingSpeed") or fix.get("MovingSpeed") or fix.get("speed")),
+                "movement_direction": fix.get("movingDirection") or fix.get("MovingDirection") or fix.get("moving_direction"),
+                "movement_prediction": _parse_movement_prediction(fix.get("movingPrediction") or fix.get("MovingPrediction") or fix.get("moving_prediction")),
             }
             analysis_points.append(p)
 
@@ -1155,11 +1222,11 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
         current_pt = analysis_points[-1] if analysis_points else None
 
         # Forecast Points
-        forecast_obj = tc.get("ForecastData") or tc.get("forecastData") or tc.get("forecast_data") or {}
+        forecast_obj = tc.get("forecastData") or tc.get("ForecastData") or tc.get("forecast_data") or {}
         if isinstance(forecast_obj, list):
             f_fixes = forecast_obj
         else:
-            f_fixes = forecast_obj.get("Fix") or forecast_obj.get("fix") or []
+            f_fixes = forecast_obj.get("fix") or forecast_obj.get("Fix") or []
         if isinstance(f_fixes, dict):
             f_fixes = [f_fixes]
         if not isinstance(f_fixes, list):
@@ -1169,23 +1236,19 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
         for fix in f_fixes:
             if not isinstance(fix, dict):
                 continue
-            coord_obj = fix.get("coordinate") if isinstance(fix.get("coordinate"), dict) else {}
-            lat_cand = fix.get("CoordinateLatitude") or fix.get("coordinateLatitude") or fix.get("latitude") or coord_obj.get("latitude")
-            lon_cand = fix.get("CoordinateLongitude") or fix.get("coordinateLongitude") or fix.get("longitude") or coord_obj.get("longitude")
-            lat = _safe_parse_float(lat_cand, min_val=-90.0, max_val=90.0)
-            lon = _safe_parse_float(lon_cand, min_val=-180.0, max_val=180.0)
+            lat, lon = parse_typhoon_coordinate(fix.get("coordinate") or fix.get("Coordinate"), fix)
             if lat is None or lon is None:
                 continue
 
-            init_time = _normalize_iso_time(fix.get("InitialTime") or fix.get("initialTime") or fix.get("init_time"))
-            tau = _safe_parse_int(fix.get("ForecastHour") or fix.get("forecastHour") or fix.get("tau"))
+            init_time = _normalize_iso_time(fix.get("initTime") or fix.get("InitialTime") or fix.get("initialTime") or fix.get("init_time"))
+            tau = _safe_parse_int(fix.get("tau") or fix.get("ForecastHour") or fix.get("forecastHour"))
             valid_time = _derive_valid_time(init_time, tau)
 
-            c15 = fix.get("Circle15ms") or fix.get("circle15ms") or fix.get("circle_of_15ms") or {}
-            c25 = fix.get("Circle25ms") or fix.get("circle25ms") or fix.get("circle_of_25ms") or {}
+            c15 = fix.get("circleOf15Ms") or fix.get("Circle15ms") or fix.get("circle15ms") or fix.get("circle_of_15ms") or {}
+            c25 = fix.get("circleOf25Ms") or fix.get("Circle25ms") or fix.get("circle25ms") or fix.get("circle_of_25ms") or {}
 
-            r15_val = c15.get("Radius") if isinstance(c15, dict) else c15
-            r25_val = c25.get("Radius") if isinstance(c25, dict) else c25
+            r15_val = c15.get("radius") or c15.get("Radius") if isinstance(c15, dict) else c15
+            r25_val = c25.get("radius") or c25.get("Radius") if isinstance(c25, dict) else c25
 
             fp = {
                 "init_time": init_time,
@@ -1193,13 +1256,13 @@ def parse_typhoon_data(data: Any) -> Dict[str, Any]:
                 "valid_time": valid_time,
                 "latitude": lat,
                 "longitude": lon,
-                "max_wind_speed": _safe_parse_float(fix.get("MaxWindSpeed") or fix.get("maxWindSpeed") or fix.get("max_wind_speed")),
-                "max_gust_speed": _safe_parse_float(fix.get("MaxGustSpeed") or fix.get("maxGustSpeed") or fix.get("max_gust_speed")),
-                "pressure": _safe_parse_float(fix.get("Pressure") or fix.get("pressure")),
+                "max_wind_speed": _safe_parse_float(fix.get("maxWindSpeed") or fix.get("MaxWindSpeed") or fix.get("max_wind_speed")),
+                "max_gust_speed": _safe_parse_float(fix.get("maxGustSpeed") or fix.get("MaxGustSpeed") or fix.get("max_gust_speed")),
+                "pressure": _safe_parse_float(fix.get("pressure") or fix.get("Pressure")),
                 "radius_15ms": _safe_parse_float(r15_val),
                 "radius_25ms": _safe_parse_float(r25_val),
-                "probability_70_radius": _safe_parse_float(fix.get("Radius70PercentProbability") or fix.get("radius70PercentProbability") or fix.get("radius_of_70percent_probability")),
-                "state_transfer": _parse_state_transfer(fix.get("StateTransfer") or fix.get("stateTransfer") or fix.get("state_transfer")),
+                "probability_70_radius": _safe_parse_float(fix.get("radiusOf70PercentProbability") or fix.get("Radius70PercentProbability") or fix.get("radius_of_70percent_probability")),
+                "state_transfer": _parse_state_transfer(fix.get("stateTransfer") or fix.get("StateTransfer") or fix.get("state_transfer")),
             }
             forecast_points.append(fp)
 

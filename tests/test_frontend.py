@@ -1350,6 +1350,92 @@ def test_phase_8e_js_typhoon_architecture():
     assert "function selectCounty(countyName" in js
 
 
+def test_phase_8e_correction_html_error_and_empty_states():
+    """Verify dedicated error state and empty state in HTML:
+    - #typhoon-empty-state with '目前無活動熱帶氣旋'
+    - #typhoon-error-state with '颱風資料暫時無法載入'
+    - Separate DOM elements
+    """
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    assert 'id="typhoon-empty-state"' in html
+    assert "目前無活動熱帶氣旋" in html
+    assert 'id="typhoon-error-state"' in html
+    assert "颱風資料暫時無法載入" in html
+
+
+def test_phase_8e_correction_css_select_and_panel_layout():
+    """Verify CSS styling for:
+    - native select light and dark mode styling with explicit background, text color, and color-scheme
+    - desktop typhoon-panel left-side placement (left: 68px, right: auto) avoiding Leaflet zoom controls
+    - mobile typhoon-panel position: static and full-width
+    - error state styling
+    """
+    response = client.get("/static/css/style.css")
+    assert response.status_code == 200
+    css = response.text
+
+    # 1. Typhoon Select Theme Styling
+    assert ".typhoon-select" in css
+    assert "color-scheme: light;" in css
+    assert ".typhoon-select option" in css
+    assert '[data-theme="dark"] .typhoon-select' in css
+    assert '[data-theme="dark"] .typhoon-select option' in css
+    assert "color-scheme: dark;" in css
+
+    # 2. Desktop Typhoon Panel Left Placement
+    assert "#typhoon-panel" in css
+    assert "left: 68px;" in css
+    assert "right: auto;" in css
+
+    # 3. Mobile Position Static
+    assert "position: static !important;" in css
+
+    # 4. Typhoon Error State
+    assert ".typhoon-error-state" in css
+    assert ".typhoon-error-title" in css
+
+
+def test_phase_8e_correction_js_world_wrapping_and_navigation_bounds():
+    """Verify JS fixes for:
+    - OSM baseTileLayer has noWrap: true
+    - Leaflet map initialized with maxBoundsViscosity: 1.0 and NORMAL_NAVIGATION_BOUNDS
+    - TYPHOON_NAVIGATION_BOUNDS used for active typhoon track
+    - Typhoon OFF restores NORMAL_NAVIGATION_BOUNDS
+    - Detail panel auto-collapse on desktop and restoration on OFF / failure
+    - Distinct error state vs empty state handling
+    - Single baseTileLayer reference
+    """
+    response = client.get("/static/js/app.js")
+    assert response.status_code == 200
+    js = response.text
+
+    # 1. Navigation Bounds constants
+    assert "NORMAL_NAVIGATION_BOUNDS" in js
+    assert "TYPHOON_NAVIGATION_BOUNDS" in js
+
+    # 2. OSM Base Tile Layer noWrap: true
+    assert "noWrap: true" in js
+
+    # 3. Map maxBoundsViscosity and maxBounds
+    assert "maxBoundsViscosity: 1.0" in js
+    assert "maxBounds: NORMAL_NAVIGATION_BOUNDS" in js
+
+    # 4. Auto-collapse helper
+    assert "function setDetailPanelCollapsed(" in js
+    assert "detailPanelWasCollapsedBeforeTyphoon" in js
+
+    # 5. Empty vs Error State handling
+    assert "typhoonErrorState" in js
+    assert "typhoonEmptyState" in js
+
+    # 6. Restorations on error & OFF
+    assert "leafletMap.setMaxBounds(NORMAL_NAVIGATION_BOUNDS)" in js
+
+
+
 
 
 

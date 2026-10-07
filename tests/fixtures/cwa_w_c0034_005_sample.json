@@ -1,0 +1,131 @@
+{
+  "success": "true",
+  "result": {
+    "resource_id": "W-C0034-005"
+  },
+  "records": {
+    "datasetDescription": "Tropical Cyclone Track",
+    "tropicalCyclones": {
+      "tropicalCyclone": [
+        {
+          "year": "2026",
+          "typhoonName": "NOLO",
+          "cwaTyphoonName": "諾羅",
+          "cwaTdNo": "TD01",
+          "cwaTyNo": "2601",
+          "analysisData": {
+            "fix": [
+              {
+                "fixTime": "2026-10-07T06:00:00+08:00",
+                "coordinate": "130.0,19.0",
+                "maxWindSpeed": "30",
+                "maxGustSpeed": "38",
+                "pressure": "975",
+                "movingSpeed": "15",
+                "movingDirection": "西北",
+                "movingPrediction": [
+                  {
+                    "value": "向西北緩慢進行",
+                    "lang": "zh-hant"
+                  },
+                  {
+                    "value": "Moving NW slowly",
+                    "lang": "en-us"
+                  }
+                ],
+                "circleOf15Ms": {
+                  "radius": "150",
+                  "quadrantRadii": {
+                    "radius": [
+                      {"value": "160", "dir": "NE"},
+                      {"value": "150", "dir": "SE"},
+                      {"value": "140", "dir": "SW"},
+                      {"value": "150", "dir": "NW"}
+                    ]
+                  }
+                },
+                "circleOf25Ms": {
+                  "radius": "50",
+                  "quadrantRadii": {
+                    "radius": [
+                      {"value": "50", "dir": "NE"},
+                      {"value": "50", "dir": "SE"},
+                      {"value": "50", "dir": "SW"},
+                      {"value": "50", "dir": "NW"}
+                    ]
+                  }
+                }
+              },
+              {
+                "fixTime": "2026-10-07T12:00:00+08:00",
+                "coordinate": "129.2,19.5",
+                "maxWindSpeed": "35",
+                "maxGustSpeed": "45",
+                "pressure": "970",
+                "movingSpeed": "18",
+                "movingDirection": "西北西",
+                "movingPrediction": [
+                  {
+                    "value": "向西北西移動",
+                    "lang": "zh-hant"
+                  }
+                ],
+                "circleOf15Ms": {
+                  "radius": "180",
+                  "quadrantRadii": {
+                    "radius": [
+                      {"value": "190", "dir": "NE"},
+                      {"value": "180", "dir": "SE"},
+                      {"value": "170", "dir": "SW"},
+                      {"value": "180", "dir": "NW"}
+                    ]
+                  }
+                },
+                "circleOf25Ms": {
+                  "radius": "60",
+                  "quadrantRadii": {
+                    "radius": [
+                      {"value": "60", "dir": "NE"},
+                      {"value": "60", "dir": "SE"},
+                      {"value": "60", "dir": "SW"},
+                      {"value": "60", "dir": "NW"}
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "forecastData": {
+            "fix": [
+              {
+                "initTime": "2026-10-07T12:00:00+08:00",
+                "tau": "24",
+                "coordinate": "127.0,21.0",
+                "maxWindSpeed": "40",
+                "maxGustSpeed": "50",
+                "pressure": "960",
+                "circleOf15Ms": {
+                  "radius": "200"
+                },
+                "circleOf25Ms": {
+                  "radius": "80"
+                },
+                "radiusOf70PercentProbability": "100",
+                "stateTransfer": [
+                  {
+                    "value": "轉變為溫帶氣旋",
+                    "lang": "zh-hant"
+                  },
+                  {
+                    "value": "BECOMING EXTRATROPICAL LOW",
+                    "lang": "en-us"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
